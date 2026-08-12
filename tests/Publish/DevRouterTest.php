@@ -16,4 +16,11 @@ final class DevRouterTest extends TestCase
         self::assertStringContainsString("return false", $router);
         self::assertStringContainsString("DIRECTORY_SEPARATOR . 'site'", $router);
     }
+
+    public function test_front_controller_maps_trailing_slash_routes_to_index_html(): void
+    {
+        $frontController = (string) file_get_contents(dirname(__DIR__, 2) . '/public/index.php');
+
+        self::assertStringContainsString("str_ends_with(\$path, '/') ? '/index.html'", $frontController);
+    }
 }

@@ -28,7 +28,10 @@ $root = dirname(__DIR__);
 if (!str_starts_with($path, '/admin')) {
     $siteRoot = realpath((string) (getenv('HOLYMD_PUBLIC_TREE') ?: $root . '/public/site'));
     $relative = trim($path, '/');
-    $candidate = $siteRoot === false ? false : realpath($siteRoot . '/' . ($relative === '' ? 'index.html' : $relative . (str_ends_with($relative, '/') ? 'index.html' : '')));
+    $sitePath = $relative === ''
+        ? 'index.html'
+        : $relative . (str_ends_with($path, '/') ? '/index.html' : '');
+    $candidate = $siteRoot === false ? false : realpath($siteRoot . '/' . $sitePath);
     if ($siteRoot === false || $candidate === false || !str_starts_with($candidate, $siteRoot . DIRECTORY_SEPARATOR) || !is_file($candidate)) { http_response_code(404); exit; }
     $types = ['html' => 'text/html; charset=utf-8', 'xml' => 'application/xml', 'json' => 'application/feed+json', 'txt' => 'text/plain; charset=utf-8', 'css' => 'text/css', 'js' => 'text/javascript'];
     $extension = strtolower(pathinfo($candidate, PATHINFO_EXTENSION));
