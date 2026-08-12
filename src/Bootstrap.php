@@ -9,6 +9,8 @@ use DI\ContainerBuilder;
 use HolyMD\Config\Settings;
 use HolyMD\Database\Connection;
 use PDO;
+use HolyMD\Geo\AiClient;
+use HolyMD\Geo\ConfiguredAiClient;
 
 final class Bootstrap
 {
@@ -22,6 +24,7 @@ final class Bootstrap
             Settings::class => $settings,
             Connection::class => static fn (): Connection => new Connection($settings),
             PDO::class => static fn (Connection $connection): PDO => $connection->pdo(),
+            AiClient::class => static fn (): AiClient => new ConfiguredAiClient(),
         ]);
 
         return $builder->build();

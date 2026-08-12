@@ -10,6 +10,10 @@ use HolyMD\Content\ArticleRepository;
 use HolyMD\Http\Csrf;
 use HolyMD\Http\Router;
 use HolyMD\Http\ServerRequest;
+use HolyMD\Geo\GeoController;
+use HolyMD\Geo\GeoProposalStore;
+use HolyMD\Geo\FileGeoReviewStore;
+use HolyMD\Geo\GeoReviewService;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 
@@ -20,7 +24,7 @@ if (!is_string($path) || !str_starts_with($path, '/admin')) {
     exit;
 }
 
-Bootstrap::createContainer();
+$container = Bootstrap::createContainer();
 
 session_start();
 $root = dirname(__DIR__);
@@ -30,7 +34,9 @@ $controller = new ArticleController(
     new AdminGuard($_SESSION),
     new Csrf($_SESSION),
 );
-$response = Router::admin($controller)->dispatch(new ServerRequest(
+$geoStore = new FileGeoReviewStore($root . '/content/geo');
+$geo = new GeoController(new ArticleRepository($root . '/content/articles'), new GeoReviewService($container->get(\HolyMD\Geo\AiClient::class), $geoStore), $geoStore, new AdminGuard($_SESSION), new Csrf($_SESSION));
+$response = Router::admin($controller, $geo)->dispatch(new ServerRequest(
     $_SERVER['REQUEST_METHOD'] ?? 'GET',
     $path,
     array_change_key_case(getallheaders() ?: [], CASE_UPPER),

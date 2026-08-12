@@ -37,6 +37,15 @@ final class GeoReviewServiceTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         (new GeoReviewService(new RecordingAiClient('{"proposals":[{"type":"body","value":"Here is your rewritten article"}],"findings":[]}')))->review($document);
     }
+
+    public function test_review_rejects_body_fields_even_when_the_proposal_type_is_allowed(): void
+    {
+        $document = new ArticleDocument('first-note', 'First note', "Body\n", new FrontMatter(['title' => 'First note', 'slug' => 'first-note', 'date' => '2026-08-12']), '/articles/first-note.md');
+        foreach (['body', 'content', 'markdown', 'body_markdown'] as $field) {
+            $this->expectException(InvalidArgumentException::class);
+            (new GeoReviewService(new RecordingAiClient(json_encode(['proposals' => [['type' => 'metadata', 'value' => [$field => 'rewrite']]], 'findings' => []], JSON_THROW_ON_ERROR))))->review($document);
+        }
+    }
 }
 
 final class RecordingAiClient implements AiClient

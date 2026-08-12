@@ -4,6 +4,10 @@ namespace HolyMD\Geo;
 use RuntimeException;
 interface AiClient { public function analyze(string $systemPrompt, string $articleMarkdown): AiResponse; }
 final readonly class AiResponse { public function __construct(public string $json) {} }
+final readonly class ConfiguredAiClient implements AiClient {
+    public function __construct(private ?EncryptedApiCredential $credential = null) {}
+    public function analyze(string $systemPrompt, string $articleMarkdown): AiResponse { throw new RuntimeException('No GEO AI transport is configured for this deployment.'); }
+}
 /** Decrypts deployment config only; plaintext is never persisted in jobs or reviews. */
 final readonly class EncryptedApiCredential {
     private function __construct(private string $value) {}
