@@ -60,4 +60,14 @@ final class ArticleDocumentTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $repository->read('missing');
     }
+
+    public function test_round_trips_quoted_backslashes(): void
+    {
+        file_put_contents($this->contentRoot . '/quoted.md', "---\ntitle: \"A \\\\ path\"\nslug: quoted\ndate: 2026-08-12\n---\nBody\n");
+        $repository = new ArticleRepository($this->contentRoot);
+        $article = $repository->read('quoted');
+        self::assertSame('A \\ path', $article->title);
+        $repository->write($article);
+        self::assertSame('A \\ path', $repository->read('quoted')->title);
+    }
 }

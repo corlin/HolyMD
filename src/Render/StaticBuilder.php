@@ -26,6 +26,11 @@ final class StaticBuilder
             throw new RuntimeException('Unable to create temporary build directory.');
         }
         $articles = $input->articles;
+        $slugs = [];
+        foreach ($articles as $article) {
+            if (isset($slugs[$article->slug])) throw new RuntimeException(sprintf('Duplicate article slug "%s".', $article->slug));
+            $slugs[$article->slug] = true;
+        }
         usort($articles, static fn (ArticleDocument $a, ArticleDocument $b): int => strcmp((string) $b->frontMatter->get('date'), (string) $a->frontMatter->get('date')));
         $files = [];
         foreach ($articles as $article) {
@@ -40,8 +45,11 @@ final class StaticBuilder
                 $topics[(string) $topic][] = $article;
             }
         }
+        $topicRoutes = [];
         foreach ($topics as $topic => $topicArticles) {
             $slug = $this->topicSlug($topic);
+            if ($slug === '' || (isset($topicRoutes[$slug]) && $topicRoutes[$slug] !== $topic)) throw new RuntimeException(sprintf('Topic "%s" has an unsafe or colliding slug.', $topic));
+            $topicRoutes[$slug] = $topic;
             $route = '/topics/' . $slug . '/';
             $this->write($temporaryRoot . $route . 'index.html', $this->renderer->render('topic', ['siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'topic' => $topic, 'articles' => $topicArticles, 'route' => $route]));
             $files[] = $route . 'index.html';
@@ -50,7 +58,7 @@ final class StaticBuilder
         $this->write($temporaryRoot . '/about/index.html', $this->renderer->render('about', ['siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'about' => $input->about]));
         $this->write($temporaryRoot . '/rss.xml', $this->rss($articles, $input));
         $this->write($temporaryRoot . '/feed.json', $this->jsonFeed($articles, $input));
-        $this->write($temporaryRoot . '/sitemap.xml', $this->sitemap($articles, $input));
+        $this->write($temporaryRoot . '/sitemap.xml', $this->sitemap($articles, $input, array_keys($topicRoutes)));
         $this->write($temporaryRoot . '/robots.txt', "User-agent: *\nAllow: /\nSitemap: " . $this->url($input, '/sitemap.xml') . "\n");
         $files = [...$files, 'index.html', 'about/index.html', 'rss.xml', 'feed.json', 'sitemap.xml', 'robots.txt'];
         if ($input->generateLlmsTxt) {
@@ -76,8 +84,10 @@ final class StaticBuilder
             'url' => $url, 'date' => $date, 'modified' => $modified, 'summary' => $summary, 'contentHtml' => $this->markdown($article->bodyMarkdown),
             'jsonLd' => json_encode(['@context' => 'https://schema.org', '@graph' => [
                 ['@type' => 'Article', 'headline' => $article->title, 'datePublished' => $date, 'dateModified' => $modified, 'author' => ['@type' => 'Person', 'name' => $input->authorName], 'mainEntityOfPage' => $url, 'description' => $summary],
+                ['@type' => 'Person', 'name' => $input->authorName],
+                ['@type' => 'WebSite', 'name' => $input->siteName, 'url' => rtrim($input->siteUrl, '/') . '/'],
                 ['@type' => 'BreadcrumbList', 'itemListElement' => [['@type' => 'ListItem', 'position' => 1, 'name' => 'Home', 'item' => $this->url($input, '/')], ['@type' => 'ListItem', 'position' => 2, 'name' => $article->title, 'item' => $url]]],
-            ]], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+            ]], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR),
         ];
     }
 
@@ -99,28 +109,34 @@ final class StaticBuilder
     }
 
     /** @param list<ArticleDocument> $articles */
-    private function sitemap(array $articles, BuildInput $input): string
+    private function sitemap(array $articles, BuildInput $input, array $topicSlugs = []): string
     {
         $urls = [$this->url($input, '/'), $this->url($input, '/about/')];
         foreach ($articles as $article) {
             $urls[] = $this->url($input, '/articles/' . $article->slug . '/');
         }
+        foreach ($topicSlugs as $topicSlug) $urls[] = $this->url($input, '/topics/' . $topicSlug . '/');
         return '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . implode('', array_map(fn (string $url): string => '<url><loc>' . $this->xml($url) . '</loc></url>', $urls)) . '</urlset>';
     }
 
     private function markdown(string $markdown): string
     {
-        $blocks = preg_split('/\n{2,}/', trim($markdown)) ?: [];
-        $html = [];
-        foreach ($blocks as $block) {
-            if (preg_match('/^# (.+)$/', $block, $matches) === 1) {
-                $html[] = '<h1>' . htmlspecialchars($matches[1], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</h1>';
-            } else {
-                $html[] = '<p>' . nl2br(htmlspecialchars($block, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'), false) . '</p>';
-            }
+        $lines = preg_split('/\R/', trim($markdown)) ?: []; $html = []; $paragraph = []; $list = false; $quote = false; $code = false; $codeLines = [];
+        $flush = function () use (&$paragraph, &$html): void { if ($paragraph !== []) { $html[] = '<p>' . implode("\n", $paragraph) . '</p>'; $paragraph = []; } };
+        foreach ($lines as $line) {
+            if (str_starts_with(trim($line), '```')) { $flush(); if ($code) { $html[] = '<pre><code>' . htmlspecialchars(implode("\n", $codeLines), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</code></pre>'; $codeLines = []; } $code = !$code; continue; }
+            if ($code) { $codeLines[] = $line; continue; }
+            if (preg_match('/^(#{1,6})\s+(.+)$/', $line, $m)) { $flush(); $level = strlen($m[1]); $html[] = '<h' . $level . '>' . $this->inline($m[2]) . '</h' . $level . '>'; continue; }
+            if (preg_match('/^[-*+]\s+(.+)$/', $line, $m)) { $flush(); if (!$list) { $html[] = '<ul>'; $list = true; } $html[] = '<li>' . $this->inline($m[1]) . '</li>'; continue; }
+            if ($list) { $html[] = '</ul>'; $list = false; }
+            if (str_starts_with($line, '> ')) { $flush(); if (!$quote) { $html[] = '<blockquote>'; $quote = true; } $html[] = '<p>' . $this->inline(substr($line, 2)) . '</p>'; continue; }
+            if ($quote) { $html[] = '</blockquote>'; $quote = false; }
+            if ($line === '') { $flush(); continue; } $paragraph[] = $this->inline($line);
         }
-        return implode("\n", $html);
+        $flush(); if ($list) $html[] = '</ul>'; if ($quote) $html[] = '</blockquote>'; if ($code) $html[] = '<pre><code>' . htmlspecialchars(implode("\n", $codeLines), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</code></pre>'; return implode("\n", $html);
     }
+
+    private function inline(string $text): string { $escaped = htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); return preg_replace('/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/', '<a href="$2">$1</a>', $escaped) ?? $escaped; }
 
     private function write(string $path, string $contents): void
     {

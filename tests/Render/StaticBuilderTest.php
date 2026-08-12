@@ -50,5 +50,16 @@ final class StaticBuilderTest extends TestCase
         self::assertStringContainsString('https://example.test/articles/first-post/', $article);
         self::assertStringContainsString('Ada Author', (string) file_get_contents($this->outputRoot . '/feed.json'));
         self::assertStringContainsString('/articles/second-post/', (string) file_get_contents($this->outputRoot . '/sitemap.xml'));
+        self::assertStringContainsString('/topics/notes/', (string) file_get_contents($this->outputRoot . '/sitemap.xml'));
+        self::assertStringContainsString('og:title', $article);
+        self::assertStringContainsString('<h1>First</h1>', $article);
+    }
+
+    public function test_rejects_duplicate_articles_and_topic_slug_collisions(): void
+    {
+        $one = new ArticleDocument('same', 'One', 'Body', new FrontMatter(['title' => 'One', 'slug' => 'same', 'date' => '2026-08-12']), '/one');
+        $two = new ArticleDocument('same', 'Two', 'Body', new FrontMatter(['title' => 'Two', 'slug' => 'same', 'date' => '2026-08-11']), '/two');
+        $this->expectException(\RuntimeException::class);
+        (new StaticBuilder())->build(new BuildInput([$one, $two], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
     }
 }

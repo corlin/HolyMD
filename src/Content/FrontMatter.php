@@ -93,8 +93,11 @@ final readonly class FrontMatter
     private static function scalar(string $value): string
     {
         $value = trim($value);
-        if ((str_starts_with($value, '"') && str_ends_with($value, '"')) || (str_starts_with($value, "'") && str_ends_with($value, "'"))) {
-            return substr($value, 1, -1);
+        if (str_starts_with($value, '"') && str_ends_with($value, '"')) {
+            return stripcslashes(substr($value, 1, -1));
+        }
+        if (str_starts_with($value, "'") && str_ends_with($value, "'")) {
+            return str_replace("''", "'", substr($value, 1, -1));
         }
         return $value;
     }
