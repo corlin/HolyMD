@@ -1,0 +1,9 @@
+.env
+.DS_Store
+**/.DS_Store
+/vendor/
+/content/
+/public/site/
+/public/.holymd-current
+/public/..holymd-current-releases/
+/public/.holymd-publish.lock
