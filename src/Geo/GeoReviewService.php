@@ -37,7 +37,7 @@ final readonly class GeoReviewService {
     {
         if (!is_array($value)) return false;
         foreach ($value as $key => $item) {
-            if (is_string($key) && in_array(strtolower($key), ['body', 'content', 'markdown', 'body_markdown', 'rewrite'], true)) return true;
+            if (is_string($key) && in_array(strtolower(preg_replace('/[^a-z0-9_]/i', '', $key)), ['body', 'content', 'markdown', 'body_markdown', 'bodymarkdown', 'rewrite'], true)) return true;
             if ($this->containsForbiddenKey($item)) return true;
         }
         return false;
