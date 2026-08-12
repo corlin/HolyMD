@@ -23,6 +23,7 @@
 - Added topic sitemap entries, duplicate article slug rejection, topic slug collision/empty rejection, and quoted/backslash front-matter round-trip coverage.
 - Follow-up commits: `78ce1ac`, `df5cad8`.
 - Final review fix `9248973` closes list/blockquote containers before headings and following blocks, adds valid sibling-structure coverage, and quotes serialized front-matter values containing newlines or backslashes.
+- Final transition fix `185ffc4` emits explicit `\\n`/`\\r` YAML escapes, closes quote/list containers on either transition, and separately covers C++/C# topic slug collisions.
 
 ## Concern
 
