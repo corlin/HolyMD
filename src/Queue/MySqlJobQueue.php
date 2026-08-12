@@ -16,7 +16,7 @@ final readonly class MySqlJobQueue
             $articleId = $this->articleId($article);
             $this->pdo->prepare("INSERT INTO builds (status) VALUES ('queued')")->execute();
             $buildId = (int) $this->pdo->lastInsertId();
-            $this->pdo->prepare("INSERT INTO jobs (job_type, status, article_id, build_id, action) VALUES ('build', 'queued', ?, ?, ?)")->execute([$articleId, $buildId, $action]);
+            $this->pdo->prepare("INSERT INTO jobs (job_type, status, article_id, build_id, action, available_at) VALUES ('build', 'queued', ?, ?, ?, UTC_TIMESTAMP(6))")->execute([$articleId, $buildId, $action]);
             return (int) $this->pdo->lastInsertId();
         });
     }
@@ -31,7 +31,7 @@ final readonly class MySqlJobQueue
             $requestKey = hash('sha256', $articleId . ':' . $versionId . ':' . $checksum);
             $this->pdo->prepare("INSERT INTO geo_reviews (article_id, article_version_id, status, provider, model, input_checksum, request_key) VALUES (?, ?, 'queued', 'configured', 'configured', ?, ?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)")->execute([$articleId, $versionId, $checksum, $requestKey]);
             $reviewId = (int) $this->pdo->lastInsertId();
-            $this->pdo->prepare("INSERT INTO jobs (job_type, status, article_id, geo_review_id) SELECT 'geo_review', 'queued', ?, ? WHERE NOT EXISTS (SELECT 1 FROM jobs WHERE geo_review_id = ? AND status IN ('queued','running','succeeded'))")->execute([$articleId, $reviewId, $reviewId]);
+            $this->pdo->prepare("INSERT INTO jobs (job_type, status, article_id, geo_review_id, available_at) SELECT 'geo_review', 'queued', ?, ?, UTC_TIMESTAMP(6) WHERE NOT EXISTS (SELECT 1 FROM jobs WHERE geo_review_id = ? AND status IN ('queued','running','succeeded'))")->execute([$articleId, $reviewId, $reviewId]);
             return (int) ($this->pdo->lastInsertId() ?: $reviewId);
         });
     }
