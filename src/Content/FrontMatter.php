@@ -20,7 +20,9 @@ final readonly class FrontMatter
             throw new InvalidArgumentException('Article must start with YAML front matter.');
         }
 
-        $lineEnding = str_contains($markdown, "\r\n") ? "\r\n" : "\n";
+        // Front matter owns its delimiter style. The Markdown body may contain
+        // different line endings after a browser/editor round trip.
+        $lineEnding = str_starts_with($markdown, "---\r\n") ? "\r\n" : "\n";
         $marker = $lineEnding . '---' . $lineEnding;
         $end = strpos($markdown, $marker, 3);
         if ($end === false) {

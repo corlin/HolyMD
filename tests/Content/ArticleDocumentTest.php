@@ -92,4 +92,17 @@ final class ArticleDocumentTest extends TestCase
         rmdir($articlesRoot);
         rmdir(dirname($articlesRoot));
     }
+
+    public function test_reads_lf_front_matter_when_the_body_contains_crlf(): void
+    {
+        file_put_contents(
+            $this->contentRoot . '/mixed-endings.md',
+            "---\ntitle: Mixed endings\nslug: mixed-endings\ndate: 2026-08-12\n---\nFirst line\r\n# Heading\r\n",
+        );
+        $repository = new ArticleRepository($this->contentRoot);
+
+        $article = $repository->read('mixed-endings');
+
+        self::assertSame("First line\r\n# Heading\r\n", $article->bodyMarkdown);
+    }
 }
