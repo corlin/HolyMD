@@ -22,6 +22,7 @@
 - Added Open Graph/Twitter metadata and Article, Person, WebSite, and BreadcrumbList JSON-LD with hex-safe JSON encoding.
 - Added topic sitemap entries, duplicate article slug rejection, topic slug collision/empty rejection, and quoted/backslash front-matter round-trip coverage.
 - Follow-up commits: `78ce1ac`, `df5cad8`.
+- Final review fix `9248973` closes list/blockquote containers before headings and following blocks, adds valid sibling-structure coverage, and quotes serialized front-matter values containing newlines or backslashes.
 
 ## Concern
 
