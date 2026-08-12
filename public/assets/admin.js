@@ -100,17 +100,36 @@
 
   const renderProposals = proposals => list.replaceChildren(...proposals.map(proposal => {
     const item = document.createElement('li');
+    item.className = 'geo-proposal-card';
     item.dataset.proposalId = proposal.id;
     item.dataset.proposalValue = JSON.stringify(proposal.value);
+
+    const header = document.createElement('div');
+    header.className = 'geo-card-header';
+    const tag = document.createElement('span');
+    tag.className = 'geo-type-tag';
+    tag.textContent = proposal.type;
+    header.append(tag);
+    item.append(header);
+
     const output = document.createElement('output');
-    output.textContent = proposal.type + ': ' + JSON.stringify(proposal.value);
+    output.className = 'geo-card-body';
+    output.dataset.geoDiff = '';
+    const valText = typeof proposal.value === 'string' ? proposal.value : JSON.stringify(proposal.value, null, 2);
+    output.textContent = valText;
     item.append(output);
+
+    const actions = document.createElement('div');
+    actions.className = 'geo-card-actions';
     ['accept', 'reject', 'edit'].forEach(action => {
       const button = document.createElement('button');
+      button.type = 'button';
       button.dataset.action = action;
-      button.textContent = action;
-      item.append(button);
+      button.className = 'btn-geo-' + action;
+      button.textContent = action === 'accept' ? 'Accept proposal' : (action === 'reject' ? 'Reject' : 'Edit');
+      actions.append(button);
     });
+    item.append(actions);
     return item;
   }));
 
