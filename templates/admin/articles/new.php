@@ -1,0 +1,7 @@
+<?php
+declare(strict_types=1);
+ob_start();
+$escape = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+?>
+<main class="admin-shell"><nav class="left-rail" aria-label="Administration"><a class="brand" href="/admin/articles">HolyMD</a><a class="active" href="/admin/articles">Articles</a><span>Library</span><span>Settings</span><footer>Administrator</footer></nav><section class="article-index"><p class="eyebrow">Writing studio</p><h1>New article</h1><p>Start with a Markdown draft. Saving this form creates the article and its first restorable version.</p><form class="new-article-form" method="post" action="/admin/articles/new"><input type="hidden" name="csrf_token" value="<?= $escape($csrfToken) ?>"><label>Title<input name="title" required></label><label>Slug <span class="muted">(optional)</span><input name="slug" pattern="[A-Za-z0-9 _-]+" aria-describedby="slug-help"></label><p id="slug-help" class="muted">A lowercase, URL-safe slug is generated from this value or the title.</p><label>Date<input name="date" type="date" value="<?= $escape($today) ?>" required></label><label class="markdown-label" for="markdown-body">Markdown</label><textarea id="markdown-body" name="body" spellcheck="true"></textarea><button type="submit">Create draft</button></form></section></main>
+<?php $content = (string) ob_get_clean(); $title = 'New article'; require dirname(__DIR__) . '/layout.php';

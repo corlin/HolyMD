@@ -44,6 +44,50 @@ final class ArticleControllerTest extends TestCase
         self::assertSame(401, $response->status);
     }
 
+    public function test_new_article_form_requires_administrator_authentication(): void
+    {
+        $response = $this->router([])->dispatch(new ServerRequest('GET', '/admin/articles/new'));
+
+        self::assertSame(401, $response->status);
+    }
+
+    public function test_new_article_form_includes_csrf_protected_creation_controls(): void
+    {
+        $response = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token'])->dispatch(new ServerRequest('GET', '/admin/articles/new'));
+
+        self::assertSame(200, $response->status);
+        self::assertStringContainsString('action="/admin/articles/new"', $response->body);
+        self::assertStringContainsString('value="expected-token"', $response->body);
+    }
+
+    public function test_new_article_creates_safe_markdown_and_first_version_then_redirects_to_edit(): void
+    {
+        $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);
+
+        $response = $router->dispatch(new ServerRequest('POST', '/admin/articles/new', [], [
+            'title' => 'A Fresh Note!', 'slug' => 'Fresh Note 2026', 'date' => '2026-08-12', 'body' => "# Hello\n", 'csrf_token' => 'expected-token',
+        ]));
+
+        self::assertSame(303, $response->status);
+        self::assertSame('/admin/articles/fresh-note-2026/edit', $response->headers['Location']);
+        $document = (new ArticleRepository($this->root . '/articles'))->read('fresh-note-2026');
+        self::assertSame('A Fresh Note!', $document->title);
+        self::assertSame("# Hello\n", $document->bodyMarkdown);
+        self::assertSame('fresh-note-2026', $document->frontMatter->get('slug'));
+        self::assertCount(1, (new VersionService($this->root . '/versions'))->list('fresh-note-2026'));
+    }
+
+    public function test_new_article_uses_title_when_slug_is_blank_and_rejects_bad_csrf_or_duplicates(): void
+    {
+        $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);
+        $payload = ['title' => 'Title Fallback', 'slug' => '', 'date' => '2026-08-12', 'body' => '', 'csrf_token' => 'expected-token'];
+
+        self::assertSame(303, $router->dispatch(new ServerRequest('POST', '/admin/articles/new', [], $payload))->status);
+        self::assertSame(422, $router->dispatch(new ServerRequest('POST', '/admin/articles/new', [], $payload))->status);
+        $payload['csrf_token'] = 'wrong-token';
+        self::assertSame(419, $router->dispatch(new ServerRequest('POST', '/admin/articles/new', [], $payload))->status);
+    }
+
     public function test_draft_save_rejects_a_request_without_a_valid_csrf_token(): void
     {
         $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);

@@ -63,6 +63,47 @@ final readonly class ArticleController
         return new Response(200, (string) ob_get_clean(), ['Content-Type' => 'text/html; charset=utf-8']);
     }
 
+    public function new(ServerRequest $request): Response
+    {
+        try {
+            $this->guard->requireAdministrator();
+        } catch (Unauthorized) {
+            return Response::json(['error' => 'Administrator authentication is required.'], 401);
+        }
+        $csrfToken = $this->csrf->token();
+        $today = (new \DateTimeImmutable('today'))->format('Y-m-d');
+        ob_start();
+        require dirname(__DIR__, 2) . '/templates/admin/articles/new.php';
+        return new Response(200, (string) ob_get_clean(), ['Content-Type' => 'text/html; charset=utf-8']);
+    }
+
+    public function create(ServerRequest $request): Response
+    {
+        if (($response = $this->authorizeMutation($request)) !== null) {
+            return $response;
+        }
+        try {
+            $title = $request->input('title');
+            $date = $request->input('date');
+            $body = $request->input('body', '');
+            $submittedSlug = $request->input('slug', '');
+            if (!is_string($title) || trim($title) === '' || !is_string($date) || !is_string($body) || !is_string($submittedSlug)) {
+                throw new InvalidArgumentException('Article title, date, and Markdown body are required.');
+            }
+            $title = trim($title);
+            $slug = $this->safeSlug($submittedSlug !== '' ? $submittedSlug : $title);
+            if ($this->articles->exists($slug)) {
+                throw new InvalidArgumentException('An article with this slug already exists.');
+            }
+            $document = new ArticleDocument($slug, $title, $body, new \HolyMD\Content\FrontMatter(['title' => $title, 'slug' => $slug, 'date' => $date]), $slug . '.md');
+            $this->articles->write($document);
+            $this->versions->snapshot($document);
+            return Response::redirect('/admin/articles/' . rawurlencode($slug) . '/edit');
+        } catch (InvalidArgumentException $exception) {
+            return Response::json(['error' => $exception->getMessage()], 422);
+        }
+    }
+
     public function edit(ServerRequest $request): Response
     {
         try {
@@ -148,5 +189,20 @@ final readonly class ArticleController
             throw new InvalidArgumentException('Invalid article draft route.');
         }
         return $matches[1];
+    }
+
+    private function safeSlug(string $value): string
+    {
+        $value = trim($value);
+        $transliterated = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $value);
+        if ($transliterated !== false) {
+            $value = $transliterated;
+        }
+        $slug = (string) preg_replace('/[^a-z0-9]+/', '-', strtolower($value));
+        $slug = trim($slug, '-');
+        if ($slug === '') {
+            throw new InvalidArgumentException('Article title or slug must contain letters or numbers.');
+        }
+        return $slug;
     }
 }

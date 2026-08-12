@@ -37,6 +37,11 @@ final readonly class ArticleRepository
         }
     }
 
+    public function exists(string $slug): bool
+    {
+        return is_file($this->safePath($slug));
+    }
+
     /** @return list<ArticleDocument> */
     public function all(): array
     {

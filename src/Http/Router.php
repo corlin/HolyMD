@@ -35,6 +35,8 @@ final readonly class Router
         if ($this->articles !== null && $request->method === 'GET' && $request->path === '/admin/articles') {
             return $this->articles->index($request);
         }
+        if ($this->articles !== null && $request->path === '/admin/articles/new' && $request->method === 'GET') return $this->articles->new($request);
+        if ($this->articles !== null && $request->path === '/admin/articles/new' && $request->method === 'POST') return $this->articles->create($request);
         if ($this->articles !== null && $request->method === 'GET' && preg_match('#^/admin/articles/[a-z0-9]+(?:-[a-z0-9]+)*/edit$#', $request->path) === 1) {
             return $this->articles->edit($request);
         }
