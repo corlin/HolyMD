@@ -26,8 +26,7 @@ final class ConfiguredAiClientTest extends TestCase
         self::assertSame('system', $payload['messages'][0]['role']);
         self::assertSame('user', $payload['messages'][1]['role']);
         self::assertSame('# Saved body', $payload['messages'][1]['content']);
-        self::assertSame('json_schema', $payload['response_format']['type']);
-        self::assertArrayNotHasKey('body', $payload['response_format']['json_schema']['schema']['properties']);
+        self::assertSame('json_object', $payload['response_format']['type']);
     }
 
     public function test_marks_rate_limits_retryable_and_redacts_provider_body(): void
