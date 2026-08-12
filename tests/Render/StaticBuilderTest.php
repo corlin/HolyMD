@@ -173,4 +173,30 @@ final class StaticBuilderTest extends TestCase
         self::assertStringContainsString('href="#subsection-a"', $html);
         self::assertStringContainsString('href="#section-two"', $html);
     }
+
+    public function test_llms_txt_includes_geo_metadata_when_present(): void
+    {
+        $frontMatter = new FrontMatter([
+            'title' => 'GEO Test Article',
+            'slug' => 'geo-test',
+            'date' => '2026-08-12',
+            'summary' => 'A GEO-reviewed summary for AI search.',
+            'topics' => ['AI', 'GEO'],
+            'entities' => 'Entity A, Entity B',
+            'faq' => ['What is GEO?'],
+            'metadata_suggestion' => 'Suggested metadata for title & description',
+        ]);
+        $article = new ArticleDocument('geo-test', 'GEO Test Article', 'Article body markdown.', $frontMatter, '/geo-test');
+        (new StaticBuilder())->build(new BuildInput([$article], 'Site', 'https://example.test', 'Author', 'About', true), $this->outputRoot);
+
+        $llmsTxt = (string) file_get_contents($this->outputRoot . '/llms.txt');
+        self::assertStringContainsString('- [GEO Test Article](https://example.test/articles/geo-test/): A GEO-reviewed summary for AI search.', $llmsTxt);
+
+        $llmsFullTxt = (string) file_get_contents($this->outputRoot . '/llms-full.txt');
+        self::assertStringContainsString('Summary: A GEO-reviewed summary for AI search.', $llmsFullTxt);
+        self::assertStringContainsString('Topics: AI, GEO', $llmsFullTxt);
+        self::assertStringContainsString('Entities: Entity A, Entity B', $llmsFullTxt);
+        self::assertStringContainsString('FAQ: What is GEO?', $llmsFullTxt);
+        self::assertStringContainsString('Metadata: Suggested metadata for title & description', $llmsFullTxt);
+    }
 }

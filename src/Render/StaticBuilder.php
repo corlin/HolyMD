@@ -78,7 +78,12 @@ final class StaticBuilder
         if ($input->generateLlmsTxt) {
             $lines = ['# ' . $input->siteName, '', $input->about, ''];
             foreach ($articles as $article) {
-                $lines[] = '- [' . $article->title . '](' . $this->url($input, '/articles/' . $article->slug . '/') . ')';
+                $summary = (string) $article->frontMatter->get('summary', '');
+                $line = '- [' . $article->title . '](' . $this->url($input, '/articles/' . $article->slug . '/') . ')';
+                if ($summary !== '') {
+                    $line .= ': ' . str_replace(["\r", "\n"], ' ', $summary);
+                }
+                $lines[] = $line;
             }
             $this->write($temporaryRoot . '/llms.txt', implode("\n", $lines) . "\n");
             $files[] = 'llms.txt';
@@ -89,6 +94,28 @@ final class StaticBuilder
                 $fullLines[] = '# ' . $article->title;
                 $fullLines[] = 'Published: ' . (string) $article->frontMatter->get('date');
                 $fullLines[] = 'URL: ' . $this->url($input, '/articles/' . $article->slug . '/');
+                $summary = (string) $article->frontMatter->get('summary', '');
+                if ($summary !== '') {
+                    $fullLines[] = 'Summary: ' . str_replace(["\r", "\n"], ' ', $summary);
+                }
+                $topics = (array) $article->frontMatter->get('topics', []);
+                if ($topics !== []) {
+                    $fullLines[] = 'Topics: ' . implode(', ', array_map('strval', $topics));
+                }
+                $entities = $article->frontMatter->get('entities');
+                if (is_string($entities) && $entities !== '') {
+                    $fullLines[] = 'Entities: ' . str_replace(["\r", "\n"], ' ', $entities);
+                } elseif (is_array($entities) && $entities !== []) {
+                    $fullLines[] = 'Entities: ' . implode(', ', array_map('strval', $entities));
+                }
+                $faq = $article->frontMatter->get('faq');
+                if (is_array($faq) && $faq !== []) {
+                    $fullLines[] = 'FAQ: ' . implode(' | ', array_map('strval', $faq));
+                }
+                $metadataSuggestion = $article->frontMatter->get('metadata_suggestion');
+                if (is_string($metadataSuggestion) && $metadataSuggestion !== '') {
+                    $fullLines[] = 'Metadata: ' . str_replace(["\r", "\n"], ' ', $metadataSuggestion);
+                }
                 $fullLines[] = '';
                 $fullLines[] = trim($article->bodyMarkdown);
                 $fullLines[] = '';
