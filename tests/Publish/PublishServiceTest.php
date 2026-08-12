@@ -124,8 +124,9 @@ final class PublishServiceTest extends TestCase
             'A concise author biography.', false, null, null, null, 'zh-CN',
         );
 
-        $this->expectException(RuntimeException::class);
-        $service->publish(new ArticleId('published'));
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('placeholder');
+        $service->publish(new ArticleId('first-note'));
     }
 
     private function removeDirectory(string $path): void
