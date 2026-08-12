@@ -36,7 +36,7 @@ final class StaticBuilder
         foreach ($articles as $article) {
             $route = '/articles/' . $article->slug . '/';
             $path = $temporaryRoot . $route . 'index.html';
-            $this->write($path, $this->renderer->render('article', $this->articleData($article, $input, $route)));
+            $this->write($path, $this->renderer->render('article', $this->articleData($article, $articles, $input, $route)));
             $files[] = $route . 'index.html';
         }
         $topics = [];
@@ -51,16 +51,21 @@ final class StaticBuilder
             if ($slug === '' || (isset($topicRoutes[$slug]) && $topicRoutes[$slug] !== $topic)) throw new RuntimeException(sprintf('Topic "%s" has an unsafe or colliding slug.', $topic));
             $topicRoutes[$slug] = $topic;
             $route = '/topics/' . $slug . '/';
-            $this->write($temporaryRoot . $route . 'index.html', $this->renderer->render('topic', ['siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'topic' => $topic, 'articles' => $topicArticles, 'route' => $route]));
+            $this->write($temporaryRoot . $route . 'index.html', $this->renderer->render('topic', [
+                'siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'topic' => $topic, 'articles' => $topicArticles, 'route' => $route,
+            ]));
             $files[] = $route . 'index.html';
         }
-        $this->write($temporaryRoot . '/index.html', $this->renderer->render('index', ['siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'articles' => $articles]));
+        $this->write($temporaryRoot . '/index.html', $this->renderer->render('index', [
+            'siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'about' => $input->about, 'articles' => $articles, 'topics' => $topics,
+        ]));
         $this->write($temporaryRoot . '/about/index.html', $this->renderer->render('about', ['siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'about' => $input->about]));
+        $this->write($temporaryRoot . '/assets/site.css', $this->siteStyles());
         $this->write($temporaryRoot . '/rss.xml', $this->rss($articles, $input));
         $this->write($temporaryRoot . '/feed.json', $this->jsonFeed($articles, $input));
         $this->write($temporaryRoot . '/sitemap.xml', $this->sitemap($articles, $input, array_keys($topicRoutes)));
         $this->write($temporaryRoot . '/robots.txt', "User-agent: *\nAllow: /\nSitemap: " . $this->url($input, '/sitemap.xml') . "\n");
-        $files = [...$files, 'index.html', 'about/index.html', 'rss.xml', 'feed.json', 'sitemap.xml', 'robots.txt'];
+        $files = [...$files, 'index.html', 'about/index.html', 'assets/site.css', 'rss.xml', 'feed.json', 'sitemap.xml', 'robots.txt'];
         if ($input->generateLlmsTxt) {
             $lines = ['# ' . $input->siteName, '', $input->about, ''];
             foreach ($articles as $article) {
@@ -73,7 +78,8 @@ final class StaticBuilder
     }
 
     /** @return array<string, mixed> */
-    private function articleData(ArticleDocument $article, BuildInput $input, string $route): array
+    /** @param list<ArticleDocument> $articles */
+    private function articleData(ArticleDocument $article, array $articles, BuildInput $input, string $route): array
     {
         $url = $this->url($input, $route);
         $date = (string) $article->frontMatter->get('date');
@@ -88,9 +94,14 @@ final class StaticBuilder
                 ['@type' => 'BreadcrumbList', 'itemListElement' => [['@type' => 'ListItem', 'position' => 1, 'name' => 'Home', 'item' => $this->url($input, '/')], ['@type' => 'ListItem', 'position' => 2, 'name' => $article->title, 'item' => $url]]],
             ];
         if (is_array($structured)) $graph[] = $structured;
+        $articleTopics = array_values(array_filter((array) $article->frontMatter->get('topics', []), 'is_string'));
+        $related = array_values(array_filter($articles, static function (ArticleDocument $candidate) use ($article, $articleTopics): bool {
+            if ($candidate->slug === $article->slug || $articleTopics === []) return false;
+            return array_intersect($articleTopics, (array) $candidate->frontMatter->get('topics', [])) !== [];
+        }));
         return [
             'siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'article' => $article,
-            'url' => $url, 'date' => $date, 'modified' => $modified, 'summary' => $summary, 'sources' => $sources, 'contentHtml' => $this->markdown($article->bodyMarkdown),
+            'url' => $url, 'date' => $date, 'modified' => $modified, 'summary' => $summary, 'sources' => $sources, 'topics' => $articleTopics, 'related' => array_slice($related, 0, 3), 'contentHtml' => $this->markdown($article->bodyMarkdown),
             'jsonLd' => json_encode(['@context' => 'https://schema.org', '@graph' => $graph], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR),
         ];
     }
@@ -141,6 +152,14 @@ final class StaticBuilder
     }
 
     private function inline(string $text): string { $escaped = htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); return preg_replace('/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/', '<a href="$2">$1</a>', $escaped) ?? $escaped; }
+
+    private function siteStyles(): string
+    {
+        $path = dirname(__DIR__, 2) . '/templates/public/site.css';
+        $styles = file_get_contents($path);
+        if ($styles === false) throw new RuntimeException('Unable to read the public site stylesheet.');
+        return $styles;
+    }
 
     private function write(string $path, string $contents): void
     {

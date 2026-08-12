@@ -82,6 +82,43 @@ final class StaticBuilderTest extends TestCase
         self::assertStringContainsString('"citation":["https://example.org/evidence"]', $html);
     }
 
+    public function test_renders_a_personal_brand_reading_experience_with_static_styles(): void
+    {
+        $articles = [
+            new ArticleDocument('featured', 'Featured essay', 'A considered opening.', new FrontMatter(['title' => 'Featured essay', 'slug' => 'featured', 'date' => '2026-08-12', 'summary' => 'A concise, configured summary.', 'topics' => ['Notes', 'Systems'], 'sources' => ['https://example.org/source']]), '/featured'),
+            new ArticleDocument('latest', 'Latest essay', 'A second thought.', new FrontMatter(['title' => 'Latest essay', 'slug' => 'latest', 'date' => '2026-08-11', 'summary' => 'Another configured summary.', 'topics' => ['Notes']]), '/latest'),
+        ];
+
+        $manifest = (new StaticBuilder())->build(new BuildInput($articles, 'HolyMD Notes', 'https://example.test', 'Ada Author', 'A short author biography.'), $this->outputRoot);
+
+        self::assertContains('assets/site.css', $manifest->files);
+        self::assertFileExists($this->outputRoot . '/assets/site.css');
+
+        $home = (string) file_get_contents($this->outputRoot . '/index.html');
+        self::assertStringContainsString('<link rel="stylesheet" href="/assets/site.css">', $home);
+        self::assertStringContainsString('<nav aria-label="Primary">', $home);
+        self::assertStringContainsString('Featured writing', $home);
+        self::assertStringContainsString('Latest writing', $home);
+        self::assertStringContainsString('/topics/notes/', $home);
+        self::assertStringContainsString('class="site-footer"', $home);
+
+        $article = (string) file_get_contents($this->outputRoot . '/articles/featured/index.html');
+        self::assertStringContainsString('class="reading-meta"', $article);
+        self::assertStringContainsString('class="prose"', $article);
+        self::assertStringContainsString('class="author-box"', $article);
+        self::assertStringContainsString('id="related-heading"', $article);
+        self::assertStringContainsString('Published', $article);
+        self::assertStringContainsString('Sources', $article);
+
+        $about = (string) file_get_contents($this->outputRoot . '/about/index.html');
+        self::assertStringContainsString('A short author biography.', $about);
+        self::assertStringContainsString('<nav aria-label="Primary">', $about);
+
+        $topic = (string) file_get_contents($this->outputRoot . '/topics/notes/index.html');
+        self::assertStringContainsString('Articles on Notes', $topic);
+        self::assertStringContainsString('<nav aria-label="Primary">', $topic);
+    }
+
     public function test_rejects_duplicate_articles_and_topic_slug_collisions(): void
     {
         $one = new ArticleDocument('same', 'One', 'Body', new FrontMatter(['title' => 'One', 'slug' => 'same', 'date' => '2026-08-12']), '/one');
