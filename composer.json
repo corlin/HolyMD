@@ -1,0 +1,29 @@
+{
+  "name": "holymd/holymd",
+  "description": "A static-first Markdown blog manager for shared PHP hosting.",
+  "type": "project",
+  "license": "proprietary",
+  "require": {
+    "php": "^8.4",
+    "php-di/php-di": "^7.0"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^12.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "HolyMD\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "HolyMD\\Tests\\": "tests/"
+    }
+  },
+  "scripts": {
+    "test": "phpunit"
+  },
+  "config": {
+    "sort-packages": true
+  }
+}
