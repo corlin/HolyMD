@@ -120,8 +120,8 @@ final class PublishServiceTest extends TestCase
     {
         $service = new PublishService(
             new ArticleRepository($this->root . '/articles'), new StaticBuilder(), new AtomicPublicTree(),
-            $this->root . '/public/.holymd-current', 'Your publication', 'https://notes.example.com', 'Your name',
-            'A concise author biography.', false, null, null, null, 'zh-CN',
+            $this->root . '/public/.holymd-current', 'REPLACE_WITH_PUBLICATION_NAME', 'https://REPLACE_WITH_YOUR_DOMAIN', 'REPLACE_WITH_AUTHOR_NAME',
+            'REPLACE_WITH_AUTHOR_BIOGRAPHY', false, null, null, null, 'zh-CN',
         );
 
         $this->expectException(\InvalidArgumentException::class);
