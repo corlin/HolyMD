@@ -20,8 +20,9 @@ final readonly class VersionService
         if (!is_dir($this->versionsRoot) && !mkdir($this->versionsRoot, 0775, true) && !is_dir($this->versionsRoot)) {
             throw new RuntimeException('Unable to create the article version directory.');
         }
-        $id = new VersionId(bin2hex(random_bytes(16)));
-        if (file_put_contents($this->path($id), $document->serialize(), LOCK_EX) === false) {
+        $serialized = $document->serialize();
+        $id = new VersionId(substr(hash('sha256', $serialized), 0, 32));
+        if (!is_file($this->path($id)) && file_put_contents($this->path($id), $serialized, LOCK_EX) === false) {
             throw new RuntimeException('Unable to write article version snapshot.');
         }
         return $id;

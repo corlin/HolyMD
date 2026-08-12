@@ -11,7 +11,7 @@ final readonly class ProposalAcceptance {
         $proposal = $this->proposals->get($id);
         if ($proposal->status !== 'pending') throw new LogicException('Only pending GEO proposals can be accepted.');
         $original = $this->articles->read($proposal->articleSlug);
-        if (!hash_equals($proposal->bodyHash, hash('sha256', $original->bodyMarkdown))) throw new LogicException('The article body changed since this GEO proposal was reviewed.');
+        if (!hash_equals($proposal->bodyHash, hash('sha256', $original->bodyMarkdown)) && !hash_equals($proposal->bodyHash, hash('sha256', $original->serialize()))) throw new LogicException('The article changed since this GEO proposal was reviewed.');
         $frontMatter = $original->frontMatter;
         foreach ($this->frontMatterChanges($proposal) as $key => $value) $frontMatter = $frontMatter->with($key, $value);
         $accepted = $original->withFrontMatter($frontMatter);

@@ -18,9 +18,9 @@ final class PublicEntrypointTest extends TestCase
         $rules = (string) file_get_contents(__DIR__ . '/../../public/.htaccess');
         self::assertStringContainsString('RewriteRule ^admin', $rules);
         self::assertStringContainsString('RewriteRule ^assets/', $rules);
-        self::assertStringContainsString('site/$1', $rules);
-        self::assertStringContainsString('site/$1/index.html', $rules);
-        self::assertStringContainsString('RewriteRule ^site(?:/|$) - [END]', $rules);
-        self::assertStringContainsString('site/$1 [END]', $rules);
+        self::assertStringContainsString('.holymd-current/$1', $rules);
+        self::assertStringContainsString('.holymd-current/$1/index.html', $rules);
+        self::assertStringContainsString('(?:site|\\.holymd-current)', $rules);
+        self::assertStringContainsString('.holymd-current/$1 [END]', $rules);
     }
 }

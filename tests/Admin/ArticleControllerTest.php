@@ -131,6 +131,14 @@ final class ArticleControllerTest extends TestCase
         self::assertSame("Original body\n", (new ArticleRepository($this->root . '/articles'))->read('first-note')->bodyMarkdown);
     }
 
+    public function test_identical_saved_article_reuses_the_same_stable_version(): void
+    {
+        $versions = new VersionService($this->root . '/versions');
+        $document = (new ArticleRepository($this->root . '/articles'))->read('first-note');
+        self::assertSame($versions->snapshot($document)->value, $versions->snapshot($document)->value);
+        self::assertCount(1, glob($this->root . '/versions/*.md') ?: []);
+    }
+
     public function test_publish_is_an_authorized_csrf_protected_real_publication_action(): void
     {
         $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);

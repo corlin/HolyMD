@@ -4,15 +4,15 @@ RewriteEngine On
 # Keep the PHP admin runtime and authored admin assets at stable paths.
 RewriteRule ^admin(?:/|$) index.php [L,QSA]
 RewriteRule ^assets/ - [L]
-RewriteRule ^site(?:/|$) - [END]
+RewriteRule ^(?:site|\.holymd-current)(?:/|$) - [END]
 
 # Serve generated static files directly. Clean routes resolve to index.html.
-RewriteCond %{DOCUMENT_ROOT}/site/$1 -f
-RewriteRule ^(.+)$ site/$1 [END]
-RewriteCond %{DOCUMENT_ROOT}/site/$1/index.html -f
-RewriteRule ^(.+?)/?$ site/$1/index.html [END]
-RewriteCond %{DOCUMENT_ROOT}/site/index.html -f
-RewriteRule ^$ site/index.html [END]
+RewriteCond %{DOCUMENT_ROOT}/.holymd-current/$1 -f
+RewriteRule ^(.+)$ .holymd-current/$1 [END]
+RewriteCond %{DOCUMENT_ROOT}/.holymd-current/$1/index.html -f
+RewriteRule ^(.+?)/?$ .holymd-current/$1/index.html [END]
+RewriteCond %{DOCUMENT_ROOT}/.holymd-current/index.html -f
+RewriteRule ^$ .holymd-current/index.html [END]
 
 # Local/shared-host fallback retains the guarded PHP resolver and truthful 404s.
 RewriteRule ^ index.php [L,QSA]

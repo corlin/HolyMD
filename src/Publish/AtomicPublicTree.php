@@ -24,18 +24,20 @@ final class AtomicPublicTree
         $release = $releases . '/release-' . gmdate('YmdHis') . '-' . bin2hex(random_bytes(6));
         if (!rename($temporaryRoot, $release)) throw new RuntimeException('Unable to store the completed static release.');
 
-        // One-time migration for installations whose live pointer is still a directory.
-        if (is_dir($liveRoot) && !is_link($liveRoot)) {
-            $legacy = $releases . '/legacy-' . bin2hex(random_bytes(6));
-            if (!rename($liveRoot, $legacy) || !symlink($legacy, $liveRoot)) {
-                if (!file_exists($liveRoot) && is_dir($legacy)) rename($legacy, $liveRoot);
-                $this->remove($release);
-                throw new RuntimeException('Symlink releases are unavailable; retain the existing live tree and configure symlink support.');
-            }
-        }
+        if (file_exists($liveRoot) && !is_link($liveRoot)) { $this->remove($release); throw new RuntimeException('The static release pointer must be prepared before publishing.'); }
         $pointer = $parent . '/.' . basename($liveRoot) . '-next-' . bin2hex(random_bytes(6));
         if (!symlink($release, $pointer)) { $this->remove($release); throw new RuntimeException('Unable to create static release pointer.'); }
         if (!rename($pointer, $liveRoot)) { unlink($pointer); $this->remove($release); throw new RuntimeException('Unable to atomically activate the static release pointer.'); }
+    }
+
+    /** Prepare a stable pointer without moving or hiding the legacy public/site tree. */
+    public function prepare(string $pointer, string $legacyTree): void
+    {
+        if (file_exists($pointer) || is_link($pointer)) return;
+        if (!is_dir($legacyTree)) throw new RuntimeException('Legacy static tree does not exist.');
+        $probe = dirname($pointer) . '/.holymd-symlink-probe-' . bin2hex(random_bytes(4));
+        if (!symlink($legacyTree, $probe)) throw new RuntimeException('This host does not support static release symlinks.');
+        if (!rename($probe, $pointer)) { unlink($probe); throw new RuntimeException('Unable to install the static release pointer.'); }
     }
 
     private function remove(string $path): void

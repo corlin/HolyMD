@@ -16,6 +16,16 @@ final class QueueProducerTest extends TestCase
         self::assertStringContainsString('ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)', $source);
     }
 
+    public function test_queue_geo_store_is_mysql_backed_and_bound_to_serialized_article_checksum(): void
+    {
+        $store = (string) file_get_contents(__DIR__ . '/../../src/Geo/MySqlGeoProposalStore.php');
+        $queue = (string) file_get_contents(__DIR__ . '/../../src/Queue/MySqlJobQueue.php');
+        self::assertStringContainsString('FROM geo_proposals INNER JOIN geo_reviews', $store);
+        self::assertStringContainsString("status = 'pending'", $store);
+        self::assertStringContainsString("hash('sha256', \$article->serialize())", $queue);
+        self::assertStringContainsString('ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)', $queue);
+    }
+
     public function test_schema_has_idempotency_keys_and_publish_action_migration(): void
     {
         $schema = (string) file_get_contents(__DIR__ . '/../../database/schema.sql');

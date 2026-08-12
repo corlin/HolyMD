@@ -21,7 +21,7 @@ $document = (new ArticleRepository($root . '/content/articles'))->read($slug);
 $binding = $pdo->prepare('SELECT geo_reviews.input_checksum FROM geo_reviews INNER JOIN articles ON articles.id = geo_reviews.article_id INNER JOIN article_versions ON article_versions.id = geo_reviews.article_version_id AND article_versions.article_id = articles.id WHERE geo_reviews.id = ? AND articles.slug = ?');
 $binding->execute([(int) $reviewId, $slug]);
 $expectedChecksum = $binding->fetchColumn();
-if (!is_string($expectedChecksum) || !hash_equals($expectedChecksum, hash('sha256', $document->bodyMarkdown))) throw new RuntimeException('GEO review is not bound to the current article version checksum.');
+if (!is_string($expectedChecksum) || !hash_equals($expectedChecksum, hash('sha256', $document->serialize()))) throw new RuntimeException('GEO review is not bound to the current saved article version checksum.');
 $review = (new GeoReviewService($container->get(AiClient::class)))->review($document);
 $pdo->beginTransaction();
 try {

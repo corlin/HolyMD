@@ -15,6 +15,7 @@ use HolyMD\Geo\GeoController;
 use HolyMD\Geo\GeoProposalStore;
 use HolyMD\Geo\FileGeoReviewStore;
 use HolyMD\Geo\GeoReviewService;
+use HolyMD\Geo\MySqlGeoProposalStore;
 use HolyMD\Publish\AtomicPublicTree;
 use HolyMD\Publish\PublishService;
 use HolyMD\Render\StaticBuilder;
@@ -27,7 +28,7 @@ $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 if (!is_string($path)) { http_response_code(400); exit; }
 $root = dirname(__DIR__);
 if (!str_starts_with($path, '/admin')) {
-    $siteRoot = realpath((string) (getenv('HOLYMD_PUBLIC_TREE') ?: $root . '/public/site'));
+    $siteRoot = realpath((string) (getenv('HOLYMD_PUBLIC_TREE') ?: $root . '/public/.holymd-current'));
     $relative = trim($path, '/');
     $sitePath = $relative === ''
         ? 'index.html'
@@ -54,15 +55,15 @@ $controller = new ArticleController(
     new Csrf($_SESSION),
     new PublishService(
         new ArticleRepository($root . '/content/articles'), new StaticBuilder(), new AtomicPublicTree(),
-        (string) (getenv('HOLYMD_PUBLIC_TREE') ?: $root . '/public/site'), (string) (getenv('HOLYMD_SITE_NAME') ?: 'HolyMD'), (string) (getenv('HOLYMD_SITE_URL') ?: 'https://example.invalid'),
+        (string) (getenv('HOLYMD_PUBLIC_TREE') ?: $root . '/public/.holymd-current'), (string) (getenv('HOLYMD_SITE_NAME') ?: 'HolyMD'), (string) (getenv('HOLYMD_SITE_URL') ?: 'https://example.invalid'),
         (string) (getenv('HOLYMD_AUTHOR_NAME') ?: 'Author'), (string) (getenv('HOLYMD_ABOUT') ?: ''),
         getenv('HOLYMD_LLMS_TXT') === '1', $root . '/content/audit',
         null, $root . '/content/holymd-publish.lock',
     ),
     new MySqlJobQueue($container->get(\PDO::class)),
 );
-$geoStore = new FileGeoReviewStore($root . '/content/geo');
-$geo = new GeoController(new ArticleRepository($root . '/content/articles'), new GeoReviewService($container->get(\HolyMD\Geo\AiClient::class), $geoStore), $geoStore, new AdminGuard($_SESSION), new Csrf($_SESSION), new MySqlJobQueue($container->get(\PDO::class)), new VersionService($root . '/content/versions'));
+$geoStore = new MySqlGeoProposalStore($container->get(\PDO::class));
+$geo = new GeoController(new ArticleRepository($root . '/content/articles'), new GeoReviewService($container->get(\HolyMD\Geo\AiClient::class)), $geoStore, new AdminGuard($_SESSION), new Csrf($_SESSION), new MySqlJobQueue($container->get(\PDO::class)), new VersionService($root . '/content/versions'));
 $response = (new Router($controller, $geo, new AuthController($container->get(\PDO::class), $_SESSION, new Csrf($_SESSION))))->dispatch(new ServerRequest(
     $_SERVER['REQUEST_METHOD'] ?? 'GET',
     $path,
