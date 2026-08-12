@@ -230,7 +230,7 @@ final readonly class ArticleController
             $encodedImage = file_get_contents($upload['tmp_name']);
             $decodedImage = is_string($encodedImage) ? @imagecreatefromstring($encodedImage) : false;
             if ($decodedImage === false) throw new InvalidArgumentException('The upload must contain complete, decodable image pixels.');
-            imagedestroy($decodedImage);
+        unset($decodedImage);
             $allowedTypes = [IMAGETYPE_JPEG => ['image/jpeg', 'jpg'], IMAGETYPE_PNG => ['image/png', 'png'], IMAGETYPE_GIF => ['image/gif', 'gif'], IMAGETYPE_WEBP => ['image/webp', 'webp']];
             $detectedMime = (new \finfo(FILEINFO_MIME_TYPE))->file($upload['tmp_name']);
             if (!isset($allowedTypes[$imageType]) || ($image['mime'] ?? null) !== $allowedTypes[$imageType][0] || $detectedMime !== $allowedTypes[$imageType][0]) throw new InvalidArgumentException('Only consistently encoded JPEG, PNG, GIF, and WebP images are allowed.');
