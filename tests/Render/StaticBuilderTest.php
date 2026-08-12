@@ -55,6 +55,15 @@ final class StaticBuilderTest extends TestCase
         self::assertStringContainsString('<h1>First</h1>', $article);
     }
 
+    public function test_closes_lists_and_quotes_before_following_blocks(): void
+    {
+        $article = new ArticleDocument('blocks', 'Blocks', "- item\n# Heading\n> quote\n## Subheading", new FrontMatter(['title' => 'Blocks', 'slug' => 'blocks', 'date' => '2026-08-12']), '/blocks');
+        (new StaticBuilder())->build(new BuildInput([$article], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
+        $html = (string) file_get_contents($this->outputRoot . '/articles/blocks/index.html');
+        self::assertStringContainsString("<ul>\n<li>item</li>\n</ul>\n<h1>Heading</h1>\n<blockquote>", $html);
+        self::assertStringContainsString("</blockquote>\n<h2>Subheading</h2>", $html);
+    }
+
     public function test_rejects_duplicate_articles_and_topic_slug_collisions(): void
     {
         $one = new ArticleDocument('same', 'One', 'Body', new FrontMatter(['title' => 'One', 'slug' => 'same', 'date' => '2026-08-12']), '/one');

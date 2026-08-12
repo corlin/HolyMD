@@ -105,6 +105,6 @@ final readonly class FrontMatter
     private static function encodeScalar(mixed $value): string
     {
         $value = (string) $value;
-        return preg_match('/[:#\[\]{}",]|^\s|\s$/', $value) === 1 ? '"' . addcslashes($value, "\\\"") . '"' : $value;
+        return preg_match('/[:#\[\]{}",]|[\\\r\n]|^\s|\s$/', $value) === 1 ? '"' . addcslashes($value, "\\\"") . '"' : $value;
     }
 }
