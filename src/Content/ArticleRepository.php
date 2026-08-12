@@ -37,6 +37,16 @@ final readonly class ArticleRepository
         }
     }
 
+    /** @return list<ArticleDocument> */
+    public function all(): array
+    {
+        $documents = [];
+        foreach (glob($this->articlesRoot . '/*.md') ?: [] as $path) {
+            $documents[] = $this->read(basename($path, '.md'));
+        }
+        return $documents;
+    }
+
     private function safePath(string $path): string
     {
         if (!preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*(?:\.md)?$/', $path)) {
