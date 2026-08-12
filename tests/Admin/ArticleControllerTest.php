@@ -84,6 +84,39 @@ final class ArticleControllerTest extends TestCase
         self::assertSame("Original body\n", (new ArticleRepository($this->root . '/articles'))->read('first-note')->bodyMarkdown);
     }
 
+    public function test_publish_is_an_authorized_csrf_protected_pending_action(): void
+    {
+        $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);
+
+        $response = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/publish', [], ['csrf_token' => 'expected-token']));
+
+        self::assertSame(202, $response->status);
+        self::assertSame(['action' => 'publish', 'pending' => true, 'slug' => 'first-note'], json_decode($response->body, true, flags: JSON_THROW_ON_ERROR));
+    }
+
+    public function test_publish_rejects_a_missing_csrf_token(): void
+    {
+        $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);
+
+        $response = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/publish'));
+
+        self::assertSame(419, $response->status);
+    }
+
+    public function test_versions_are_scoped_to_the_current_article_for_listing_and_restore(): void
+    {
+        file_put_contents($this->root . '/articles/second-note.md', "---\ntitle: Second note\nslug: second-note\ndate: 2026-08-12\n---\nSecond body\n");
+        $versions = new VersionService($this->root . '/versions');
+        $secondVersion = $versions->snapshot((new ArticleRepository($this->root . '/articles'))->read('second-note'));
+        $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);
+
+        self::assertSame([], $versions->list('first-note'));
+        $response = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/restore/' . $secondVersion->value, [], ['csrf_token' => 'expected-token']));
+
+        self::assertSame(422, $response->status);
+        self::assertSame("Original body\n", (new ArticleRepository($this->root . '/articles'))->read('first-note')->bodyMarkdown);
+    }
+
     /** @param array<string, mixed> $session */
     private function router(array $session): Router
     {

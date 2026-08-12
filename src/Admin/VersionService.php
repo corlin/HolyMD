@@ -27,7 +27,7 @@ final readonly class VersionService
         return $id;
     }
 
-    public function restore(VersionId $id): ArticleDocument
+    public function restore(VersionId $id, ?string $expectedSlug = null): ArticleDocument
     {
         $markdown = file_get_contents($this->path($id));
         if ($markdown === false) {
@@ -39,15 +39,30 @@ final readonly class VersionService
         if (!is_string($slug) || !is_string($title)) {
             throw new InvalidArgumentException('Article version has invalid front matter.');
         }
-        return new ArticleDocument($slug, $title, $body, $frontMatter, $this->path($id));
+        $document = new ArticleDocument($slug, $title, $body, $frontMatter, $this->path($id));
+        if ($expectedSlug !== null && $document->slug !== $expectedSlug) {
+            throw new InvalidArgumentException('Article version does not belong to this article.');
+        }
+        return $document;
     }
 
     /** @return list<VersionId> */
-    public function list(): array
+    public function list(string $articleSlug): array
     {
         $files = glob($this->versionsRoot . '/*.md') ?: [];
         rsort($files, SORT_STRING);
-        return array_values(array_map(static fn (string $path): VersionId => new VersionId((string) basename($path, '.md')), $files));
+        return array_values(array_filter(array_map(
+            function (string $path) use ($articleSlug): ?VersionId {
+                $id = new VersionId((string) basename($path, '.md'));
+                try {
+                    $this->restore($id, $articleSlug);
+                    return $id;
+                } catch (InvalidArgumentException) {
+                    return null;
+                }
+            },
+            $files,
+        )));
     }
 
     private function path(VersionId $id): string

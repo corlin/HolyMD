@@ -72,7 +72,7 @@ final readonly class ArticleController
         } catch (InvalidArgumentException) {
             return Response::json(['error' => 'Article not found.'], 404);
         }
-        $versions = $this->versions->list();
+        $versions = $this->versions->list($article->slug);
         $csrfToken = $this->csrf->token();
         ob_start();
         require dirname(__DIR__, 2) . '/templates/admin/articles/edit.php';
@@ -85,8 +85,11 @@ final readonly class ArticleController
             return $response;
         }
         try {
-            $version = new VersionId((string) basename($request->path));
-            $document = $this->versions->restore($version);
+            if (preg_match('#^/admin/articles/([a-z0-9]+(?:-[a-z0-9]+)*)/restore/([a-f0-9]{32})$#', $request->path, $matches) !== 1) {
+                throw new InvalidArgumentException('Invalid article restore route.');
+            }
+            $version = new VersionId($matches[2]);
+            $document = $this->versions->restore($version, $matches[1]);
             $this->articles->write($document);
             $this->versions->snapshot($document);
             return Response::redirect('/admin/articles/' . $document->slug . '/edit');
@@ -100,7 +103,10 @@ final readonly class ArticleController
         if (($response = $this->authorizeMutation($request)) !== null) {
             return $response;
         }
-        return Response::json(['error' => 'Publishing and settings are installed in a later release.'], 501);
+        if (preg_match('#^/admin/articles/([a-z0-9]+(?:-[a-z0-9]+)*)/(publish|withdraw)$#', $request->path, $matches) === 1) {
+            return Response::json(['action' => $matches[2], 'pending' => true, 'slug' => $matches[1]], 202);
+        }
+        return Response::json(['action' => 'settings', 'pending' => true], 202);
     }
 
     private function authorizeMutation(ServerRequest $request): ?Response
