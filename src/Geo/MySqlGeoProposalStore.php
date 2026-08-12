@@ -16,15 +16,14 @@ final readonly class MySqlGeoProposalStore implements GeoProposalStore
         $query->execute([$id->value]);
         $row = $query->fetch();
         if (!is_array($row)) throw new InvalidArgumentException('GEO proposal was not found.');
-        $metadata = json_decode((string) $row['proposed_metadata'], true, 512, JSON_THROW_ON_ERROR);
-        $value = is_array($metadata) && array_keys($metadata) === ['value'] ? $metadata['value'] : $metadata;
+        $value = json_decode((string) $row['proposed_metadata'], true, 512, JSON_THROW_ON_ERROR);
         if (!is_array($value) && !is_string($value)) throw new RuntimeException('Stored GEO proposal metadata is invalid.');
         return new GeoProposal(new GeoProposalId((string) $row['id']), (string) $row['slug'], (string) $row['input_checksum'], (string) $row['proposal_type'], $value, (string) $row['status'], (string) $row['body_checksum']);
     }
 
     public function save(GeoProposal $proposal): void
     {
-        $json = json_encode(is_array($proposal->value) ? $proposal->value : ['value' => $proposal->value], JSON_THROW_ON_ERROR);
+        $json = json_encode($proposal->value, JSON_THROW_ON_ERROR);
         $update = $this->pdo->prepare("UPDATE geo_proposals SET proposed_metadata = ?, proposal_key = ? WHERE id = ? AND status = 'pending'");
         $update->execute([$json, hash('sha256', $proposal->id->value . ':' . $proposal->type . ':' . $json), $proposal->id->value]);
         if ($update->rowCount() !== 1) throw new InvalidArgumentException('Only a pending GEO proposal can be edited.');

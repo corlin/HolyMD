@@ -38,6 +38,19 @@ final class GeoControllerTest extends TestCase
         self::assertStringContainsString("x.status==='completed'", $javascript);
         self::assertStringContainsString('await poll()', $javascript);
         self::assertStringNotContainsString('x.proposals.map', $javascript);
+        self::assertStringContainsString('dataset.proposalValue=JSON.stringify(p.value)', $javascript);
+    }
+    public function test_edit_decodes_structured_metadata_and_rejects_malformed_json_before_accept(): void {
+        $store = new InMemoryGeoProposalStore(); $router = $this->router(['admin_user_id'=>1,'csrf_token'=>'token'],$store);
+        $document=(new ArticleRepository($this->root))->read('first-note'); $hash=hash('sha256',$document->bodyMarkdown);
+        $store->save(new \HolyMD\Geo\GeoProposal(new \HolyMD\Geo\GeoProposalId('metadata-edit'),'first-note',$hash,'metadata',['summary'=>'Old']));
+        $bad=$router->dispatch(new ServerRequest('POST','/admin/geo/proposals/metadata-edit/edit',[],['csrf_token'=>'token','value'=>'{bad'])); self::assertSame(422,$bad->status);
+        $edited=$router->dispatch(new ServerRequest('POST','/admin/geo/proposals/metadata-edit/edit',[],['csrf_token'=>'token','value'=>'{"summary":"Edited"}'])); self::assertSame(200,$edited->status); self::assertSame(['summary'=>'Edited'],$store->get(new \HolyMD\Geo\GeoProposalId('metadata-edit'))->value);
+        $accepted=$router->dispatch(new ServerRequest('POST','/admin/geo/proposals/metadata-edit/accept',[],['csrf_token'=>'token'])); self::assertSame('Edited',json_decode($accepted->body,true,flags:JSON_THROW_ON_ERROR)['frontMatter']['summary']);
+
+        $current=(new ArticleRepository($this->root))->read('first-note'); $store->save(new \HolyMD\Geo\GeoProposal(new \HolyMD\Geo\GeoProposalId('entities-edit'),'first-note',hash('sha256',$current->bodyMarkdown),'entities',['Old']));
+        self::assertSame(200,$router->dispatch(new ServerRequest('POST','/admin/geo/proposals/entities-edit/edit',[],['csrf_token'=>'token','value'=>'["Ada","PHP"]']))->status);
+        self::assertSame(['Ada','PHP'],$store->get(new \HolyMD\Geo\GeoProposalId('entities-edit'))->value);
     }
     private function router(array $session, GeoProposalStore $store): Router {
         $articles = new ArticleRepository($this->root); $controller = new ArticleController($articles, new VersionService($this->root . '/versions'), new AdminGuard($session), new Csrf($session));

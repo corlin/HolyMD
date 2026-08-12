@@ -27,8 +27,7 @@ $pdo->beginTransaction();
 try {
     $insert = $pdo->prepare('INSERT INTO geo_proposals (geo_review_id, proposal_type, proposed_metadata, proposal_key, status) VALUES (?, ?, ?, ?, \'pending\') ON DUPLICATE KEY UPDATE id=id');
     foreach ($review->proposals as $proposal) {
-        $metadata = is_array($proposal->value) ? $proposal->value : ['value' => $proposal->value];
-        $json = json_encode($metadata, JSON_THROW_ON_ERROR);
+        $json = json_encode($proposal->value, JSON_THROW_ON_ERROR);
         $insert->execute([(int) $reviewId, $proposal->type, $json, hash('sha256', $reviewId . ':' . $proposal->type . ':' . $json)]);
     }
     $pdo->commit();
