@@ -35,7 +35,7 @@ try {
     $command = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($entrypoint) . ' --article ' . escapeshellarg($job['slug']);
     if ($job['job_type'] === 'build' && $job['action'] === 'withdraw') $command .= ' --withdraw';
     if ($job['job_type'] === 'geo_review' && $job['geo_review_id'] !== null) $command .= ' --review-id ' . escapeshellarg((string) $job['geo_review_id']);
-    exec($command, $output, $exitCode);
+    exec($command . ' 2>&1', $output, $exitCode);
     if ($exitCode !== 0) throw new RuntimeException(implode("\n", $output));
     $pdo->beginTransaction();
     if ($job['build_id'] !== null) { $build = $pdo->prepare("UPDATE builds INNER JOIN jobs ON jobs.build_id = builds.id SET builds.status = 'succeeded', builds.completed_at = UTC_TIMESTAMP(6) WHERE builds.id = ? AND jobs.id = ? AND jobs.status = 'running' AND jobs.lock_token = ?"); $build->execute([$job['build_id'], $job['id'], $token]); }

@@ -7,6 +7,8 @@ namespace HolyMD\Tests;
 use DI\Container;
 use HolyMD\Bootstrap;
 use PDO;
+use HolyMD\Geo\AiClient;
+use HolyMD\Geo\ConfiguredAiClient;
 use PHPUnit\Framework\TestCase;
 
 final class BootstrapTest extends TestCase
@@ -50,6 +52,7 @@ final class BootstrapTest extends TestCase
         $pdo = $container->get(PDO::class);
 
         self::assertSame(PDO::ERRMODE_EXCEPTION, $pdo->getAttribute(PDO::ATTR_ERRMODE));
+        self::assertInstanceOf(ConfiguredAiClient::class, $container->get(AiClient::class));
     }
 
     public function test_operational_schema_defines_all_required_tables_without_article_bodies(): void

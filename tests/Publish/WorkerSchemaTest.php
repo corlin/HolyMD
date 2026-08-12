@@ -25,6 +25,7 @@ final class WorkerSchemaTest extends TestCase
         self::assertStringContainsString("status = 'succeeded'", $worker);
         self::assertStringNotContainsString('holymd_jobs', $worker);
         self::assertStringNotContainsString('payload_json', $worker);
+        self::assertStringContainsString("exec(\$command . ' 2>&1'", $worker);
     }
 
     public function test_geo_entrypoint_runs_the_review_service_and_persists_proposals(): void

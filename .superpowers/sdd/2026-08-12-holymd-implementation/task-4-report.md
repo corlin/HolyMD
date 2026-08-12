@@ -23,3 +23,9 @@ The acceptance test explicitly proves that accepted `summary` and `topics` updat
 ## P1 follow-up
 
 Commit `31c5247` wires `GeoController` into the admin router and public entry point, persists proposals/jobs through `FileGeoReviewStore`, adds authenticated review/accept/reject/edit endpoints, and connects the admin panel to live JSON responses. The validator now rejects top-level extras and nested body/content/markdown/rewrite fields, and route integration tests cover authentication and front-matter-only acceptance.
+
+## Production provider execution follow-up
+
+The production AI client now speaks the OpenAI-compatible chat-completions protocol with strict JSON-schema output, configurable endpoint/model/timeouts/response-size limits, encrypted deployment credentials, bounded HTTP reads, actionable status errors, and retryable classification for transient HTTP failures. No paid API was called during verification. The worker captures subprocess stderr so retry/final failure messages reach `geo_reviews.failure_message` and the existing admin poll UI. The admin panel exposes configuration state, model, and endpoint host without disclosing credentials.
+
+Verification: `composer test` passed 65 tests / 238 assertions; PHP lint across `src`, `bin`, `tests`, and `templates` passed; `git diff --check` passed.
