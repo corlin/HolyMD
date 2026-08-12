@@ -22,7 +22,8 @@ $binding = $pdo->prepare('SELECT geo_reviews.input_checksum FROM geo_reviews INN
 $binding->execute([(int) $reviewId, $slug]);
 $expectedChecksum = $binding->fetchColumn();
 if (!is_string($expectedChecksum) || !hash_equals($expectedChecksum, hash('sha256', $document->serialize()))) throw new RuntimeException('GEO review is not bound to the current saved article version checksum.');
-$review = (new GeoReviewService($container->get(AiClient::class)))->review($document);
+try { $review = (new GeoReviewService($container->get(AiClient::class)))->review($document); }
+catch (\HolyMD\Geo\GeoAiException $error) { fwrite(STDERR, ($error->retryable ? 'RETRYABLE: ' : 'PERMANENT: ') . $error->getMessage() . "\n"); exit($error->retryable ? 75 : 78); }
 $pdo->beginTransaction();
 try {
     $insert = $pdo->prepare('INSERT INTO geo_proposals (geo_review_id, proposal_type, proposed_metadata, proposal_key, status) VALUES (?, ?, ?, ?, \'pending\') ON DUPLICATE KEY UPDATE id=id');

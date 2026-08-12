@@ -26,6 +26,8 @@ final class WorkerSchemaTest extends TestCase
         self::assertStringNotContainsString('holymd_jobs', $worker);
         self::assertStringNotContainsString('payload_json', $worker);
         self::assertStringContainsString("exec(\$command . ' 2>&1'", $worker);
+        self::assertStringContainsString("\$exitCode === 75", $worker);
+        self::assertStringContainsString("str_starts_with(\$exception->getMessage(), 'RETRYABLE:')", $worker);
     }
 
     public function test_geo_entrypoint_runs_the_review_service_and_persists_proposals(): void

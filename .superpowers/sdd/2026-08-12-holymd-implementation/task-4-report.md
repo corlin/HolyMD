@@ -29,3 +29,7 @@ Commit `31c5247` wires `GeoController` into the admin router and public entry po
 The production AI client now speaks the OpenAI-compatible chat-completions protocol with strict JSON-schema output, configurable endpoint/model/timeouts/response-size limits, encrypted deployment credentials, bounded HTTP reads, actionable status errors, and retryable classification for transient HTTP failures. No paid API was called during verification. The worker captures subprocess stderr so retry/final failure messages reach `geo_reviews.failure_message` and the existing admin poll UI. The admin panel exposes configuration state, model, and endpoint host without disclosing credentials.
 
 Verification: `composer test` passed 65 tests / 238 assertions; PHP lint across `src`, `bin`, `tests`, and `templates` passed; `git diff --check` passed.
+
+## Production security gate
+
+The configured endpoint is now rejected unless it is HTTPS without userinfo and every literal or DNS-resolved address is public; validation runs immediately before the bearer credential is sent. The strict provider schema encodes proposal values as JSON strings, eliminating open-ended schema objects, before the existing typed validator decodes and checks them. GEO subprocess exit `75` is retryable while permanent configuration/auth/schema failures exit `78`; the worker requeues only retryable failures and still caps attempts at three. Focused gate tests and the full suite pass: 71 tests / 246 assertions.

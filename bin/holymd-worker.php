@@ -36,7 +36,7 @@ try {
     if ($job['job_type'] === 'build' && $job['action'] === 'withdraw') $command .= ' --withdraw';
     if ($job['job_type'] === 'geo_review' && $job['geo_review_id'] !== null) $command .= ' --review-id ' . escapeshellarg((string) $job['geo_review_id']);
     exec($command . ' 2>&1', $output, $exitCode);
-    if ($exitCode !== 0) throw new RuntimeException(implode("\n", $output));
+    if ($exitCode !== 0) throw new RuntimeException(($exitCode === 75 ? 'RETRYABLE: ' : 'PERMANENT: ') . implode("\n", $output));
     $pdo->beginTransaction();
     if ($job['build_id'] !== null) { $build = $pdo->prepare("UPDATE builds INNER JOIN jobs ON jobs.build_id = builds.id SET builds.status = 'succeeded', builds.completed_at = UTC_TIMESTAMP(6) WHERE builds.id = ? AND jobs.id = ? AND jobs.status = 'running' AND jobs.lock_token = ?"); $build->execute([$job['build_id'], $job['id'], $token]); }
     if ($job['geo_review_id'] !== null) { $review = $pdo->prepare("UPDATE geo_reviews INNER JOIN jobs ON jobs.geo_review_id = geo_reviews.id SET geo_reviews.status = 'completed', geo_reviews.completed_at = UTC_TIMESTAMP(6) WHERE geo_reviews.id = ? AND jobs.id = ? AND jobs.status = 'running' AND jobs.lock_token = ?"); $review->execute([$job['geo_review_id'], $job['id'], $token]); }
@@ -48,10 +48,11 @@ try {
 } catch (Throwable $exception) {
     if ($pdo->inTransaction()) $pdo->rollBack();
     $pdo->beginTransaction();
-    if ($job['build_id'] !== null) { $state = $pdo->prepare("UPDATE builds INNER JOIN jobs ON jobs.build_id = builds.id SET builds.status = IF(jobs.attempts >= 3, 'failed', 'queued'), builds.failure_message = ? WHERE builds.id = ? AND jobs.id = ? AND jobs.status = 'running' AND jobs.lock_token = ?"); $state->execute([substr($exception->getMessage(), 0, 1000), $job['build_id'], $job['id'], $token]); }
-    if ($job['geo_review_id'] !== null) { $state = $pdo->prepare("UPDATE geo_reviews INNER JOIN jobs ON jobs.geo_review_id = geo_reviews.id SET geo_reviews.status = IF(jobs.attempts >= 3, 'failed', 'queued'), geo_reviews.failure_message = ? WHERE geo_reviews.id = ? AND jobs.id = ? AND jobs.status = 'running' AND jobs.lock_token = ?"); $state->execute([substr($exception->getMessage(), 0, 1000), $job['geo_review_id'], $job['id'], $token]); }
-    $failed = $pdo->prepare("UPDATE jobs SET status = CASE WHEN attempts >= 3 THEN 'failed' ELSE 'queued' END, available_at = DATE_ADD(UTC_TIMESTAMP(6), INTERVAL 5 MINUTE), last_error = ?, locked_at = NULL, lock_token = NULL WHERE id = ? AND status = 'running' AND lock_token = ?");
-    $failed->execute([substr($exception->getMessage(), 0, 1000), $job['id'], $token]);
+    $retryable = str_starts_with($exception->getMessage(), 'RETRYABLE:');
+    if ($job['build_id'] !== null) { $state = $pdo->prepare("UPDATE builds INNER JOIN jobs ON jobs.build_id = builds.id SET builds.status = IF(? AND jobs.attempts < 3, 'queued', 'failed'), builds.failure_message = ? WHERE builds.id = ? AND jobs.id = ? AND jobs.status = 'running' AND jobs.lock_token = ?"); $state->execute([$retryable, substr($exception->getMessage(), 0, 1000), $job['build_id'], $job['id'], $token]); }
+    if ($job['geo_review_id'] !== null) { $state = $pdo->prepare("UPDATE geo_reviews INNER JOIN jobs ON jobs.geo_review_id = geo_reviews.id SET geo_reviews.status = IF(? AND jobs.attempts < 3, 'queued', 'failed'), geo_reviews.failure_message = ? WHERE geo_reviews.id = ? AND jobs.id = ? AND jobs.status = 'running' AND jobs.lock_token = ?"); $state->execute([$retryable, substr($exception->getMessage(), 0, 1000), $job['geo_review_id'], $job['id'], $token]); }
+    $failed = $pdo->prepare("UPDATE jobs SET status = IF(? AND attempts < 3, 'queued', 'failed'), available_at = DATE_ADD(UTC_TIMESTAMP(6), INTERVAL 5 MINUTE), last_error = ?, locked_at = NULL, lock_token = NULL WHERE id = ? AND status = 'running' AND lock_token = ?");
+    $failed->execute([$retryable, substr($exception->getMessage(), 0, 1000), $job['id'], $token]);
     $pdo->commit();
     fwrite(STDERR, "Job {$job['id']} failed safely: {$exception->getMessage()}\n");
     exit(1);

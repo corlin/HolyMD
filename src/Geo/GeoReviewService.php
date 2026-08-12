@@ -15,6 +15,7 @@ final readonly class GeoReviewService {
         if (!is_array($payload) || array_diff(array_keys($payload), ['proposals', 'findings']) !== [] || !array_is_list($payload['proposals'] ?? null) || !array_is_list($payload['findings'] ?? null)) throw new InvalidArgumentException('Response must contain only proposal and finding lists.');
         $proposals = [];
         foreach ($payload['proposals'] as $index => $proposal) {
+            if (is_array($proposal) && isset($proposal['value_json']) && !isset($proposal['value'])) { try { $proposal['value'] = json_decode((string) $proposal['value_json'], true, 64, JSON_THROW_ON_ERROR); } catch (JsonException) { throw new InvalidArgumentException('Proposal value_json is invalid JSON.'); } unset($proposal['value_json']); }
             if (!is_array($proposal) || !is_string($proposal['type'] ?? null) || !array_key_exists('value', $proposal)) throw new InvalidArgumentException('Every proposal requires a type and value.');
             if (!in_array($proposal['type'], GeoReview::TYPES, true) || array_diff(array_keys($proposal), ['type', 'value']) !== [] || !$this->validValue($proposal['type'], $proposal['value'])) throw new InvalidArgumentException('Response contains an unsupported GEO proposal.');
             $proposals[] = new GeoProposal(new GeoProposalId('review-' . substr($hash, 0, 16) . '-' . $index), $slug, $hash, $proposal['type'], $proposal['value']);
