@@ -11,11 +11,14 @@ final readonly class ProposalAcceptance {
         $proposal = $this->proposals->get($id);
         if ($proposal->status !== 'pending') throw new LogicException('Only pending GEO proposals can be accepted.');
         $original = $this->articles->read($proposal->articleSlug);
-        if (!hash_equals($proposal->bodyHash, hash('sha256', $original->bodyMarkdown)) && !hash_equals($proposal->bodyHash, hash('sha256', $original->serialize()))) throw new LogicException('The article changed since this GEO proposal was reviewed.');
+        $bodyHash = hash('sha256', $original->bodyMarkdown);
+        $legacyBodyOnly = hash_equals($proposal->inputChecksum, $proposal->bodyHash);
+        if (!$legacyBodyOnly && !hash_equals($proposal->inputChecksum, hash('sha256', $original->serialize()))) throw new LogicException('The article changed since this GEO proposal was reviewed.');
+        if (!hash_equals($proposal->bodyHash, $bodyHash)) throw new LogicException('The article body changed since this GEO proposal was reviewed.');
         $frontMatter = $original->frontMatter;
         foreach ($this->frontMatterChanges($proposal) as $key => $value) $frontMatter = $frontMatter->with($key, $value);
         $accepted = $original->withFrontMatter($frontMatter);
-        if (!hash_equals($proposal->bodyHash, hash('sha256', $accepted->bodyMarkdown))) throw new LogicException('GEO proposal acceptance must not alter body Markdown.');
+        if (!hash_equals($bodyHash, hash('sha256', $accepted->bodyMarkdown))) throw new LogicException('GEO proposal acceptance must not alter body Markdown.');
         $this->articles->write($accepted); $this->proposals->markAccepted($id); return $accepted;
     }
     public function reject(GeoProposalId $id): void { $this->proposals->markRejected($id); }

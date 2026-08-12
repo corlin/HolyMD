@@ -29,6 +29,15 @@ final class GeoControllerTest extends TestCase
         self::assertSame(200, $accepted->status); self::assertSame('Summary', json_decode($accepted->body, true, flags: JSON_THROW_ON_ERROR)['frontMatter']['summary']);
         self::assertSame("Exact body\n", (new ArticleRepository($this->root))->read('first-note')->bodyMarkdown);
         self::assertSame(401, $this->router([], new InMemoryGeoProposalStore())->dispatch(new ServerRequest('POST', '/admin/articles/first-note/geo/review'))->status);
+        self::assertSame(401, $this->router([], new InMemoryGeoProposalStore())->dispatch(new ServerRequest('GET', '/admin/articles/first-note/geo/review'))->status);
+    }
+
+    public function test_admin_javascript_polls_queued_review_status_before_mapping_proposals(): void {
+        $javascript = (string) file_get_contents(__DIR__ . '/../../public/assets/admin.js');
+        self::assertStringContainsString('if(x.queued)', $javascript);
+        self::assertStringContainsString("x.status==='completed'", $javascript);
+        self::assertStringContainsString('await poll()', $javascript);
+        self::assertStringNotContainsString('x.proposals.map', $javascript);
     }
     private function router(array $session, GeoProposalStore $store): Router {
         $articles = new ArticleRepository($this->root); $controller = new ArticleController($articles, new VersionService($this->root . '/versions'), new AdminGuard($session), new Csrf($session));

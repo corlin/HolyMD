@@ -1,4 +1,7 @@
 ALTER TABLE `jobs` ADD COLUMN `action` ENUM('publish', 'withdraw') NULL AFTER `build_id`;
+ALTER TABLE `article_versions` ADD COLUMN `body_checksum` CHAR(64) NULL AFTER `content_checksum`;
+UPDATE `article_versions` SET `body_checksum` = `content_checksum` WHERE `body_checksum` IS NULL;
+ALTER TABLE `article_versions` MODIFY `body_checksum` CHAR(64) NOT NULL;
 ALTER TABLE `geo_reviews` ADD COLUMN `request_key` CHAR(64) NULL AFTER `input_checksum`;
 UPDATE `geo_reviews` SET `request_key` = SHA2(CONCAT(`article_id`, ':', `article_version_id`, ':', `input_checksum`, ':', `id`), 256) WHERE `request_key` IS NULL;
 ALTER TABLE `geo_reviews` MODIFY `request_key` CHAR(64) NOT NULL, ADD UNIQUE KEY `geo_reviews_request_unique` (`request_key`);

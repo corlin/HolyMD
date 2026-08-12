@@ -29,6 +29,7 @@ final readonly class Router
         if ($this->auth !== null && $request->path === '/admin/login' && in_array($request->method, ['GET', 'POST'], true)) return $this->auth->login($request);
         if ($this->auth !== null && $request->path === '/admin/logout' && $request->method === 'POST') return $this->auth->logout($request);
         if ($this->geo !== null && $request->method === 'POST' && preg_match('#^/admin/articles/[a-z0-9]+(?:-[a-z0-9]+)*/geo/review$#', $request->path) === 1) return $this->geo->review($request);
+        if ($this->geo !== null && $request->method === 'GET' && preg_match('#^/admin/articles/[a-z0-9]+(?:-[a-z0-9]+)*/geo/review$#', $request->path) === 1) return $this->geo->status($request);
         if ($this->geo !== null && $request->method === 'POST' && preg_match('#^/admin/geo/proposals/[A-Za-z0-9][A-Za-z0-9_-]{0,127}/accept$#', $request->path) === 1) return $this->geo->accept($request);
         if ($this->geo !== null && $request->method === 'POST' && preg_match('#^/admin/geo/proposals/[A-Za-z0-9][A-Za-z0-9_-]{0,127}/reject$#', $request->path) === 1) return $this->geo->reject($request);
         if ($this->geo !== null && $request->method === 'POST' && preg_match('#^/admin/geo/proposals/[A-Za-z0-9][A-Za-z0-9_-]{0,127}/edit$#', $request->path) === 1) return $this->geo->edit($request);

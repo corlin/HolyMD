@@ -56,4 +56,21 @@ final class ProposalAcceptanceTest extends TestCase
         $this->expectException(LogicException::class);
         (new ProposalAcceptance($repository, $store))->accept(new GeoProposalId('proposal-2'));
     }
+
+    public function test_queued_acceptance_uses_full_input_checksum_for_staleness_and_body_hash_for_invariant(): void
+    {
+        $repository = new ArticleRepository($this->root); $original = $repository->read('first-note'); $store = new InMemoryGeoProposalStore();
+        $id = new GeoProposalId('queued-proposal');
+        $store->save(new GeoProposal($id, 'first-note', hash('sha256', $original->serialize()), 'summary', 'Queued summary', 'pending', hash('sha256', $original->bodyMarkdown)));
+        $accepted = (new ProposalAcceptance($repository, $store))->accept($id);
+        self::assertSame('Queued summary', $accepted->frontMatter->get('summary'));
+        self::assertSame($original->bodyMarkdown, $accepted->bodyMarkdown);
+
+        $stale = $repository->read('first-note');
+        $staleId = new GeoProposalId('stale-metadata');
+        $store->save(new GeoProposal($staleId, 'first-note', hash('sha256', $stale->serialize()), 'summary', 'Must reject', 'pending', hash('sha256', $stale->bodyMarkdown)));
+        $repository->write($stale->withFrontMatter($stale->frontMatter->with('topics', ['changed'])));
+        $this->expectException(LogicException::class);
+        (new ProposalAcceptance($repository, $store))->accept($staleId);
+    }
 }

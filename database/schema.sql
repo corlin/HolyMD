@@ -31,6 +31,7 @@ CREATE TABLE IF NOT EXISTS `article_versions` (
     `article_id` BIGINT UNSIGNED NOT NULL,
     `snapshot_path` VARCHAR(768) NOT NULL,
     `content_checksum` CHAR(64) NOT NULL,
+    `body_checksum` CHAR(64) NOT NULL,
     `created_by_admin_user_id` BIGINT UNSIGNED NULL,
     `created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     PRIMARY KEY (`id`),

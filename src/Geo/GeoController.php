@@ -19,11 +19,17 @@ final readonly class GeoController {
         try { $document = $this->articles->read($slug); if ($this->queue !== null && $this->versions !== null) { $version = $this->versions->snapshot($document); $jobId = $this->queue->enqueueGeoReview($document, $version->value . '.md'); return Response::json(['articleSlug' => $slug, 'queued' => true, 'jobId' => $jobId], 202); } $result = $this->reviews->review($document); foreach ($result->proposals as $proposal) $this->proposals->save($proposal); return Response::json(['articleSlug' => $result->articleSlug, 'bodyHash' => $result->bodyHash, 'findings' => $result->findings, 'proposals' => array_map(static fn (GeoProposal $p): array => ['id' => $p->id->value, 'type' => $p->type, 'value' => $p->value, 'status' => $p->status], $result->proposals)]); }
         catch (InvalidArgumentException $exception) { return Response::json(['error' => $exception->getMessage()], 422); }
     }
+    public function status(ServerRequest $request): Response {
+        try { $this->guard->requireAdministrator(); } catch (Unauthorized) { return Response::json(['error' => 'Administrator authentication is required.'], 401); }
+        $slug = $this->slug($request->path); if ($slug === null) return Response::json(['error' => 'Invalid article route.'], 404);
+        if (!$this->proposals instanceof MySqlGeoProposalStore) return Response::json(['error' => 'Queued GEO status is not configured.'], 404);
+        $status = $this->proposals->latestForArticle($slug); return $status === null ? Response::json(['status' => 'none', 'proposals' => []]) : Response::json($status);
+    }
     public function accept(ServerRequest $request): Response { return $this->decision($request, true); }
     public function reject(ServerRequest $request): Response { return $this->decision($request, false); }
     public function edit(ServerRequest $request): Response {
         if (($failure = $this->authorize($request)) !== null) return $failure;
-        try { $id = new GeoProposalId($this->proposalId($request->path)); $proposal = $this->proposals->get($id); $value = $request->input('value'); if (!is_string($value) && !is_array($value)) throw new InvalidArgumentException('Proposal value must be JSON text or an object.'); if (is_array($value)) { foreach (array_keys($value) as $key) if (in_array(strtolower((string) $key), ['body', 'content', 'markdown', 'body_markdown', 'rewrite'], true)) throw new InvalidArgumentException('Proposal edits may not contain body content.'); } $this->proposals->save(new GeoProposal($proposal->id, $proposal->articleSlug, $proposal->bodyHash, $proposal->type, $value)); return Response::json(['saved' => true]); }
+        try { $id = new GeoProposalId($this->proposalId($request->path)); $proposal = $this->proposals->get($id); $value = $request->input('value'); if (!is_string($value) && !is_array($value)) throw new InvalidArgumentException('Proposal value must be JSON text or an object.'); if (is_array($value)) { foreach (array_keys($value) as $key) if (in_array(strtolower((string) $key), ['body', 'content', 'markdown', 'body_markdown', 'rewrite'], true)) throw new InvalidArgumentException('Proposal edits may not contain body content.'); } $this->proposals->save(new GeoProposal($proposal->id, $proposal->articleSlug, $proposal->inputChecksum, $proposal->type, $value, $proposal->status, $proposal->bodyHash)); return Response::json(['saved' => true]); }
         catch (InvalidArgumentException|LogicException $exception) { return Response::json(['error' => $exception->getMessage()], 422); }
     }
     private function decision(ServerRequest $request, bool $accept): Response {

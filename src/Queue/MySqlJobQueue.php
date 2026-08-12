@@ -26,7 +26,7 @@ final readonly class MySqlJobQueue
         return $this->transaction(function () use ($article, $snapshotPath): int {
             $articleId = $this->articleId($article);
             $checksum = hash('sha256', $article->serialize());
-            $this->pdo->prepare('INSERT INTO article_versions (article_id, snapshot_path, content_checksum) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)')->execute([$articleId, $snapshotPath, $checksum]);
+            $this->pdo->prepare('INSERT INTO article_versions (article_id, snapshot_path, content_checksum, body_checksum) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)')->execute([$articleId, $snapshotPath, $checksum, hash('sha256', $article->bodyMarkdown)]);
             $versionId = (int) $this->pdo->lastInsertId();
             $requestKey = hash('sha256', $articleId . ':' . $versionId . ':' . $checksum);
             $this->pdo->prepare("INSERT INTO geo_reviews (article_id, article_version_id, status, provider, model, input_checksum, request_key) VALUES (?, ?, 'queued', 'configured', 'configured', ?, ?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)")->execute([$articleId, $versionId, $checksum, $requestKey]);
