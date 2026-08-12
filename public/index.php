@@ -6,6 +6,7 @@ use HolyMD\Bootstrap;
 use HolyMD\Admin\ArticleController;
 use HolyMD\Admin\VersionService;
 use HolyMD\Auth\AdminGuard;
+use HolyMD\Auth\AuthController;
 use HolyMD\Content\ArticleRepository;
 use HolyMD\Http\Csrf;
 use HolyMD\Http\Router;
@@ -38,7 +39,10 @@ if (!str_starts_with($path, '/admin')) {
 
 $container = Bootstrap::createContainer();
 
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_set_cookie_params(['httponly' => true, 'secure' => (($_SERVER['HTTPS'] ?? '') === 'on'), 'samesite' => 'Lax', 'path' => '/']);
+    session_start();
+}
 $controller = new ArticleController(
     new ArticleRepository($root . '/content/articles'),
     new VersionService($root . '/content/versions'),
@@ -53,7 +57,7 @@ $controller = new ArticleController(
 );
 $geoStore = new FileGeoReviewStore($root . '/content/geo');
 $geo = new GeoController(new ArticleRepository($root . '/content/articles'), new GeoReviewService($container->get(\HolyMD\Geo\AiClient::class), $geoStore), $geoStore, new AdminGuard($_SESSION), new Csrf($_SESSION));
-$response = Router::admin($controller, $geo)->dispatch(new ServerRequest(
+$response = (new Router($controller, $geo, new AuthController($container->get(\PDO::class), $_SESSION, new Csrf($_SESSION))))->dispatch(new ServerRequest(
     $_SERVER['REQUEST_METHOD'] ?? 'GET',
     $path,
     array_change_key_case(getallheaders() ?: [], CASE_UPPER),

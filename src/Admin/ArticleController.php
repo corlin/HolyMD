@@ -57,6 +57,7 @@ final readonly class ArticleController
             return Response::json(['error' => 'Administrator authentication is required.'], 401);
         }
         $articles = $this->articles->all();
+        $csrfToken = $this->csrf->token();
         ob_start();
         require dirname(__DIR__, 2) . '/templates/admin/articles/index.php';
         return new Response(200, (string) ob_get_clean(), ['Content-Type' => 'text/html; charset=utf-8']);
