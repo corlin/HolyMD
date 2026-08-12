@@ -264,6 +264,7 @@ final readonly class ArticleController
     {
         try { $this->guard->requireAdministrator(); } catch (Unauthorized) { return Response::json(['error' => 'Administrator authentication is required.'], 401); }
         $settings = $this->siteSettings;
+        $csrfToken = $this->csrf->token();
         ob_start(); require dirname(__DIR__, 2) . '/templates/admin/settings.php';
         return new Response(200, (string) ob_get_clean(), ['Content-Type' => 'text/html; charset=utf-8']);
     }
