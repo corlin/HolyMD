@@ -38,6 +38,6 @@ if ($dryRun) {
     exit(0);
 }
 
-$service = new PublishService($articles, new StaticBuilder(), new AtomicPublicTree(), $root . '/public', (string) (getenv('HOLYMD_SITE_NAME') ?: 'HolyMD'), (string) (getenv('HOLYMD_SITE_URL') ?: 'https://example.invalid'), (string) (getenv('HOLYMD_AUTHOR_NAME') ?: 'Author'), (string) (getenv('HOLYMD_ABOUT') ?: ''), getenv('HOLYMD_LLMS_TXT') === '1', $root . '/content/audit');
+$service = new PublishService($articles, new StaticBuilder(), new AtomicPublicTree(), (string) (getenv('HOLYMD_PUBLIC_TREE') ?: $root . '/public/site'), (string) (getenv('HOLYMD_SITE_NAME') ?: 'HolyMD'), (string) (getenv('HOLYMD_SITE_URL') ?: 'https://example.invalid'), (string) (getenv('HOLYMD_AUTHOR_NAME') ?: 'Author'), (string) (getenv('HOLYMD_ABOUT') ?: ''), getenv('HOLYMD_LLMS_TXT') === '1', $root . '/content/audit', null, $root . '/content/holymd-publish.lock');
 $result = $service->publish(new \HolyMD\Publish\ArticleId($slug));
 fwrite(STDOUT, $result->validation->text() . "\nPublished {$result->manifest->articleCount} article(s).\n");

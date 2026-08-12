@@ -13,6 +13,7 @@ use HolyMD\Render\StaticBuilder;
 use InvalidArgumentException;
 use RuntimeException;
 use Throwable;
+use Closure;
 
 final readonly class PublishService
 {
@@ -27,6 +28,8 @@ final readonly class PublishService
         private string $about,
         private bool $generateLlmsTxt = false,
         private ?string $auditRoot = null,
+        private ?Closure $persist = null,
+        private ?string $lockPath = null,
     ) {
     }
 
@@ -42,7 +45,10 @@ final readonly class PublishService
 
     private function build(ArticleId $id, string $nextStatus): PublishResult
     {
+        $lock = $this->lock();
         $temporaryRoot = dirname($this->liveRoot) . '/.' . basename($this->liveRoot) . '-build-' . bin2hex(random_bytes(6));
+        $current = null;
+        $persisted = false;
         try {
             $current = $this->articles->read($id->slug);
             $updated = $current->withFrontMatter($current->frontMatter->with('status', $nextStatus));
@@ -54,15 +60,21 @@ final readonly class PublishService
             $manifest = $this->builder->build(new BuildInput($published, $this->siteName, $this->siteUrl, $this->authorName, $this->about, $this->generateLlmsTxt), $temporaryRoot);
             $manifest = $this->writeRedirects($temporaryRoot, $published, $manifest);
             $this->writeManifest($temporaryRoot, $manifest);
+            $this->persist($updated);
+            $persisted = true;
             $this->publicTree->swap($temporaryRoot, $this->liveRoot);
-            $this->articles->write($updated);
             $this->audit($id, $nextStatus, 'published');
             return new PublishResult($manifest, $validation);
         } catch (Throwable $exception) {
+            if ($persisted && $current instanceof ArticleDocument) {
+                try { $this->persist($current); } catch (Throwable) { /* audit retains the failed recovery context */ }
+            }
             $this->audit($id, $nextStatus, 'failed', $exception->getMessage());
             throw $exception;
         } finally {
             if (is_dir($temporaryRoot)) $this->remove($temporaryRoot);
+            flock($lock, LOCK_UN);
+            fclose($lock);
         }
     }
 
@@ -71,11 +83,21 @@ final readonly class PublishService
     {
         $errors = [];
         $slugs = [];
+        $redirects = [];
         foreach ($published as $article) {
             if (isset($slugs[$article->slug])) $errors[] = sprintf('Duplicate published slug "%s".', $article->slug);
             $slugs[$article->slug] = true;
             try { new DateTimeImmutable((string) $article->frontMatter->get('date')); } catch (Throwable) { $errors[] = sprintf('Article "%s" has an invalid date.', $article->slug); }
+            foreach ((array) $article->frontMatter->get('previous_slugs', []) as $oldSlug) {
+                if (!is_string($oldSlug) || preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/', $oldSlug) !== 1) { $errors[] = sprintf('Article "%s" has an invalid historical slug.', $article->slug); continue; }
+                if (isset($slugs[$oldSlug]) || isset($redirects[$oldSlug])) $errors[] = sprintf('Redirect slug "%s" collides with a published route.', $oldSlug);
+                $redirects[$oldSlug] = true;
+            }
+            foreach ((array) $article->frontMatter->get('sources', []) as $source) if (!is_string($source) || filter_var($source, FILTER_VALIDATE_URL) === false) $errors[] = sprintf('Article "%s" has an invalid citation URL.', $article->slug);
+            $structured = $article->frontMatter->get('structured_data');
+            if ($structured !== null && !is_array($structured)) $errors[] = sprintf('Article "%s" has invalid structured data.', $article->slug);
         }
+        foreach ($redirects as $slug => $_) if (isset($slugs[$slug])) $errors[] = sprintf('Redirect slug "%s" collides with a published route.', $slug);
         return new ValidationReport($errors);
     }
 
@@ -118,5 +140,20 @@ final readonly class PublishService
             is_dir($child) && !is_link($child) ? $this->remove($child) : unlink($child);
         }
         rmdir($path);
+    }
+
+    private function persist(ArticleDocument $document): void
+    {
+        if ($this->persist !== null) { ($this->persist)($document); return; }
+        $this->articles->write($document);
+    }
+
+    /** @return resource */
+    private function lock()
+    {
+        $path = $this->lockPath ?? dirname($this->liveRoot) . '/.holymd-publish.lock';
+        $handle = fopen($path, 'c');
+        if ($handle === false || !flock($handle, LOCK_EX | LOCK_NB)) throw new RuntimeException('A publication is already running.');
+        return $handle;
     }
 }

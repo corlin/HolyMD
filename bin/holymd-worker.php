@@ -10,12 +10,13 @@ require dirname(__DIR__) . '/vendor/autoload.php';
 
 $root = dirname(__DIR__);
 $pdo = (new Connection(Settings::fromEnvironment($root)))->pdo();
+$token = bin2hex(random_bytes(16));
 $pdo->beginTransaction();
 try {
-    $job = $pdo->query("SELECT id, job_type, payload_json, attempts FROM holymd_jobs WHERE status = 'queued' AND available_at <= UTC_TIMESTAMP() ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED")->fetch();
+    $job = $pdo->query("SELECT jobs.id, jobs.job_type, jobs.article_id, jobs.build_id, jobs.attempts, articles.slug FROM jobs LEFT JOIN articles ON articles.id = jobs.article_id WHERE jobs.status = 'queued' AND jobs.job_type = 'build' AND jobs.available_at <= UTC_TIMESTAMP(6) ORDER BY jobs.id LIMIT 1 FOR UPDATE SKIP LOCKED")->fetch();
     if ($job === false) { $pdo->commit(); fwrite(STDOUT, "No queued jobs.\n"); exit(0); }
-    $claim = $pdo->prepare("UPDATE holymd_jobs SET status = 'running', attempts = attempts + 1, locked_at = UTC_TIMESTAMP() WHERE id = ?");
-    $claim->execute([$job['id']]);
+    $claim = $pdo->prepare("UPDATE jobs SET status = 'running', attempts = attempts + 1, locked_at = UTC_TIMESTAMP(6), lock_token = ? WHERE id = ? AND status = 'queued'");
+    $claim->execute([$token, $job['id']]);
     $pdo->commit();
 } catch (Throwable $exception) {
     if ($pdo->inTransaction()) $pdo->rollBack();
@@ -24,17 +25,17 @@ try {
 }
 
 try {
-    $payload = json_decode((string) $job['payload_json'], true, 512, JSON_THROW_ON_ERROR);
-    if (($job['job_type'] ?? '') !== 'build' || !is_array($payload) || !is_string($payload['article_slug'] ?? null)) throw new RuntimeException('Unsupported job payload.');
-    $command = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($root . '/bin/holymd-build.php') . ' --article ' . escapeshellarg($payload['article_slug']);
+    if (($job['job_type'] ?? '') !== 'build' || !is_string($job['slug'] ?? null)) throw new RuntimeException('Build job has no linked article slug.');
+    $command = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($root . '/bin/holymd-build.php') . ' --article ' . escapeshellarg($job['slug']);
     exec($command, $output, $exitCode);
     if ($exitCode !== 0) throw new RuntimeException(implode("\n", $output));
-    $done = $pdo->prepare("UPDATE holymd_jobs SET status = 'completed', completed_at = UTC_TIMESTAMP(), last_error = NULL WHERE id = ? AND status = 'running'");
-    $done->execute([$job['id']]);
+    $done = $pdo->prepare("UPDATE jobs SET status = 'succeeded', locked_at = NULL, lock_token = NULL, last_error = NULL WHERE id = ? AND status = 'running' AND lock_token = ?");
+    $done->execute([$job['id'], $token]);
+    if ($job['build_id'] !== null) { $build = $pdo->prepare("UPDATE builds SET status = 'succeeded', completed_at = UTC_TIMESTAMP(6) WHERE id = ?"); $build->execute([$job['build_id']]); }
     fwrite(STDOUT, "Completed job {$job['id']}.\n");
 } catch (Throwable $exception) {
-    $failed = $pdo->prepare("UPDATE holymd_jobs SET status = CASE WHEN attempts >= 3 THEN 'failed' ELSE 'queued' END, available_at = DATE_ADD(UTC_TIMESTAMP(), INTERVAL 5 MINUTE), last_error = ?, locked_at = NULL WHERE id = ? AND status = 'running'");
-    $failed->execute([substr($exception->getMessage(), 0, 1000), $job['id']]);
+    $failed = $pdo->prepare("UPDATE jobs SET status = CASE WHEN attempts >= 3 THEN 'failed' ELSE 'queued' END, available_at = DATE_ADD(UTC_TIMESTAMP(6), INTERVAL 5 MINUTE), last_error = ?, locked_at = NULL, lock_token = NULL WHERE id = ? AND status = 'running' AND lock_token = ?");
+    $failed->execute([substr($exception->getMessage(), 0, 1000), $job['id'], $token]);
     fwrite(STDERR, "Job {$job['id']} failed safely: {$exception->getMessage()}\n");
     exit(1);
 }

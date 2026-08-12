@@ -38,7 +38,7 @@ $controller = new ArticleController(
     new Csrf($_SESSION),
     new PublishService(
         new ArticleRepository($root . '/content/articles'), new StaticBuilder(), new AtomicPublicTree(),
-        $root . '/public', (string) (getenv('HOLYMD_SITE_NAME') ?: 'HolyMD'), (string) (getenv('HOLYMD_SITE_URL') ?: 'https://example.invalid'),
+        (string) (getenv('HOLYMD_PUBLIC_TREE') ?: $root . '/public/site'), (string) (getenv('HOLYMD_SITE_NAME') ?: 'HolyMD'), (string) (getenv('HOLYMD_SITE_URL') ?: 'https://example.invalid'),
         (string) (getenv('HOLYMD_AUTHOR_NAME') ?: 'Author'), (string) (getenv('HOLYMD_ABOUT') ?: ''),
         getenv('HOLYMD_LLMS_TXT') === '1', $root . '/content/audit',
     ),

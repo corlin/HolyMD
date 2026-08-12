@@ -21,9 +21,11 @@ final class PublishServiceTest extends TestCase
     {
         $this->root = sys_get_temp_dir() . '/holymd-publish-' . bin2hex(random_bytes(6));
         mkdir($this->root . '/articles', 0777, true);
-        mkdir($this->root . '/public', 0777, true);
-        file_put_contents($this->root . '/public/index.html', 'previous site');
-        file_put_contents($this->root . '/public/.holymd-manifest.json', '{"build":"previous"}');
+        mkdir($this->root . '/public/site', 0777, true);
+        file_put_contents($this->root . '/public/index.php', '<?php // admin runtime');
+        file_put_contents($this->root . '/public/assets.css', 'admin asset');
+        file_put_contents($this->root . '/public/site/index.html', 'previous site');
+        file_put_contents($this->root . '/public/site/.holymd-manifest.json', '{"build":"previous"}');
         file_put_contents($this->root . '/articles/first-note.md', "---\ntitle: First note\nslug: first-note\ndate: 2026-08-12\nstatus: draft\n---\nBody\n");
     }
 
@@ -43,8 +45,9 @@ final class PublishServiceTest extends TestCase
             self::assertStringContainsString('Template', $exception->getMessage());
         }
 
-        self::assertSame('previous site', file_get_contents($this->root . '/public/index.html'));
-        self::assertSame('{"build":"previous"}', file_get_contents($this->root . '/public/.holymd-manifest.json'));
+        self::assertSame('previous site', file_get_contents($this->root . '/public/site/index.html'));
+        self::assertSame('{"build":"previous"}', file_get_contents($this->root . '/public/site/.holymd-manifest.json'));
+        self::assertSame('<?php // admin runtime', file_get_contents($this->root . '/public/index.php'));
         self::assertSame('draft', (new ArticleRepository($this->root . '/articles'))->read('first-note')->frontMatter->get('status'));
     }
 
@@ -56,10 +59,11 @@ final class PublishServiceTest extends TestCase
         $result = $this->service()->publish(new ArticleId('first-note'));
 
         self::assertSame(2, $result->manifest->articleCount);
-        self::assertFileExists($this->root . '/public/articles/old-name/index.html');
-        self::assertStringContainsString('/articles/renamed/', (string) file_get_contents($this->root . '/public/articles/old-name/index.html'));
-        self::assertStringNotContainsString('withdrawn', (string) file_get_contents($this->root . '/public/feed.json'));
-        self::assertStringNotContainsString('withdrawn', (string) file_get_contents($this->root . '/public/sitemap.xml'));
+        self::assertFileExists($this->root . '/public/site/articles/old-name/index.html');
+        self::assertStringContainsString('/articles/renamed/', (string) file_get_contents($this->root . '/public/site/articles/old-name/index.html'));
+        self::assertStringNotContainsString('withdrawn', (string) file_get_contents($this->root . '/public/site/feed.json'));
+        self::assertStringNotContainsString('withdrawn', (string) file_get_contents($this->root . '/public/site/sitemap.xml'));
+        self::assertSame('admin asset', file_get_contents($this->root . '/public/assets.css'));
         self::assertSame('published', (new ArticleRepository($this->root . '/articles'))->read('first-note')->frontMatter->get('status'));
     }
 
@@ -69,7 +73,7 @@ final class PublishServiceTest extends TestCase
             new ArticleRepository($this->root . '/articles'),
             $builder ?? new StaticBuilder(),
             new AtomicPublicTree(),
-            $this->root . '/public',
+            $this->root . '/public/site',
             'HolyMD Notes',
             'https://example.test',
             'Ada Author',
@@ -77,6 +81,22 @@ final class PublishServiceTest extends TestCase
             true,
             $this->root . '/audit',
         );
+    }
+
+    public function test_persistence_failure_does_not_expose_a_new_tree(): void
+    {
+        $service = new PublishService(new ArticleRepository($this->root . '/articles'), new StaticBuilder(), new AtomicPublicTree(), $this->root . '/public/site', 'HolyMD Notes', 'https://example.test', 'Ada Author', 'About Ada.', false, $this->root . '/audit', static function (): void { throw new RuntimeException('disk full'); });
+
+        $this->expectExceptionMessage('disk full');
+        try { $service->publish(new ArticleId('first-note')); }
+        finally { self::assertSame('previous site', file_get_contents($this->root . '/public/site/index.html')); }
+    }
+
+    public function test_rejects_redirect_collision_with_a_published_route(): void
+    {
+        file_put_contents($this->root . '/articles/other.md', "---\ntitle: Other\nslug: other\ndate: 2026-08-11\nstatus: published\nprevious_slugs:\n  - first-note\n---\nOther\n");
+        $this->expectException(\InvalidArgumentException::class);
+        $this->service()->publish(new ArticleId('first-note'));
     }
 
     private function removeDirectory(string $path): void
