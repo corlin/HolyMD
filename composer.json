@@ -4,6 +4,15 @@
   "type": "project",
   "license": "proprietary",
   "require": {
+    "ext-exif": "*",
+    "ext-fileinfo": "*",
+    "ext-gd": "*",
+    "ext-json": "*",
+    "ext-mbstring": "*",
+    "ext-openssl": "*",
+    "ext-pdo": "*",
+    "ext-pdo_mysql": "*",
+    "ext-sodium": "*",
     "php": "^8.4",
     "php-di/php-di": "^7.0"
   },
