@@ -118,6 +118,18 @@ final class ArticleControllerTest extends TestCase
         self::assertSame(1, count(glob($this->root . '/versions/*.md') ?: []));
     }
 
+    public function test_editor_requests_server_rendered_markdown_for_live_preview(): void
+    {
+        $response = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token'])->dispatch(new ServerRequest('GET', '/admin/articles/first-note/edit'));
+        $javascript = (string) file_get_contents(dirname(__DIR__, 2) . '/public/assets/admin.js');
+
+        self::assertSame(200, $response->status);
+        self::assertStringContainsString('id="markdown-preview"', $response->body);
+        self::assertStringContainsString("const previewUrl='/admin/markdown/preview'", $javascript);
+        self::assertStringContainsString('preview.innerHTML', $javascript);
+        self::assertStringNotContainsString('preview.textContent=body.value', $javascript);
+    }
+
     public function test_restore_is_authorized_and_restores_a_snapshot(): void
     {
         $versions = new VersionService($this->root . '/versions');
@@ -283,6 +295,27 @@ final class ArticleControllerTest extends TestCase
 
         self::assertSame(422, $response->status);
         self::assertSame("Original body\n", (new ArticleRepository($this->root . '/articles'))->read('first-note')->bodyMarkdown);
+    }
+
+    public function test_authenticated_preview_renders_safe_markdown_html_without_saving(): void
+    {
+        $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);
+        $response = $router->dispatch(new ServerRequest('POST', '/admin/markdown/preview', [], [
+            'csrf_token' => 'expected-token',
+            'body' => "## Heading\n\n> **Quoted**\n\n<script>alert(1)</script>",
+        ]));
+
+        self::assertSame(200, $response->status);
+        self::assertSame('application/json; charset=utf-8', $response->headers['Content-Type']);
+        $payload = json_decode($response->body, true, flags: JSON_THROW_ON_ERROR);
+        self::assertStringContainsString('<h3>Heading</h3>', $payload['html']);
+        self::assertStringContainsString('<blockquote>', $payload['html']);
+        self::assertStringContainsString('<strong>Quoted</strong>', $payload['html']);
+        self::assertStringNotContainsString('<script', $payload['html']);
+        self::assertSame("Original body\n", (new ArticleRepository($this->root . '/articles'))->read('first-note')->bodyMarkdown);
+
+        self::assertSame(419, $router->dispatch(new ServerRequest('POST', '/admin/markdown/preview', [], ['body' => '**No token**']))->status);
+        self::assertSame(401, $this->router([])->dispatch(new ServerRequest('POST', '/admin/markdown/preview', [], ['body' => '**No admin**']))->status);
     }
 
     /** @param array<string, mixed> $session */

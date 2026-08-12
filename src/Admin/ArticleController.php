@@ -14,6 +14,7 @@ use HolyMD\Http\ServerRequest;
 use HolyMD\Publish\ArticleId;
 use HolyMD\Publish\PublishService;
 use HolyMD\Queue\MySqlJobQueue;
+use HolyMD\Render\MarkdownRenderer;
 use InvalidArgumentException;
 
 final readonly class ArticleController
@@ -28,7 +29,21 @@ final readonly class ArticleController
         private ?string $mediaRoot = null,
         /** @var array<string, string> */
         private array $siteSettings = [],
+        private ?MarkdownRenderer $markdownRenderer = null,
     ) {
+    }
+
+    public function previewMarkdown(ServerRequest $request): Response
+    {
+        if (($response = $this->authorizeMutation($request)) !== null) {
+            return $response;
+        }
+        $body = $request->input('body');
+        if (!is_string($body) || strlen($body) > 1024 * 1024) {
+            return Response::json(['error' => 'Markdown preview requires a body no larger than 1 MB.'], 422);
+        }
+
+        return Response::json(['html' => ($this->markdownRenderer ?? new MarkdownRenderer())->render($body)]);
     }
 
     public function saveDraft(ServerRequest $request): Response

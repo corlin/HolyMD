@@ -4,6 +4,7 @@
   "type": "project",
   "license": "proprietary",
   "require": {
+    "php": "^8.4",
     "ext-exif": "*",
     "ext-fileinfo": "*",
     "ext-gd": "*",
@@ -13,7 +14,7 @@
     "ext-pdo": "*",
     "ext-pdo_mysql": "*",
     "ext-sodium": "*",
-    "php": "^8.4",
+    "league/commonmark": "^2.7",
     "php-di/php-di": "^7.0"
   },
   "require-dev": {

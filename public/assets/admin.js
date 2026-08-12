@@ -1,6 +1,204 @@
 (() => {
- const studio=document.querySelector('.studio'); if(studio){const body=document.querySelector('#markdown-body'),title=document.querySelector('#article-title'),date=document.querySelector('#article-date'),token=document.querySelector('#csrf-token'),preview=document.querySelector('#markdown-preview'),state=document.querySelector('#save-state'); const setState=(value,label)=>{state.dataset.state=value;state.textContent=label;}; const render=()=>{preview.textContent=body.value;}; let timer; const save=async()=>{setState('saving','Saving…');try{const r=await fetch(studio.dataset.autosaveUrl,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({title:title.value,date:date.value,body:body.value,csrf_token:token.value})});if(!r.ok){const x=await r.json();throw Error(x.error||'Save failed');}setState('saved','Saved draft');}catch(error){setState('error',error.message||'Save failed');}}; [body,title,date].forEach(f=>f.addEventListener('input',()=>{render();setState('unsaved','Unsaved changes');clearTimeout(timer);timer=setTimeout(save,800);}));render();}
- document.addEventListener('click',async event=>{const button=event.target.closest('[data-copy]');if(!button)return;try{await navigator.clipboard.writeText(button.dataset.copy);button.textContent='Copied';}catch{button.textContent='Copy failed';}});
- const panel=document.querySelector('[data-geo-panel]'); if(!panel)return; const slug=panel.dataset.articleSlug,csrf=panel.querySelector('[data-geo-csrf]').value,status=panel.querySelector('[data-geo-review-status]'),list=panel.querySelector('[data-geo-proposals]'),reviewButton=panel.querySelector('[data-geo-review]'); const req=async(path,data={})=>{const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({...data,csrf_token:csrf})});const x=await r.json();if(!r.ok)throw Error(x.error||'GEO request failed');return x;}; const render=proposals=>list.replaceChildren(...proposals.map(p=>{const li=document.createElement('li');li.dataset.proposalId=p.id;li.dataset.proposalValue=JSON.stringify(p.value);const out=document.createElement('output');out.textContent=p.type+': '+JSON.stringify(p.value);li.append(out);['accept','reject','edit'].forEach(a=>{const b=document.createElement('button');b.dataset.action=a;b.textContent=a;li.append(b);});return li;})); const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms)); const poll=async()=>{reviewButton.disabled=true;for(let attempt=0;attempt<60;attempt++){const r=await fetch(`/admin/articles/${slug}/geo/review`),x=await r.json();if(!r.ok)throw Error(x.error||'GEO status failed');if(x.status==='completed'){render(x.proposals);status.textContent='Review complete';reviewButton.disabled=false;reviewButton.textContent='Request GEO review';return;}if(x.status==='failed'){reviewButton.disabled=false;reviewButton.textContent='Retry GEO review';throw Error(x.failure||'GEO review failed');}status.textContent=x.status==='running'?'GEO review running…':'GEO review queued — waiting for Cron worker…';reviewButton.textContent='Refresh GEO status';await sleep(Math.min(15000,2000+attempt*500));}reviewButton.disabled=false;reviewButton.textContent='Refresh GEO status';status.textContent='Review is still queued. You can leave this page and refresh its status later.';}; reviewButton.onclick=async()=>{try{if(reviewButton.textContent==='Refresh GEO status'){await poll();return;}const x=await req(`/admin/articles/${slug}/geo/review`);if(x.queued){status.textContent='Review queued — waiting for Cron worker…';await poll();}else{render(x.proposals);status.textContent='Review complete';}}catch(e){status.textContent=e.message;reviewButton.disabled=false;}}; list.onclick=async e=>{const b=e.target.closest('button');if(!b)return;const item=b.parentNode,id=item.dataset.proposalId;try{const data=b.dataset.action==='edit'?{value:prompt('Metadata JSON',item.dataset.proposalValue)||''}:{};const result=await req(`/admin/geo/proposals/${id}/${b.dataset.action}`,data);if(b.dataset.action==='edit')item.dataset.proposalValue=JSON.stringify(result.value);b.disabled=true;}catch(x){status.textContent=x.message;}};
- const resumeStatus=async()=>{try{const r=await fetch(`/admin/articles/${slug}/geo/review`),x=await r.json();if(!r.ok)return;if(x.status==='completed'){render(x.proposals);status.textContent='Review complete';return;}if(x.status==='failed'){status.textContent=x.failure||'GEO review failed';reviewButton.textContent='Retry GEO review';return;}if(x.status==='queued'||x.status==='running'){status.textContent=x.status==='running'?'GEO review running…':'GEO review queued — waiting for Cron worker…';await poll();}}catch(e){status.textContent='GEO status can be refreshed later.';}}; resumeStatus();
+  const studio = document.querySelector('.studio');
+  if (studio) {
+    const body = document.querySelector('#markdown-body');
+    const title = document.querySelector('#article-title');
+    const date = document.querySelector('#article-date');
+    const token = document.querySelector('#csrf-token');
+    const preview = document.querySelector('#markdown-preview');
+    const state = document.querySelector('#save-state');
+    const previewUrl='/admin/markdown/preview';
+    let saveTimer;
+    let previewTimer;
+    let previewVersion = 0;
+
+    const setState = (value, label) => {
+      state.dataset.state = value;
+      state.textContent = label;
+    };
+
+    const renderPreview = async () => {
+      const version = ++previewVersion;
+      preview.setAttribute('aria-busy', 'true');
+      try {
+        const response = await fetch(previewUrl, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+          body: new URLSearchParams({body: body.value, csrf_token: token.value}),
+        });
+        const payload = await response.json();
+        if (!response.ok) throw Error(payload.error || 'Preview failed');
+        if (version === previewVersion) preview.innerHTML = payload.html;
+      } catch (error) {
+        if (version === previewVersion) preview.textContent = error.message || 'Preview failed';
+      } finally {
+        if (version === previewVersion) preview.removeAttribute('aria-busy');
+      }
+    };
+
+    const queuePreview = () => {
+      clearTimeout(previewTimer);
+      previewTimer = setTimeout(renderPreview, 120);
+    };
+
+    const save = async () => {
+      setState('saving', 'Saving…');
+      try {
+        const response = await fetch(studio.dataset.autosaveUrl, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+          body: new URLSearchParams({title: title.value, date: date.value, body: body.value, csrf_token: token.value}),
+        });
+        if (!response.ok) {
+          const payload = await response.json();
+          throw Error(payload.error || 'Save failed');
+        }
+        setState('saved', 'Saved draft');
+      } catch (error) {
+        setState('error', error.message || 'Save failed');
+      }
+    };
+
+    [body, title, date].forEach(field => field.addEventListener('input', () => {
+      queuePreview();
+      setState('unsaved', 'Unsaved changes');
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(save, 800);
+    }));
+    renderPreview();
+  }
+
+  document.addEventListener('click', async event => {
+    const button = event.target.closest('[data-copy]');
+    if (!button) return;
+    try {
+      await navigator.clipboard.writeText(button.dataset.copy);
+      button.textContent = 'Copied';
+    } catch {
+      button.textContent = 'Copy failed';
+    }
+  });
+
+  const panel = document.querySelector('[data-geo-panel]');
+  if (!panel) return;
+  const slug = panel.dataset.articleSlug;
+  const csrf = panel.querySelector('[data-geo-csrf]').value;
+  const status = panel.querySelector('[data-geo-review-status]');
+  const list = panel.querySelector('[data-geo-proposals]');
+  const reviewButton = panel.querySelector('[data-geo-review]');
+
+  const request = async (path, data = {}) => {
+    const response = await fetch(path, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: new URLSearchParams({...data, csrf_token: csrf}),
+    });
+    const payload = await response.json();
+    if (!response.ok) throw Error(payload.error || 'GEO request failed');
+    return payload;
+  };
+
+  const renderProposals = proposals => list.replaceChildren(...proposals.map(proposal => {
+    const item = document.createElement('li');
+    item.dataset.proposalId = proposal.id;
+    item.dataset.proposalValue = JSON.stringify(proposal.value);
+    const output = document.createElement('output');
+    output.textContent = proposal.type + ': ' + JSON.stringify(proposal.value);
+    item.append(output);
+    ['accept', 'reject', 'edit'].forEach(action => {
+      const button = document.createElement('button');
+      button.dataset.action = action;
+      button.textContent = action;
+      item.append(button);
+    });
+    return item;
+  }));
+
+  const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+  const poll = async () => {
+    reviewButton.disabled = true;
+    for (let attempt = 0; attempt < 60; attempt++) {
+      const response = await fetch(`/admin/articles/${slug}/geo/review`);
+      const payload = await response.json();
+      if (!response.ok) throw Error(payload.error || 'GEO status failed');
+      if (payload.status === 'completed') {
+        renderProposals(payload.proposals);
+        status.textContent = 'Review complete';
+        reviewButton.disabled = false;
+        reviewButton.textContent = 'Request GEO review';
+        return;
+      }
+      if (payload.status === 'failed') {
+        reviewButton.disabled = false;
+        reviewButton.textContent = 'Retry GEO review';
+        throw Error(payload.failure || 'GEO review failed');
+      }
+      status.textContent = payload.status === 'running' ? 'GEO review running…' : 'GEO review queued — waiting for Cron worker…';
+      reviewButton.textContent = 'Refresh GEO status';
+      await sleep(Math.min(15000, 2000 + attempt * 500));
+    }
+    reviewButton.disabled = false;
+    reviewButton.textContent = 'Refresh GEO status';
+    status.textContent = 'Review is still queued. You can leave this page and refresh its status later.';
+  };
+
+  reviewButton.onclick = async () => {
+    try {
+      if (reviewButton.textContent === 'Refresh GEO status') {
+        await poll();
+        return;
+      }
+      const payload = await request(`/admin/articles/${slug}/geo/review`);
+      if (payload.queued) {
+        status.textContent = 'Review queued — waiting for Cron worker…';
+        await poll();
+      } else {
+        renderProposals(payload.proposals);
+        status.textContent = 'Review complete';
+      }
+    } catch (error) {
+      status.textContent = error.message;
+      reviewButton.disabled = false;
+    }
+  };
+
+  list.onclick = async event => {
+    const button = event.target.closest('button');
+    if (!button) return;
+    const item = button.parentNode;
+    const id = item.dataset.proposalId;
+    try {
+      const data = button.dataset.action === 'edit' ? {value: prompt('Metadata JSON', item.dataset.proposalValue) || ''} : {};
+      const result = await request(`/admin/geo/proposals/${id}/${button.dataset.action}`, data);
+      if (button.dataset.action === 'edit') item.dataset.proposalValue = JSON.stringify(result.value);
+      button.disabled = true;
+    } catch (error) {
+      status.textContent = error.message;
+    }
+  };
+
+  const resumeStatus = async () => {
+    try {
+      const response = await fetch(`/admin/articles/${slug}/geo/review`);
+      const payload = await response.json();
+      if (!response.ok) return;
+      if (payload.status === 'completed') {
+        renderProposals(payload.proposals);
+        status.textContent = 'Review complete';
+        return;
+      }
+      if (payload.status === 'failed') {
+        status.textContent = payload.failure || 'GEO review failed';
+        reviewButton.textContent = 'Retry GEO review';
+        return;
+      }
+      if (payload.status === 'queued' || payload.status === 'running') {
+        status.textContent = payload.status === 'running' ? 'GEO review running…' : 'GEO review queued — waiting for Cron worker…';
+        await poll();
+      }
+    } catch {
+      status.textContent = 'GEO status can be refreshed later.';
+    }
+  };
+  resumeStatus();
 })();

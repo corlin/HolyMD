@@ -70,3 +70,9 @@ h3 { margin: 0; font-size: clamp(1.45rem, 2.5vw, 2rem); }
 .site-footer nav a { color: var(--accent); }
 @media (max-width: 38rem) { .shell, .article-page { width: min(100% - 1.5rem, 74rem); } .nav-row { min-height: 4.25rem; } .nav-row nav { gap: .7rem; } .hero { padding-top: 4rem; } .article-row { gap: 1rem; } .site-footer > div { align-items: flex-start; flex-direction: column; } }
 @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+.prose table { width: 100%; margin: 2rem 0; border-collapse: collapse; font-family: var(--sans); font-size: .82em; }
+.prose th, .prose td { padding: .65rem .75rem; border: 1px solid var(--rule); text-align: left; }
+.prose th { background: var(--paper-deep); }
+.prose img { display: block; max-width: 100%; height: auto; margin: 2rem auto; }
+.prose hr { margin: 3rem 0; border: 0; border-top: 1px solid var(--rule); }
+.prose input[type="checkbox"] { width: auto; margin-right: .45rem; }

@@ -19,6 +19,7 @@ use HolyMD\Geo\MySqlGeoProposalStore;
 use HolyMD\Publish\AtomicPublicTree;
 use HolyMD\Publish\PublishService;
 use HolyMD\Render\StaticBuilder;
+use HolyMD\Render\MarkdownRenderer;
 use HolyMD\Queue\MySqlJobQueue;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
@@ -74,6 +75,7 @@ $controller = new ArticleController(
     new MySqlJobQueue($container->get(\PDO::class)),
     $root . '/content/media',
     ['site_name' => (string) (getenv('HOLYMD_SITE_NAME') ?: 'HolyMD'), 'site_url' => (string) (getenv('HOLYMD_SITE_URL') ?: 'https://example.invalid'), 'author_name' => (string) (getenv('HOLYMD_AUTHOR_NAME') ?: 'Author'), 'about' => (string) (getenv('HOLYMD_ABOUT') ?: ''), 'site_language' => (string) (getenv('HOLYMD_SITE_LANGUAGE') ?: 'zh-CN')],
+    new MarkdownRenderer(),
 );
 $geoStore = new MySqlGeoProposalStore($container->get(\PDO::class));
 $geo = new GeoController(new ArticleRepository($root . '/content/articles'), new GeoReviewService($container->get(\HolyMD\Geo\AiClient::class)), $geoStore, new AdminGuard($_SESSION), new Csrf($_SESSION), new MySqlJobQueue($container->get(\PDO::class)), new VersionService($root . '/content/versions'));

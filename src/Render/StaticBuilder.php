@@ -11,10 +11,12 @@ use RuntimeException;
 final class StaticBuilder
 {
     private TemplateRenderer $renderer;
+    private MarkdownRenderer $markdownRenderer;
 
-    public function __construct(?TemplateRenderer $renderer = null)
+    public function __construct(?TemplateRenderer $renderer = null, ?MarkdownRenderer $markdownRenderer = null)
     {
         $this->renderer = $renderer ?? new TemplateRenderer(dirname(__DIR__, 2) . '/templates/public');
+        $this->markdownRenderer = $markdownRenderer ?? new MarkdownRenderer();
     }
 
     public function build(BuildInput $input, string $temporaryRoot): BuildManifest
@@ -104,7 +106,7 @@ final class StaticBuilder
         }));
         return [
             'siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'siteLanguage' => $input->siteLanguage, 'article' => $article,
-            'url' => $url, 'date' => $date, 'modified' => $modified, 'summary' => $summary, 'sources' => $sources, 'topics' => $articleTopics, 'related' => array_slice($related, 0, 3), 'contentHtml' => $this->markdown($article->bodyMarkdown),
+            'url' => $url, 'date' => $date, 'modified' => $modified, 'summary' => $summary, 'sources' => $sources, 'topics' => $articleTopics, 'related' => array_slice($related, 0, 3), 'contentHtml' => $this->markdownRenderer->render($article->bodyMarkdown),
             'jsonLd' => json_encode(['@context' => 'https://schema.org', '@graph' => $graph], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR),
         ];
     }
@@ -122,7 +124,7 @@ final class StaticBuilder
     /** @param list<ArticleDocument> $articles */
     private function jsonFeed(array $articles, BuildInput $input): string
     {
-        $items = array_map(fn (ArticleDocument $article): array => ['id' => $this->url($input, '/articles/' . $article->slug . '/'), 'url' => $this->url($input, '/articles/' . $article->slug . '/'), 'title' => $article->title, 'date_published' => (string) $article->frontMatter->get('date'), 'summary' => (string) $article->frontMatter->get('summary', ''), 'content_html' => $this->markdown($article->bodyMarkdown), 'authors' => [['name' => $input->authorName]]], $articles);
+        $items = array_map(fn (ArticleDocument $article): array => ['id' => $this->url($input, '/articles/' . $article->slug . '/'), 'url' => $this->url($input, '/articles/' . $article->slug . '/'), 'title' => $article->title, 'date_published' => (string) $article->frontMatter->get('date'), 'summary' => (string) $article->frontMatter->get('summary', ''), 'content_html' => $this->markdownRenderer->render($article->bodyMarkdown), 'authors' => [['name' => $input->authorName]]], $articles);
         return json_encode(['version' => 'https://jsonfeed.org/version/1.1', 'title' => $input->siteName, 'home_page_url' => $input->siteUrl, 'feed_url' => $this->url($input, '/feed.json'), 'authors' => [['name' => $input->authorName]], 'items' => $items], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
     }
 
@@ -136,25 +138,6 @@ final class StaticBuilder
         foreach ($topicSlugs as $topicSlug) $urls[] = $this->url($input, '/topics/' . $topicSlug . '/');
         return '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . implode('', array_map(fn (string $url): string => '<url><loc>' . $this->xml($url) . '</loc></url>', $urls)) . '</urlset>';
     }
-
-    private function markdown(string $markdown): string
-    {
-        $lines = preg_split('/\R/', trim($markdown)) ?: []; $html = []; $paragraph = []; $list = false; $quote = false; $code = false; $codeLines = [];
-        $flush = function () use (&$paragraph, &$html): void { if ($paragraph !== []) { $html[] = '<p>' . implode("\n", $paragraph) . '</p>'; $paragraph = []; } };
-        foreach ($lines as $line) {
-            if (str_starts_with(trim($line), '```')) { $flush(); if ($code) { $html[] = '<pre><code>' . htmlspecialchars(implode("\n", $codeLines), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</code></pre>'; $codeLines = []; } $code = !$code; continue; }
-            if ($code) { $codeLines[] = $line; continue; }
-            if (preg_match('/^(#{1,6})\s+(.+)$/', $line, $m)) { $flush(); if ($list) { $html[] = '</ul>'; $list = false; } if ($quote) { $html[] = '</blockquote>'; $quote = false; } $level = min(strlen($m[1]) + 1, 6); $html[] = '<h' . $level . '>' . $this->inline($m[2]) . '</h' . $level . '>'; continue; }
-            if (preg_match('/^[-*+]\s+(.+)$/', $line, $m)) { $flush(); if ($quote) { $html[] = '</blockquote>'; $quote = false; } if (!$list) { $html[] = '<ul>'; $list = true; } $html[] = '<li>' . $this->inline($m[1]) . '</li>'; continue; }
-            if ($list) { $html[] = '</ul>'; $list = false; }
-            if (str_starts_with($line, '> ')) { $flush(); if ($list) { $html[] = '</ul>'; $list = false; } if (!$quote) { $html[] = '<blockquote>'; $quote = true; } $html[] = '<p>' . $this->inline(substr($line, 2)) . '</p>'; continue; }
-            if ($quote) { $html[] = '</blockquote>'; $quote = false; }
-            if ($line === '') { $flush(); continue; } $paragraph[] = $this->inline($line);
-        }
-        $flush(); if ($list) $html[] = '</ul>'; if ($quote) $html[] = '</blockquote>'; if ($code) $html[] = '<pre><code>' . htmlspecialchars(implode("\n", $codeLines), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</code></pre>'; return implode("\n", $html);
-    }
-
-    private function inline(string $text): string { $escaped = htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); return preg_replace('/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/', '<a href="$2">$1</a>', $escaped) ?? $escaped; }
 
     private function siteStyles(): string
     {

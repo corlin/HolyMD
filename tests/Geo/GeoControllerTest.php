@@ -34,17 +34,17 @@ final class GeoControllerTest extends TestCase
 
     public function test_admin_javascript_polls_queued_review_status_before_mapping_proposals(): void {
         $javascript = (string) file_get_contents(__DIR__ . '/../../public/assets/admin.js');
-        self::assertStringContainsString('if(x.queued)', $javascript);
-        self::assertStringContainsString("x.status==='completed'", $javascript);
+        self::assertStringContainsString('if (payload.queued)', $javascript);
+        self::assertStringContainsString("payload.status === 'completed'", $javascript);
         self::assertStringContainsString('await poll()', $javascript);
-        self::assertStringContainsString('attempt<60', $javascript);
+        self::assertStringContainsString('attempt < 60', $javascript);
         self::assertStringContainsString('waiting for Cron worker', $javascript);
         self::assertStringContainsString('Refresh GEO status', $javascript);
-        self::assertStringNotContainsString('x.proposals.map', $javascript);
-        self::assertStringContainsString('dataset.proposalValue=JSON.stringify(p.value)', $javascript);
+        self::assertStringNotContainsString('payload.proposals.map', $javascript);
+        self::assertStringContainsString('item.dataset.proposalValue = JSON.stringify(proposal.value)', $javascript);
         self::assertStringContainsString('resumeStatus()', $javascript);
-        self::assertStringContainsString("x.status==='running'", $javascript);
-        self::assertStringContainsString("x.status==='failed'", $javascript);
+        self::assertStringContainsString("payload.status === 'running'", $javascript);
+        self::assertStringContainsString("payload.status === 'failed'", $javascript);
     }
     public function test_edit_decodes_structured_metadata_and_rejects_malformed_json_before_accept(): void {
         $store = new InMemoryGeoProposalStore(); $router = $this->router(['admin_user_id'=>1,'csrf_token'=>'token'],$store);
