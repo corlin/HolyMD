@@ -5,6 +5,7 @@ use HolyMD\Geo\ConfiguredAiClient;
 use HolyMD\Geo\GeoAiException;
 use HolyMD\Geo\HttpResponse;
 use HolyMD\Geo\HttpTransport;
+use HolyMD\Geo\EndpointPolicy;
 use PHPUnit\Framework\TestCase;
 
 final class ConfiguredAiClientTest extends TestCase
@@ -12,7 +13,7 @@ final class ConfiguredAiClientTest extends TestCase
     public function test_sends_openai_compatible_analysis_request_and_extracts_json_content(): void
     {
         $transport = new RecordingTransport(new HttpResponse(200, json_encode(['choices' => [['message' => ['content' => '{"proposals":[],"findings":[]}']]]], JSON_THROW_ON_ERROR)));
-        $client = new ConfiguredAiClient('secret', 'https://provider.test/v1/chat/completions', 'geo-model', $transport, 12, 4096);
+        $client = new ConfiguredAiClient('secret', 'https://provider.test/v1/chat/completions', 'geo-model', $transport, 12, 4096, new EndpointPolicy(static fn (string $host): array => ['8.8.8.8']));
 
         $response = $client->analyze('Never write prose.', '# Saved body');
 
@@ -31,7 +32,7 @@ final class ConfiguredAiClientTest extends TestCase
 
     public function test_marks_rate_limits_retryable_and_redacts_provider_body(): void
     {
-        $client = new ConfiguredAiClient('secret', 'https://provider.test/v1/chat/completions', 'geo-model', new RecordingTransport(new HttpResponse(429, '{"error":{"message":"quota detail secret"}}')), 10, 2048);
+        $client = new ConfiguredAiClient('secret', 'https://provider.test/v1/chat/completions', 'geo-model', new RecordingTransport(new HttpResponse(429, '{"error":{"message":"quota detail secret"}}')), 10, 2048, new EndpointPolicy(static fn (string $host): array => ['8.8.8.8']));
         try { $client->analyze('prompt', 'body'); self::fail('Expected exception.'); }
         catch (GeoAiException $exception) { self::assertTrue($exception->retryable); self::assertStringContainsString('HTTP 429', $exception->getMessage()); self::assertStringNotContainsString('secret', $exception->getMessage()); }
     }

@@ -42,6 +42,9 @@ final class GeoControllerTest extends TestCase
         self::assertStringContainsString('Refresh GEO status', $javascript);
         self::assertStringNotContainsString('x.proposals.map', $javascript);
         self::assertStringContainsString('dataset.proposalValue=JSON.stringify(p.value)', $javascript);
+        self::assertStringContainsString('resumeStatus()', $javascript);
+        self::assertStringContainsString("x.status==='running'", $javascript);
+        self::assertStringContainsString("x.status==='failed'", $javascript);
     }
     public function test_edit_decodes_structured_metadata_and_rejects_malformed_json_before_accept(): void {
         $store = new InMemoryGeoProposalStore(); $router = $this->router(['admin_user_id'=>1,'csrf_token'=>'token'],$store);
