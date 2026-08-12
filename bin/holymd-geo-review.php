@@ -17,11 +17,25 @@ if (!is_string($slug) || preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/', $slug) !== 1
 
 $container = Bootstrap::createContainer($root);
 $pdo = $container->get(\PDO::class);
-$document = (new ArticleRepository($root . '/content/articles'))->read($slug);
-$binding = $pdo->prepare('SELECT geo_reviews.input_checksum FROM geo_reviews INNER JOIN articles ON articles.id = geo_reviews.article_id INNER JOIN article_versions ON article_versions.id = geo_reviews.article_version_id AND article_versions.article_id = articles.id WHERE geo_reviews.id = ? AND articles.slug = ?');
+$binding = $pdo->prepare('SELECT geo_reviews.input_checksum, article_versions.snapshot_path FROM geo_reviews INNER JOIN articles ON articles.id = geo_reviews.article_id INNER JOIN article_versions ON article_versions.id = geo_reviews.article_version_id AND article_versions.article_id = articles.id WHERE geo_reviews.id = ? AND articles.slug = ?');
 $binding->execute([(int) $reviewId, $slug]);
-$expectedChecksum = $binding->fetchColumn();
-if (!is_string($expectedChecksum) || !hash_equals($expectedChecksum, hash('sha256', $document->serialize()))) throw new RuntimeException('GEO review is not bound to the current saved article version checksum.');
+$row = $binding->fetch(\PDO::FETCH_ASSOC);
+if (!is_array($row) || !is_string($row['input_checksum'] ?? null) || !is_string($row['snapshot_path'] ?? null)) {
+    fwrite(STDERR, "GEO review is not bound to a valid article version.\n");
+    exit(64);
+}
+$expectedChecksum = (string) $row['input_checksum'];
+$snapshotPath = (string) $row['snapshot_path'];
+$versionId = new \HolyMD\Admin\VersionId((string) basename($snapshotPath, '.md'));
+$versionService = new \HolyMD\Admin\VersionService($root . '/content/versions');
+try {
+    $document = $versionService->restore($versionId, $slug);
+} catch (\Throwable) {
+    $document = (new ArticleRepository($root . '/content/articles'))->read($slug);
+}
+if (!hash_equals($expectedChecksum, hash('sha256', $document->serialize()))) {
+    throw new RuntimeException('GEO review is not bound to the current saved article version checksum.');
+}
 try { $review = (new GeoReviewService($container->get(AiClient::class)))->review($document); }
 catch (\HolyMD\Geo\GeoAiException $error) { fwrite(STDERR, ($error->retryable ? 'RETRYABLE: ' : 'PERMANENT: ') . $error->getMessage() . "\n"); exit($error->retryable ? 75 : 78); }
 $pdo->beginTransaction();
