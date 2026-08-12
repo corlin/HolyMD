@@ -1,6 +1,8 @@
 # HolyMD
 
-HolyMD 是一款面向个人品牌的静态优先 Markdown 博客管理工具。作者在 PHP 后台编辑文件系统中的 Markdown，发布时生成可由 Apache 直接提供的 HTML、CSS、RSS、sitemap、`llms.txt` 与结构化数据；MySQL 只保存账号、任务、构建、审计和 GEO 建议等运行状态，不保存文章正文。
+HolyMD 是一款面向个人品牌的静态优先 Markdown 博客管理工具。作者在 PHP 后台编辑文件系统中的 Markdown，发布时生成可由 Apache 直接提供的 HTML、CSS、RSS、sitemap、`llms.txt`、`llms-full.txt`、OpenGraph 与结构化数据；MySQL 只保存账号、任务、构建、审计和 GEO 建议等运行状态，不保存文章正文。
+
+全站前台原生支持暗黑模式无闪烁切换（系统跟随/浅色/深色）、智能 TOC 文章目录提取与阅读时间预估，并内置向 LLM / AI 智能体开放的整站知识库全文导出文件 `/llms-full.txt`。
 
 AI 的边界是 GEO 优化：它可以建议摘要、实体、元数据和结构化信息，但不能生成或改写正文。每一项建议都必须由管理员单独接受、编辑或拒绝，正文哈希在接受前后保持不变。
 
