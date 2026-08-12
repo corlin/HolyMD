@@ -11,6 +11,9 @@ use HolyMD\Content\ArticleRepository;
 use HolyMD\Http\Csrf;
 use HolyMD\Http\Router;
 use HolyMD\Http\ServerRequest;
+use HolyMD\Publish\AtomicPublicTree;
+use HolyMD\Publish\PublishService;
+use HolyMD\Render\StaticBuilder;
 use PHPUnit\Framework\TestCase;
 
 final class ArticleControllerTest extends TestCase
@@ -84,14 +87,15 @@ final class ArticleControllerTest extends TestCase
         self::assertSame("Original body\n", (new ArticleRepository($this->root . '/articles'))->read('first-note')->bodyMarkdown);
     }
 
-    public function test_publish_is_an_authorized_csrf_protected_pending_action(): void
+    public function test_publish_is_an_authorized_csrf_protected_real_publication_action(): void
     {
         $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);
 
         $response = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/publish', [], ['csrf_token' => 'expected-token']));
 
-        self::assertSame(202, $response->status);
-        self::assertSame(['action' => 'publish', 'pending' => true, 'slug' => 'first-note'], json_decode($response->body, true, flags: JSON_THROW_ON_ERROR));
+        self::assertSame(200, $response->status);
+        self::assertSame('publish', json_decode($response->body, true, flags: JSON_THROW_ON_ERROR)['action']);
+        self::assertFileExists($this->root . '/public/articles/first-note/index.html');
     }
 
     public function test_publish_rejects_a_missing_csrf_token(): void
@@ -121,14 +125,17 @@ final class ArticleControllerTest extends TestCase
     private function router(array $session): Router
     {
         $repository = new ArticleRepository($this->root . '/articles');
-        $controller = new ArticleController($repository, new VersionService($this->root . '/versions'), new AdminGuard($session), new Csrf($session));
+        $publisher = new PublishService($repository, new StaticBuilder(), new AtomicPublicTree(), $this->root . '/public', 'Test', 'https://example.test', 'Author', 'About');
+        $controller = new ArticleController($repository, new VersionService($this->root . '/versions'), new AdminGuard($session), new Csrf($session), $publisher);
         return Router::admin($controller);
     }
 
     private function removeDirectory(string $path): void
     {
-        foreach (glob($path . '/*') ?: [] as $child) {
-            is_dir($child) ? $this->removeDirectory($child) : unlink($child);
+        foreach (scandir($path) ?: [] as $name) {
+            if ($name === '.' || $name === '..') continue;
+            $child = $path . '/' . $name;
+            is_dir($child) && !is_link($child) ? $this->removeDirectory($child) : unlink($child);
         }
         rmdir($path);
     }

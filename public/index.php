@@ -14,6 +14,9 @@ use HolyMD\Geo\GeoController;
 use HolyMD\Geo\GeoProposalStore;
 use HolyMD\Geo\FileGeoReviewStore;
 use HolyMD\Geo\GeoReviewService;
+use HolyMD\Publish\AtomicPublicTree;
+use HolyMD\Publish\PublishService;
+use HolyMD\Render\StaticBuilder;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 
@@ -33,6 +36,12 @@ $controller = new ArticleController(
     new VersionService($root . '/content/versions'),
     new AdminGuard($_SESSION),
     new Csrf($_SESSION),
+    new PublishService(
+        new ArticleRepository($root . '/content/articles'), new StaticBuilder(), new AtomicPublicTree(),
+        $root . '/public', (string) (getenv('HOLYMD_SITE_NAME') ?: 'HolyMD'), (string) (getenv('HOLYMD_SITE_URL') ?: 'https://example.invalid'),
+        (string) (getenv('HOLYMD_AUTHOR_NAME') ?: 'Author'), (string) (getenv('HOLYMD_ABOUT') ?: ''),
+        getenv('HOLYMD_LLMS_TXT') === '1', $root . '/content/audit',
+    ),
 );
 $geoStore = new FileGeoReviewStore($root . '/content/geo');
 $geo = new GeoController(new ArticleRepository($root . '/content/articles'), new GeoReviewService($container->get(\HolyMD\Geo\AiClient::class), $geoStore), $geoStore, new AdminGuard($_SESSION), new Csrf($_SESSION));

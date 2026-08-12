@@ -36,7 +36,10 @@ final readonly class Router
         if ($request->method === 'POST' && preg_match('#^/admin/articles/[a-z0-9]+(?:-[a-z0-9]+)*/restore/[a-f0-9]{32}$#', $request->path) === 1) {
             return $this->articles->restore($request);
         }
-        if ($request->method === 'POST' && (preg_match('#^/admin/articles/[a-z0-9-]+/(publish|withdraw)$#', $request->path) === 1 || $request->path === '/admin/settings')) {
+        if ($request->method === 'POST' && preg_match('#^/admin/articles/[a-z0-9-]+/(publish|withdraw)$#', $request->path) === 1) {
+            return $this->articles->publish($request);
+        }
+        if ($request->method === 'POST' && $request->path === '/admin/settings') {
             return $this->articles->unsupportedMutation($request);
         }
         return Response::json(['error' => 'Not found.'], 404);

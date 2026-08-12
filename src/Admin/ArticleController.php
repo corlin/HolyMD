@@ -11,6 +11,8 @@ use HolyMD\Content\ArticleRepository;
 use HolyMD\Http\Csrf;
 use HolyMD\Http\Response;
 use HolyMD\Http\ServerRequest;
+use HolyMD\Publish\ArticleId;
+use HolyMD\Publish\PublishService;
 use InvalidArgumentException;
 
 final readonly class ArticleController
@@ -20,6 +22,7 @@ final readonly class ArticleController
         private VersionService $versions,
         private AdminGuard $guard,
         private Csrf $csrf,
+        private ?PublishService $publisher = null,
     ) {
     }
 
@@ -98,15 +101,31 @@ final readonly class ArticleController
         }
     }
 
-    public function unsupportedMutation(ServerRequest $request): Response
+    public function publish(ServerRequest $request): Response
     {
         if (($response = $this->authorizeMutation($request)) !== null) {
             return $response;
         }
-        if (preg_match('#^/admin/articles/([a-z0-9]+(?:-[a-z0-9]+)*)/(publish|withdraw)$#', $request->path, $matches) === 1) {
-            return Response::json(['action' => $matches[2], 'pending' => true, 'slug' => $matches[1]], 202);
+        if (preg_match('#^/admin/articles/([a-z0-9]+(?:-[a-z0-9]+)*)/(publish|withdraw)$#', $request->path, $matches) !== 1) {
+            return Response::json(['error' => 'Invalid publication route.'], 422);
         }
-        return Response::json(['action' => 'settings', 'pending' => true], 202);
+        if ($this->publisher === null) {
+            return Response::json(['error' => 'Publishing is not configured.'], 503);
+        }
+        try {
+            $result = $matches[2] === 'publish' ? $this->publisher->publish(new ArticleId($matches[1])) : $this->publisher->withdraw(new ArticleId($matches[1]));
+            return Response::json(['action' => $matches[2], 'slug' => $matches[1], 'articleCount' => $result->manifest->articleCount, 'validation' => $result->validation->text()]);
+        } catch (InvalidArgumentException $exception) {
+            return Response::json(['error' => $exception->getMessage()], 422);
+        } catch (\RuntimeException $exception) {
+            return Response::json(['error' => $exception->getMessage()], 500);
+        }
+    }
+
+    public function unsupportedMutation(ServerRequest $request): Response
+    {
+        if (($response = $this->authorizeMutation($request)) !== null) return $response;
+        return Response::json(['error' => 'Settings mutation is not configured.'], 503);
     }
 
     private function authorizeMutation(ServerRequest $request): ?Response
