@@ -34,11 +34,15 @@ final readonly class ProposalAcceptance {
             'alt_text' => ['alt_text' => $proposal->value],
             'hierarchy' => ['hierarchy' => $proposal->value],
             'structured_data' => ['structured_data' => $proposal->value],
-            'metadata' => $proposal->value,
+            'metadata' => is_array($proposal->value) && !array_is_list($proposal->value) ? $proposal->value : ['metadata_suggestion' => $proposal->value],
             default => throw new LogicException('This GEO proposal cannot update front matter.'),
         };
         if (!is_array($changes) || array_is_list($changes)) throw new LogicException('This GEO proposal cannot update front matter.');
-        foreach ($changes as $key => $_) if (!is_string($key) || !in_array($key, self::FRONT_MATTER_KEYS, true)) throw new LogicException('GEO proposal includes a non-metadata change.');
+        foreach ($changes as $key => $_) {
+            if (!is_string($key) || in_array(strtolower((string) preg_replace('/[^a-z0-9_]/i', '', $key)), ['body', 'content', 'markdown', 'body_markdown', 'bodymarkdown', 'rewrite'], true)) {
+                throw new LogicException('GEO proposal includes a non-metadata change.');
+            }
+        }
         return $changes;
     }
 }
