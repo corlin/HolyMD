@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS `admin_users` (
 
 CREATE TABLE IF NOT EXISTS `articles` (
     `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    `source_path` VARCHAR(1024) NOT NULL,
+    `source_path` VARCHAR(768) NOT NULL,
     `slug` VARCHAR(255) NOT NULL,
     `state` ENUM('draft', 'published', 'withdrawn') NOT NULL DEFAULT 'draft',
     `metadata_checksum` CHAR(64) NOT NULL,
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS `articles` (
 CREATE TABLE IF NOT EXISTS `article_versions` (
     `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     `article_id` BIGINT UNSIGNED NOT NULL,
-    `snapshot_path` VARCHAR(1024) NOT NULL,
+    `snapshot_path` VARCHAR(768) NOT NULL,
     `content_checksum` CHAR(64) NOT NULL,
     `created_by_admin_user_id` BIGINT UNSIGNED NULL,
     `created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
@@ -79,7 +79,7 @@ CREATE TABLE IF NOT EXISTS `builds` (
     `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     `status` ENUM('queued', 'running', 'succeeded', 'failed') NOT NULL DEFAULT 'queued',
     `triggered_by_admin_user_id` BIGINT UNSIGNED NULL,
-    `manifest_path` VARCHAR(1024) NULL,
+    `manifest_path` VARCHAR(768) NULL,
     `output_checksum` CHAR(64) NULL,
     `failure_message` TEXT NULL,
     `started_at` DATETIME(6) NULL,
