@@ -30,6 +30,7 @@ final readonly class PublishService
         private ?string $auditRoot = null,
         private ?Closure $persist = null,
         private ?string $lockPath = null,
+        private string $siteLanguage = 'zh-CN',
     ) {
     }
 
@@ -57,7 +58,7 @@ final readonly class PublishService
             $validation = $this->validate($published);
             if (!$validation->isValid()) throw new InvalidArgumentException($validation->text());
             if (!mkdir($temporaryRoot, 0775, true) && !is_dir($temporaryRoot)) throw new RuntimeException('Unable to create temporary build directory.');
-            $manifest = $this->builder->build(new BuildInput($published, $this->siteName, $this->siteUrl, $this->authorName, $this->about, $this->generateLlmsTxt), $temporaryRoot);
+            $manifest = $this->builder->build(new BuildInput($published, $this->siteName, $this->siteUrl, $this->authorName, $this->about, $this->generateLlmsTxt, $this->siteLanguage), $temporaryRoot);
             $manifest = $this->writeRedirects($temporaryRoot, $published, $manifest);
             $this->writeManifest($temporaryRoot, $manifest);
             $this->persist($updated);
@@ -82,6 +83,10 @@ final readonly class PublishService
     private function validate(array $published): ValidationReport
     {
         $errors = [];
+        if ($this->siteUrl === '' || str_contains($this->siteUrl, 'example.invalid')) $errors[] = 'The public site URL must be configured and cannot use a placeholder domain.';
+        if (trim($this->siteName) === '' || in_array(trim($this->siteName), ['HolyMD', 'Site'], true)) $errors[] = 'The public site name must be configured and cannot use a placeholder value.';
+        if (trim($this->authorName) === '' || trim($this->authorName) === 'Author') $errors[] = 'The public author name must be configured and cannot use a placeholder value.';
+        if (preg_match('/^[a-z]{2,3}(?:-[A-Z]{2})?$/', $this->siteLanguage) !== 1) $errors[] = 'The public site language must be a valid BCP 47 language tag.';
         $slugs = [];
         $redirects = [];
         foreach ($published as $article) {

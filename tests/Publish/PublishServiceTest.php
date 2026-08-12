@@ -100,6 +100,22 @@ final class PublishServiceTest extends TestCase
         $this->service()->publish(new ArticleId('first-note'));
     }
 
+    public function test_rejects_placeholder_public_identity_before_building(): void
+    {
+        $service = new PublishService(
+            new ArticleRepository($this->root . '/articles'), new StaticBuilder(), new AtomicPublicTree(),
+            $this->root . '/public/.holymd-current', 'HolyMD', 'https://example.invalid', 'Author', '', false, null, null, null, 'zh-CN',
+        );
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage('site URL');
+        try { $service->publish(new ArticleId('first-note')); }
+        finally {
+            self::assertSame('previous site', file_get_contents($this->root . '/public/site/index.html'));
+            self::assertSame('draft', (new ArticleRepository($this->root . '/articles'))->read('first-note')->frontMatter->get('status'));
+        }
+    }
+
     private function removeDirectory(string $path): void
     {
         if (!is_dir($path) && !is_link($path)) return;

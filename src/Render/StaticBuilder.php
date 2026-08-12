@@ -22,6 +22,9 @@ final class StaticBuilder
         if (!str_starts_with($input->siteUrl, 'https://')) {
             throw new RuntimeException('The public site URL must use HTTPS.');
         }
+        if (preg_match('/^[a-z]{2,3}(?:-[A-Z]{2})?$/', $input->siteLanguage) !== 1) {
+            throw new RuntimeException('The public site language must be a valid BCP 47 language tag.');
+        }
         if (!is_dir($temporaryRoot) && !mkdir($temporaryRoot, 0775, true) && !is_dir($temporaryRoot)) {
             throw new RuntimeException('Unable to create temporary build directory.');
         }
@@ -52,14 +55,14 @@ final class StaticBuilder
             $topicRoutes[$slug] = $topic;
             $route = '/topics/' . $slug . '/';
             $this->write($temporaryRoot . $route . 'index.html', $this->renderer->render('topic', [
-                'siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'topic' => $topic, 'articles' => $topicArticles, 'route' => $route,
+                'siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'siteLanguage' => $input->siteLanguage, 'topic' => $topic, 'articles' => $topicArticles, 'route' => $route,
             ]));
             $files[] = $route . 'index.html';
         }
         $this->write($temporaryRoot . '/index.html', $this->renderer->render('index', [
-            'siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'about' => $input->about, 'articles' => $articles, 'topics' => $topics,
+            'siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'about' => $input->about, 'siteLanguage' => $input->siteLanguage, 'articles' => $articles, 'topics' => $topics,
         ]));
-        $this->write($temporaryRoot . '/about/index.html', $this->renderer->render('about', ['siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'about' => $input->about]));
+        $this->write($temporaryRoot . '/about/index.html', $this->renderer->render('about', ['siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'about' => $input->about, 'siteLanguage' => $input->siteLanguage]));
         $this->write($temporaryRoot . '/assets/site.css', $this->siteStyles());
         $this->write($temporaryRoot . '/rss.xml', $this->rss($articles, $input));
         $this->write($temporaryRoot . '/feed.json', $this->jsonFeed($articles, $input));
@@ -100,7 +103,7 @@ final class StaticBuilder
             return array_intersect($articleTopics, (array) $candidate->frontMatter->get('topics', [])) !== [];
         }));
         return [
-            'siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'article' => $article,
+            'siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'siteLanguage' => $input->siteLanguage, 'article' => $article,
             'url' => $url, 'date' => $date, 'modified' => $modified, 'summary' => $summary, 'sources' => $sources, 'topics' => $articleTopics, 'related' => array_slice($related, 0, 3), 'contentHtml' => $this->markdown($article->bodyMarkdown),
             'jsonLd' => json_encode(['@context' => 'https://schema.org', '@graph' => $graph], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR),
         ];
@@ -141,7 +144,7 @@ final class StaticBuilder
         foreach ($lines as $line) {
             if (str_starts_with(trim($line), '```')) { $flush(); if ($code) { $html[] = '<pre><code>' . htmlspecialchars(implode("\n", $codeLines), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</code></pre>'; $codeLines = []; } $code = !$code; continue; }
             if ($code) { $codeLines[] = $line; continue; }
-            if (preg_match('/^(#{1,6})\s+(.+)$/', $line, $m)) { $flush(); if ($list) { $html[] = '</ul>'; $list = false; } if ($quote) { $html[] = '</blockquote>'; $quote = false; } $level = strlen($m[1]); $html[] = '<h' . $level . '>' . $this->inline($m[2]) . '</h' . $level . '>'; continue; }
+            if (preg_match('/^(#{1,6})\s+(.+)$/', $line, $m)) { $flush(); if ($list) { $html[] = '</ul>'; $list = false; } if ($quote) { $html[] = '</blockquote>'; $quote = false; } $level = min(strlen($m[1]) + 1, 6); $html[] = '<h' . $level . '>' . $this->inline($m[2]) . '</h' . $level . '>'; continue; }
             if (preg_match('/^[-*+]\s+(.+)$/', $line, $m)) { $flush(); if ($quote) { $html[] = '</blockquote>'; $quote = false; } if (!$list) { $html[] = '<ul>'; $list = true; } $html[] = '<li>' . $this->inline($m[1]) . '</li>'; continue; }
             if ($list) { $html[] = '</ul>'; $list = false; }
             if (str_starts_with($line, '> ')) { $flush(); if ($list) { $html[] = '</ul>'; $list = false; } if (!$quote) { $html[] = '<blockquote>'; $quote = true; } $html[] = '<p>' . $this->inline(substr($line, 2)) . '</p>'; continue; }

@@ -58,7 +58,7 @@ $controller = new ArticleController(
         (string) (getenv('HOLYMD_PUBLIC_TREE') ?: $root . '/public/.holymd-current'), (string) (getenv('HOLYMD_SITE_NAME') ?: 'HolyMD'), (string) (getenv('HOLYMD_SITE_URL') ?: 'https://example.invalid'),
         (string) (getenv('HOLYMD_AUTHOR_NAME') ?: 'Author'), (string) (getenv('HOLYMD_ABOUT') ?: ''),
         getenv('HOLYMD_LLMS_TXT') === '1', $root . '/content/audit',
-        null, $root . '/content/holymd-publish.lock',
+        null, $root . '/content/holymd-publish.lock', (string) (getenv('HOLYMD_SITE_LANGUAGE') ?: 'zh-CN'),
     ),
     new MySqlJobQueue($container->get(\PDO::class)),
 );

@@ -177,7 +177,7 @@ final class ArticleControllerTest extends TestCase
     private function router(array $session): Router
     {
         $repository = new ArticleRepository($this->root . '/articles');
-        $publisher = new PublishService($repository, new StaticBuilder(), new AtomicPublicTree(), $this->root . '/public', 'Test', 'https://example.test', 'Author', 'About');
+        $publisher = new PublishService($repository, new StaticBuilder(), new AtomicPublicTree(), $this->root . '/public', 'Test publication', 'https://example.test', 'Ada Test', 'About Ada.');
         $controller = new ArticleController($repository, new VersionService($this->root . '/versions'), new AdminGuard($session), new Csrf($session), $publisher);
         return Router::admin($controller);
     }

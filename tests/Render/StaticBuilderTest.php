@@ -52,7 +52,9 @@ final class StaticBuilderTest extends TestCase
         self::assertStringContainsString('/articles/second-post/', (string) file_get_contents($this->outputRoot . '/sitemap.xml'));
         self::assertStringContainsString('/topics/notes/', (string) file_get_contents($this->outputRoot . '/sitemap.xml'));
         self::assertStringContainsString('og:title', $article);
-        self::assertStringContainsString('<h1>First</h1>', $article);
+        self::assertStringContainsString('<html lang="zh-CN">', $article);
+        self::assertStringContainsString('<h2>First</h2>', $article);
+        self::assertSame(1, substr_count($article, '<h1'));
     }
 
     public function test_closes_lists_and_quotes_before_following_blocks(): void
@@ -60,8 +62,9 @@ final class StaticBuilderTest extends TestCase
         $article = new ArticleDocument('blocks', 'Blocks', "- item\n# Heading\n> quote\n## Subheading", new FrontMatter(['title' => 'Blocks', 'slug' => 'blocks', 'date' => '2026-08-12']), '/blocks');
         (new StaticBuilder())->build(new BuildInput([$article], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
         $html = (string) file_get_contents($this->outputRoot . '/articles/blocks/index.html');
-        self::assertStringContainsString("<ul>\n<li>item</li>\n</ul>\n<h1>Heading</h1>\n<blockquote>", $html);
-        self::assertStringContainsString("</blockquote>\n<h2>Subheading</h2>", $html);
+        self::assertStringContainsString("<ul>\n<li>item</li>\n</ul>\n<h2>Heading</h2>\n<blockquote>", $html);
+        self::assertStringContainsString("</blockquote>\n<h3>Subheading</h3>", $html);
+        self::assertSame(1, substr_count($html, '<h1'));
     }
 
     public function test_closes_quote_before_list(): void
@@ -117,6 +120,24 @@ final class StaticBuilderTest extends TestCase
         $topic = (string) file_get_contents($this->outputRoot . '/topics/notes/index.html');
         self::assertStringContainsString('Articles on Notes', $topic);
         self::assertStringContainsString('<nav aria-label="Primary">', $topic);
+    }
+
+    public function test_renders_configured_valid_site_language_on_every_page(): void
+    {
+        $article = new ArticleDocument('language', 'Language', 'Body.', new FrontMatter(['title' => 'Language', 'slug' => 'language', 'date' => '2026-08-12', 'topics' => ['Notes']]), '/language');
+        (new StaticBuilder())->build(new BuildInput([$article], 'Notes', 'https://example.test', 'Ada', 'About Ada', false, 'fr-CA'), $this->outputRoot);
+
+        foreach (['/index.html', '/about/index.html', '/articles/language/index.html', '/topics/notes/index.html'] as $path) {
+            self::assertStringContainsString('<html lang="fr-CA">', (string) file_get_contents($this->outputRoot . $path));
+        }
+    }
+
+    public function test_rejects_an_invalid_site_language(): void
+    {
+        $article = new ArticleDocument('language', 'Language', 'Body.', new FrontMatter(['title' => 'Language', 'slug' => 'language', 'date' => '2026-08-12']), '/language');
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('site language');
+        (new StaticBuilder())->build(new BuildInput([$article], 'Notes', 'https://example.test', 'Ada', 'About Ada', false, 'invalid language'), $this->outputRoot);
     }
 
     public function test_rejects_duplicate_articles_and_topic_slug_collisions(): void
