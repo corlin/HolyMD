@@ -100,7 +100,7 @@
 
   const renderProposals = proposals => list.replaceChildren(...proposals.map(proposal => {
     const item = document.createElement('li');
-    item.className = 'geo-proposal-card';
+    item.className = 'geo-proposal-card' + (proposal.status === 'accepted' ? ' is-accepted' : (proposal.status === 'rejected' ? ' is-rejected' : ''));
     item.dataset.proposalId = proposal.id;
     item.dataset.proposalValue = JSON.stringify(proposal.value);
 
@@ -110,6 +110,13 @@
     tag.className = 'geo-type-tag';
     tag.textContent = proposal.type;
     header.append(tag);
+
+    if (proposal.status === 'accepted' || proposal.status === 'rejected') {
+      const statusPill = document.createElement('span');
+      statusPill.className = 'geo-status-pill ' + proposal.status;
+      statusPill.textContent = proposal.status === 'accepted' ? 'Accepted ✓' : 'Rejected';
+      header.append(statusPill);
+    }
     item.append(header);
 
     const output = document.createElement('output');
@@ -119,17 +126,19 @@
     output.textContent = valText;
     item.append(output);
 
-    const actions = document.createElement('div');
-    actions.className = 'geo-card-actions';
-    ['accept', 'reject', 'edit'].forEach(action => {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.dataset.action = action;
-      button.className = 'btn-geo-' + action;
-      button.textContent = action === 'accept' ? 'Accept proposal' : (action === 'reject' ? 'Reject' : 'Edit');
-      actions.append(button);
-    });
-    item.append(actions);
+    if (proposal.status !== 'accepted' && proposal.status !== 'rejected') {
+      const actions = document.createElement('div');
+      actions.className = 'geo-card-actions';
+      ['accept', 'reject', 'edit'].forEach(action => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.dataset.action = action;
+        button.className = 'btn-geo-' + action;
+        button.textContent = action === 'accept' ? 'Accept proposal' : (action === 'reject' ? 'Reject' : 'Edit');
+        actions.append(button);
+      });
+      item.append(actions);
+    }
     return item;
   }));
 
@@ -182,15 +191,58 @@
   };
 
   list.onclick = async event => {
-    const button = event.target.closest('button');
+    const button = event.target.closest('button[data-action]');
     if (!button) return;
-    const item = button.parentNode;
+    const item = button.closest('[data-proposal-id]');
+    if (!item) return;
     const id = item.dataset.proposalId;
+    const action = button.dataset.action;
+
     try {
-      const data = button.dataset.action === 'edit' ? {value: prompt('Metadata JSON', item.dataset.proposalValue) || ''} : {};
-      const result = await request(`/admin/geo/proposals/${id}/${button.dataset.action}`, data);
-      if (button.dataset.action === 'edit') item.dataset.proposalValue = JSON.stringify(result.value);
-      button.disabled = true;
+      if (action === 'edit') {
+        const input = prompt('Edit metadata proposal value:', item.dataset.proposalValue);
+        if (input === null) return;
+        const result = await request(`/admin/geo/proposals/${id}/edit`, {value: input});
+        item.dataset.proposalValue = JSON.stringify(result.value);
+        const cardBody = item.querySelector('.geo-card-body');
+        if (cardBody) {
+          cardBody.textContent = typeof result.value === 'string' ? result.value : JSON.stringify(result.value, null, 2);
+        }
+        status.textContent = 'Proposal updated successfully.';
+        return;
+      }
+
+      if (action === 'accept') {
+        await request(`/admin/geo/proposals/${id}/accept`);
+        item.classList.add('is-accepted');
+        const header = item.querySelector('.geo-card-header');
+        if (header && !header.querySelector('.geo-status-pill')) {
+          const pill = document.createElement('span');
+          pill.className = 'geo-status-pill accepted';
+          pill.textContent = 'Accepted ✓';
+          header.append(pill);
+        }
+        const actions = item.querySelector('.geo-card-actions');
+        if (actions) actions.remove();
+        status.textContent = 'Proposal accepted and applied to article metadata.';
+        return;
+      }
+
+      if (action === 'reject') {
+        await request(`/admin/geo/proposals/${id}/reject`);
+        item.classList.add('is-rejected');
+        const header = item.querySelector('.geo-card-header');
+        if (header && !header.querySelector('.geo-status-pill')) {
+          const pill = document.createElement('span');
+          pill.className = 'geo-status-pill rejected';
+          pill.textContent = 'Rejected';
+          header.append(pill);
+        }
+        const actions = item.querySelector('.geo-card-actions');
+        if (actions) actions.remove();
+        status.textContent = 'Proposal rejected.';
+        return;
+      }
     } catch (error) {
       status.textContent = error.message;
     }
