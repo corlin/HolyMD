@@ -23,4 +23,11 @@ final class DevRouterTest extends TestCase
 
         self::assertStringContainsString("str_ends_with(\$path, '/') ? '/index.html'", $frontController);
     }
+
+    public function test_documented_dev_server_uses_public_as_its_document_root(): void
+    {
+        $readme = (string) file_get_contents(dirname(__DIR__, 2) . '/README.md');
+
+        self::assertStringContainsString('php -S 127.0.0.1:8789 -t public bin/holymd-dev-router.php', $readme);
+    }
 }

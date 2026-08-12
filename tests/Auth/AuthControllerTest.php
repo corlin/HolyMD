@@ -64,6 +64,15 @@ final class AuthControllerTest extends TestCase
         self::assertSame(419, $this->router()->dispatch(new ServerRequest('POST', '/admin/login', [], ['email' => 'admin@example.test', 'password' => 'correct horse']))->status);
     }
 
+    public function test_login_page_classes_have_dedicated_admin_styles(): void
+    {
+        $css = (string) file_get_contents(dirname(__DIR__, 2) . '/public/assets/admin.css');
+
+        self::assertStringContainsString('.login-shell{', $css);
+        self::assertStringContainsString('.login-card{', $css);
+        self::assertStringContainsString('.login-error{', $css);
+    }
+
     private function router(): Router
     {
         return Router::auth(new AuthController($this->pdo, $this->session, new Csrf($this->session)));

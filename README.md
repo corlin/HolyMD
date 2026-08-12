@@ -23,7 +23,7 @@ php bin/holymd-migrate.php
 HOLYMD_ADMIN_PASSWORD='a-unique-password-at-least-12-characters' \
   php bin/holymd-admin.php create --email admin@example.com --display-name 'Site administrator'
 php bin/holymd-build.php --dry-run
-php -S 127.0.0.1:8789 bin/holymd-dev-router.php
+php -S 127.0.0.1:8789 -t public bin/holymd-dev-router.php
 ```
 
 后台地址为 `http://127.0.0.1:8789/admin/login`。首次正式发布前执行：
