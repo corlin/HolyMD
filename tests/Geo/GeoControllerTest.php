@@ -37,6 +37,9 @@ final class GeoControllerTest extends TestCase
         self::assertStringContainsString('if(x.queued)', $javascript);
         self::assertStringContainsString("x.status==='completed'", $javascript);
         self::assertStringContainsString('await poll()', $javascript);
+        self::assertStringContainsString('attempt<60', $javascript);
+        self::assertStringContainsString('waiting for Cron worker', $javascript);
+        self::assertStringContainsString('Refresh GEO status', $javascript);
         self::assertStringNotContainsString('x.proposals.map', $javascript);
         self::assertStringContainsString('dataset.proposalValue=JSON.stringify(p.value)', $javascript);
     }
