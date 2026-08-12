@@ -1,0 +1,1 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>About | <?= htmlspecialchars($siteName) ?></title><link rel="canonical" href="<?= htmlspecialchars(rtrim($siteUrl, '/') . '/about/') ?>"></head><body><main><h1>About <?= htmlspecialchars($authorName) ?></h1><p><?= nl2br(htmlspecialchars($about), false) ?></p></main></body></html>
