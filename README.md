@@ -23,13 +23,21 @@ php bin/holymd-migrate.php
 HOLYMD_ADMIN_PASSWORD='a-unique-password-at-least-12-characters' \
   php bin/holymd-admin.php create --email admin@example.com --display-name 'Site administrator'
 php bin/holymd-build.php --dry-run
+php bin/holymd-prepare-release.php
 php -S 127.0.0.1:8789 -t public bin/holymd-dev-router.php
 ```
 
-后台地址为 `http://127.0.0.1:8789/admin/login`。首次正式发布前执行：
+后台地址为 `http://127.0.0.1:8789/admin/login`。在后台提交发布或 GEO 审核任务后，在本地终端运行 Worker 即可完成异步处理：
 
 ```bash
-php bin/holymd-prepare-release.php
+php bin/holymd-worker.php
+# 或在本地开发时启动轮询 Worker：
+while true; do php bin/holymd-worker.php >/dev/null 2>&1; sleep 2; done
+```
+
+首次正式发布前执行部署预检：
+
+```bash
 php bin/holymd-check.php
 ```
 
