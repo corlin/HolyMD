@@ -83,9 +83,10 @@ final readonly class PublishService
     private function validate(array $published): ValidationReport
     {
         $errors = [];
-        if ($this->siteUrl === '' || str_contains($this->siteUrl, 'example.invalid')) $errors[] = 'The public site URL must be configured and cannot use a placeholder domain.';
-        if (trim($this->siteName) === '' || in_array(trim($this->siteName), ['HolyMD', 'Site'], true)) $errors[] = 'The public site name must be configured and cannot use a placeholder value.';
-        if (trim($this->authorName) === '' || trim($this->authorName) === 'Author') $errors[] = 'The public author name must be configured and cannot use a placeholder value.';
+        $host = strtolower((string) parse_url($this->siteUrl, PHP_URL_HOST));
+        if ($this->siteUrl === '' || $host === '' || $host === 'example.com' || str_ends_with($host, '.example.com') || str_contains($host, 'example.invalid')) $errors[] = 'The public site URL must be configured and cannot use a placeholder domain.';
+        if (trim($this->siteName) === '' || in_array(strtolower(trim($this->siteName)), ['holymd', 'site', 'your publication'], true)) $errors[] = 'The public site name must be configured and cannot use a placeholder value.';
+        if (trim($this->authorName) === '' || in_array(strtolower(trim($this->authorName)), ['author', 'your name'], true)) $errors[] = 'The public author name must be configured and cannot use a placeholder value.';
         if (preg_match('/^[a-z]{2,3}(?:-[A-Z]{2})?$/', $this->siteLanguage) !== 1) $errors[] = 'The public site language must be a valid BCP 47 language tag.';
         $slugs = [];
         $redirects = [];

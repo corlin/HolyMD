@@ -116,6 +116,18 @@ final class PublishServiceTest extends TestCase
         }
     }
 
+    public function test_rejects_documented_example_identity_values(): void
+    {
+        $service = new PublishService(
+            new ArticleRepository($this->root . '/articles'), new StaticBuilder(), new AtomicPublicTree(),
+            $this->root . '/public/.holymd-current', 'Your publication', 'https://notes.example.com', 'Your name',
+            'A concise author biography.', false, null, null, null, 'zh-CN',
+        );
+
+        $this->expectException(RuntimeException::class);
+        $service->publish(new ArticleId('published'));
+    }
+
     private function removeDirectory(string $path): void
     {
         if (!is_dir($path) && !is_link($path)) return;
