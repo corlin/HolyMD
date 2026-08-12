@@ -69,7 +69,11 @@ final class StaticBuilder
         $this->write($temporaryRoot . '/rss.xml', $this->rss($articles, $input));
         $this->write($temporaryRoot . '/feed.json', $this->jsonFeed($articles, $input));
         $this->write($temporaryRoot . '/sitemap.xml', $this->sitemap($articles, $input, array_keys($topicRoutes)));
-        $this->write($temporaryRoot . '/robots.txt', "User-agent: *\nAllow: /\nSitemap: " . $this->url($input, '/sitemap.xml') . "\n");
+        $robotsTxt = "User-agent: *\nAllow: /\nSitemap: " . $this->url($input, '/sitemap.xml') . "\n";
+        if ($input->generateLlmsTxt) {
+            $robotsTxt .= "LLMs-Txt: " . $this->url($input, '/llms.txt') . "\nLLMs-Full-Txt: " . $this->url($input, '/llms-full.txt') . "\n";
+        }
+        $this->write($temporaryRoot . '/robots.txt', $robotsTxt);
         $files = [...$files, 'index.html', 'about/index.html', 'assets/site.css', 'rss.xml', 'feed.json', 'sitemap.xml', 'robots.txt'];
         if ($input->generateLlmsTxt) {
             $lines = ['# ' . $input->siteName, '', $input->about, ''];
@@ -78,6 +82,19 @@ final class StaticBuilder
             }
             $this->write($temporaryRoot . '/llms.txt', implode("\n", $lines) . "\n");
             $files[] = 'llms.txt';
+
+            $fullLines = ['# ' . $input->siteName . ' (Full Archive)', '', $input->about, ''];
+            foreach ($articles as $article) {
+                $fullLines[] = '---';
+                $fullLines[] = '# ' . $article->title;
+                $fullLines[] = 'Published: ' . (string) $article->frontMatter->get('date');
+                $fullLines[] = 'URL: ' . $this->url($input, '/articles/' . $article->slug . '/');
+                $fullLines[] = '';
+                $fullLines[] = trim($article->bodyMarkdown);
+                $fullLines[] = '';
+            }
+            $this->write($temporaryRoot . '/llms-full.txt', implode("\n", $fullLines) . "\n");
+            $files[] = 'llms-full.txt';
         }
         return new BuildManifest(count($articles), $files);
     }
@@ -104,9 +121,33 @@ final class StaticBuilder
             if ($candidate->slug === $article->slug || $articleTopics === []) return false;
             return array_intersect($articleTopics, (array) $candidate->frontMatter->get('topics', [])) !== [];
         }));
+
+        $contentHtml = $this->markdownRenderer->render($article->bodyMarkdown);
+        $toc = [];
+        $contentHtmlWithIds = preg_replace_callback(
+            '/<h([23])(\b[^>]*)>(.*?)<\/h\1>/s',
+            static function (array $matches) use (&$toc): string {
+                $level = (int) $matches[1];
+                $attrs = $matches[2];
+                $innerHtml = $matches[3];
+                $plainText = trim(strip_tags($innerHtml));
+                if ($plainText === '') return $matches[0];
+                $id = trim((string) preg_replace('/[^a-z0-9]+/i', '-', strtolower($plainText)), '-');
+                if ($id === '') $id = 'heading-' . (count($toc) + 1);
+                $toc[] = ['level' => $level, 'title' => $plainText, 'id' => $id];
+                return sprintf('<h%d id="%s"%s>%s</h%d>', $level, $id, $attrs, $innerHtml, $level);
+            },
+            $contentHtml
+        ) ?? $contentHtml;
+
+        $cleanText = preg_replace('/\s+/', '', strip_tags($article->bodyMarkdown)) ?? '';
+        $wordCount = mb_strlen($cleanText, 'UTF-8');
+        $readingMinutes = max(1, (int) ceil($wordCount / 300));
+
         return [
             'siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'siteLanguage' => $input->siteLanguage, 'article' => $article,
-            'url' => $url, 'date' => $date, 'modified' => $modified, 'summary' => $summary, 'sources' => $sources, 'topics' => $articleTopics, 'related' => array_slice($related, 0, 3), 'contentHtml' => $this->markdownRenderer->render($article->bodyMarkdown),
+            'url' => $url, 'date' => $date, 'modified' => $modified, 'summary' => $summary, 'sources' => $sources, 'topics' => $articleTopics, 'related' => array_slice($related, 0, 3),
+            'contentHtml' => $contentHtmlWithIds, 'toc' => $toc, 'readingMinutes' => $readingMinutes,
             'jsonLd' => json_encode(['@context' => 'https://schema.org', '@graph' => $graph], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR),
         ];
     }

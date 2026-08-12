@@ -44,6 +44,7 @@ final class StaticBuilderTest extends TestCase
         self::assertFileExists($this->outputRoot . '/rss.xml');
         self::assertFileExists($this->outputRoot . '/sitemap.xml');
         self::assertFileExists($this->outputRoot . '/llms.txt');
+        self::assertFileExists($this->outputRoot . '/llms-full.txt');
         $article = (string) file_get_contents($this->outputRoot . '/articles/first-post/index.html');
         self::assertStringContainsString('<article>', $article);
         self::assertStringContainsString('"@type":"Article"', $article);
@@ -53,7 +54,11 @@ final class StaticBuilderTest extends TestCase
         self::assertStringContainsString('/topics/notes/', (string) file_get_contents($this->outputRoot . '/sitemap.xml'));
         self::assertStringContainsString('og:title', $article);
         self::assertStringContainsString('<html lang="zh-CN">', $article);
-        self::assertStringContainsString('<h2>First</h2>', $article);
+        self::assertStringContainsString('<h2 id="first">First</h2>', $article);
+        self::assertStringContainsString('1 min read', $article);
+        self::assertStringContainsString('class="theme-switcher"', $article);
+        self::assertStringContainsString('LLMs-Full-Txt:', (string) file_get_contents($this->outputRoot . '/robots.txt'));
+        self::assertStringContainsString('First post', (string) file_get_contents($this->outputRoot . '/llms-full.txt'));
         self::assertSame(1, substr_count($article, '<h1'));
     }
 
@@ -62,8 +67,8 @@ final class StaticBuilderTest extends TestCase
         $article = new ArticleDocument('blocks', 'Blocks', "- item\n# Heading\n> quote\n## Subheading", new FrontMatter(['title' => 'Blocks', 'slug' => 'blocks', 'date' => '2026-08-12']), '/blocks');
         (new StaticBuilder())->build(new BuildInput([$article], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
         $html = (string) file_get_contents($this->outputRoot . '/articles/blocks/index.html');
-        self::assertStringContainsString("<ul>\n<li>item</li>\n</ul>\n<h2>Heading</h2>\n<blockquote>", $html);
-        self::assertStringContainsString("</blockquote>\n<h3>Subheading</h3>", $html);
+        self::assertStringContainsString("<ul>\n<li>item</li>\n</ul>\n<h2 id=\"heading\">Heading</h2>\n<blockquote>", $html);
+        self::assertStringContainsString("</blockquote>\n<h3 id=\"subheading\">Subheading</h3>", $html);
         self::assertSame(1, substr_count($html, '<h1'));
     }
 
@@ -154,5 +159,18 @@ final class StaticBuilderTest extends TestCase
         $two = new ArticleDocument('csharp', 'C#', 'Body', new FrontMatter(['title' => 'C#', 'slug' => 'csharp', 'date' => '2026-08-11', 'topics' => ['C#']]), '/csharp');
         $this->expectException(\RuntimeException::class);
         (new StaticBuilder())->build(new BuildInput([$one, $two], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
+    }
+
+    public function test_renders_table_of_contents_when_three_or_more_headings_exist(): void
+    {
+        $markdown = "# Section One\n\nContent one.\n\n## Subsection A\n\nContent A.\n\n# Section Two\n\nContent two.";
+        $article = new ArticleDocument('toc-test', 'TOC Test', $markdown, new FrontMatter(['title' => 'TOC Test', 'slug' => 'toc-test', 'date' => '2026-08-12']), '/toc-test');
+        (new StaticBuilder())->build(new BuildInput([$article], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
+        $html = (string) file_get_contents($this->outputRoot . '/articles/toc-test/index.html');
+
+        self::assertStringContainsString('class="toc-box"', $html);
+        self::assertStringContainsString('href="#section-one"', $html);
+        self::assertStringContainsString('href="#subsection-a"', $html);
+        self::assertStringContainsString('href="#section-two"', $html);
     }
 }
