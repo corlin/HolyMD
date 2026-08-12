@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace HolyMD\Tests\Content;
 
 use HolyMD\Content\ArticleRepository;
+use HolyMD\Content\ArticleDocument;
+use HolyMD\Content\FrontMatter;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 
@@ -69,5 +71,25 @@ final class ArticleDocumentTest extends TestCase
         self::assertSame('A \\ path', $article->title);
         $repository->write($article);
         self::assertSame('A \\ path', $repository->read('quoted')->title);
+    }
+
+    public function test_write_creates_a_missing_articles_root_recursively(): void
+    {
+        $articlesRoot = $this->contentRoot . '/missing/articles';
+        $document = new ArticleDocument(
+            'new-note',
+            'New note',
+            "Body\n",
+            new FrontMatter(['title' => 'New note', 'slug' => 'new-note', 'date' => '2026-08-12']),
+            $articlesRoot . '/new-note.md',
+        );
+
+        (new ArticleRepository($articlesRoot))->write($document);
+
+        self::assertSame("---\ntitle: New note\nslug: new-note\ndate: 2026-08-12\n---\nBody\n", file_get_contents($articlesRoot . '/new-note.md'));
+
+        unlink($articlesRoot . '/new-note.md');
+        rmdir($articlesRoot);
+        rmdir(dirname($articlesRoot));
     }
 }

@@ -31,6 +31,7 @@ final readonly class ArticleRepository
 
     public function write(ArticleDocument $document): void
     {
+        $this->ensureArticlesRootExists();
         $sourcePath = $this->safePath($document->slug);
         if (file_put_contents($sourcePath, $document->serialize(), LOCK_EX) === false) {
             throw new RuntimeException(sprintf('Unable to write article "%s".', $document->slug));
@@ -59,5 +60,12 @@ final readonly class ArticleRepository
         }
         $slug = preg_replace('/\.md$/', '', $path);
         return $this->articlesRoot . '/' . $slug . '.md';
+    }
+
+    private function ensureArticlesRootExists(): void
+    {
+        if (!is_dir($this->articlesRoot) && !@mkdir($this->articlesRoot, 0775, true) && !is_dir($this->articlesRoot)) {
+            throw new RuntimeException(sprintf('Unable to create articles directory "%s".', $this->articlesRoot));
+        }
     }
 }
