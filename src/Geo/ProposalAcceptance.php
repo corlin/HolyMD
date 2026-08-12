@@ -19,7 +19,9 @@ final readonly class ProposalAcceptance {
         foreach ($this->frontMatterChanges($proposal) as $key => $value) $frontMatter = $frontMatter->with($key, $value);
         $accepted = $original->withFrontMatter($frontMatter);
         if (!hash_equals($bodyHash, hash('sha256', $accepted->bodyMarkdown))) throw new LogicException('GEO proposal acceptance must not alter body Markdown.');
-        $this->articles->write($accepted); $this->proposals->markAccepted($id); return $accepted;
+        $this->articles->write($accepted);
+        $this->proposals->markAccepted($id, hash('sha256', $accepted->serialize()));
+        return $accepted;
     }
     public function reject(GeoProposalId $id): void { $this->proposals->markRejected($id); }
     /** @return array<string,mixed> */ private function frontMatterChanges(GeoProposal $proposal): array {

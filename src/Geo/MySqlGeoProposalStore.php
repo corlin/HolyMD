@@ -40,7 +40,24 @@ final readonly class MySqlGeoProposalStore implements GeoProposalStore
         return ['reviewId' => (int) $row['id'], 'status' => (string) $row['status'], 'failure' => $row['failure_message'] === null ? null : (string) $row['failure_message'], 'proposals' => $proposals];
     }
 
-    public function markAccepted(GeoProposalId $id): void { $this->mark($id, 'accepted'); }
+    public function markAccepted(GeoProposalId $id, string $nextInputChecksum): void
+    {
+        if (preg_match('/^[a-f0-9]{64}$/', $nextInputChecksum) !== 1) throw new InvalidArgumentException('GEO proposal checksum is invalid.');
+        $this->pdo->beginTransaction();
+        try {
+            $review = $this->pdo->prepare("SELECT geo_review_id FROM geo_proposals WHERE id = ? AND status = 'pending' FOR UPDATE");
+            $review->execute([$id->value]);
+            $reviewId = $review->fetchColumn();
+            if ($reviewId === false) throw new InvalidArgumentException('Only a pending GEO proposal can be decided.');
+            $this->mark($id, 'accepted');
+            $update = $this->pdo->prepare('UPDATE geo_reviews SET input_checksum = ? WHERE id = ?');
+            $update->execute([$nextInputChecksum, $reviewId]);
+            $this->pdo->commit();
+        } catch (\Throwable $exception) {
+            if ($this->pdo->inTransaction()) $this->pdo->rollBack();
+            throw $exception;
+        }
+    }
     public function markRejected(GeoProposalId $id): void { $this->mark($id, 'rejected'); }
     public function saveReview(GeoReview $review): void { throw new RuntimeException('Queue GEO reviews are persisted by the worker transaction.'); }
     public function enqueueRetry(string $articleSlug, string $bodyHash, string $reason): void { throw new RuntimeException('Queue retries are managed by the MySQL worker.'); }

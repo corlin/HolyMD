@@ -95,4 +95,25 @@ final class ProposalAcceptanceTest extends TestCase
         self::assertSame(['Ada', 'PHP'], $accepted->frontMatter->get('entities'));
         self::assertSame($original->bodyMarkdown, $accepted->bodyMarkdown);
     }
+
+    public function test_accepting_one_proposal_rebases_pending_siblings_from_the_same_review(): void
+    {
+        $repository = new ArticleRepository($this->root);
+        $store = new InMemoryGeoProposalStore();
+        $original = $repository->read('first-note');
+        $checksum = hash('sha256', $original->serialize());
+        $bodyHash = hash('sha256', $original->bodyMarkdown);
+        $summaryId = new GeoProposalId('sibling-summary');
+        $entitiesId = new GeoProposalId('sibling-entities');
+        $store->save(new GeoProposal($summaryId, 'first-note', $checksum, 'summary', 'First change', 'pending', $bodyHash));
+        $store->save(new GeoProposal($entitiesId, 'first-note', $checksum, 'entities', ['PHP'], 'pending', $bodyHash));
+        $acceptance = new ProposalAcceptance($repository, $store);
+
+        $acceptance->accept($summaryId);
+        $accepted = $acceptance->accept($entitiesId);
+
+        self::assertSame('First change', $accepted->frontMatter->get('summary'));
+        self::assertSame(['PHP'], $accepted->frontMatter->get('entities'));
+        self::assertSame($original->bodyMarkdown, $accepted->bodyMarkdown);
+    }
 }
