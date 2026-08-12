@@ -14,6 +14,8 @@ final class PreflightTest extends TestCase
         $root = sys_get_temp_dir() . '/holymd-preflight-' . bin2hex(random_bytes(5));
         mkdir($root . '/content/articles', 0775, true);
         mkdir($root . '/content/media', 0775, true);
+        mkdir($root . '/content/versions', 0775, true);
+        mkdir($root . '/content/audit', 0775, true);
         mkdir($root . '/public/site', 0775, true);
 
         try {
@@ -37,6 +39,8 @@ final class PreflightTest extends TestCase
         } finally {
             rmdir($root . '/content/articles');
             rmdir($root . '/content/media');
+            rmdir($root . '/content/versions');
+            rmdir($root . '/content/audit');
             rmdir($root . '/content');
             rmdir($root . '/public/site');
             rmdir($root . '/public');
@@ -49,6 +53,8 @@ final class PreflightTest extends TestCase
         $root = sys_get_temp_dir() . '/holymd-preflight-' . bin2hex(random_bytes(5));
         mkdir($root . '/content/articles', 0775, true);
         mkdir($root . '/content/media', 0775, true);
+        mkdir($root . '/content/versions', 0775, true);
+        mkdir($root . '/content/audit', 0775, true);
         mkdir($root . '/public/site', 0775, true);
         symlink($root . '/public/site', $root . '/public/.holymd-current');
 
@@ -64,6 +70,40 @@ final class PreflightTest extends TestCase
 
             self::assertTrue($report->passed(), $report->text());
             self::assertStringContainsString('PASS', $report->text());
+        } finally {
+            unlink($root . '/public/.holymd-current');
+            rmdir($root . '/content/articles');
+            rmdir($root . '/content/media');
+            rmdir($root . '/content/versions');
+            rmdir($root . '/content/audit');
+            rmdir($root . '/content');
+            rmdir($root . '/public/site');
+            rmdir($root . '/public');
+            rmdir($root);
+        }
+    }
+
+    public function test_rejects_publish_placeholders_and_missing_runtime_directories_without_requiring_geo_transport(): void
+    {
+        $root = sys_get_temp_dir() . '/holymd-preflight-' . bin2hex(random_bytes(5));
+        mkdir($root . '/content/articles', 0775, true);
+        mkdir($root . '/content/media', 0775, true);
+        mkdir($root . '/public/site', 0775, true);
+        symlink($root . '/public/site', $root . '/public/.holymd-current');
+        try {
+            $report = (new Preflight(static fn (): bool => true, static fn (): bool => true, static fn (): bool => false))->check($root, [
+                'HOLYMD_DSN' => 'mysql:host=localhost;dbname=holymd',
+                'HOLYMD_SITE_NAME' => 'HolyMD',
+                'HOLYMD_SITE_URL' => 'https://example.com',
+                'HOLYMD_AUTHOR_NAME' => 'Author',
+                'HOLYMD_ABOUT' => 'Biography',
+                'HOLYMD_SITE_LANGUAGE' => 'zh-CN',
+            ]);
+            self::assertFalse($report->passed());
+            self::assertStringContainsString('content/versions', $report->text());
+            self::assertStringContainsString('content/audit', $report->text());
+            self::assertStringContainsString('public identity', $report->text());
+            self::assertStringNotContainsString('allow_url_fopen', $report->text());
         } finally {
             unlink($root . '/public/.holymd-current');
             rmdir($root . '/content/articles');

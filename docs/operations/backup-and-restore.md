@@ -7,16 +7,17 @@
 在没有发布任务运行时执行：
 
 ```bash
-cd /home/account/holymd
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
-mkdir -p backups/$stamp
-tar -czf backups/$stamp/content.tar.gz content
-cp .env backups/$stamp/env.copy
-chmod 600 backups/$stamp/env.copy
+backup_root=/home/account-private/holymd-backups/$stamp
+umask 077
+mkdir -p "$backup_root"
+cd /home/account/holymd
+tar -czf "$backup_root/content.tar.gz" content
+cp .env "$backup_root/env.copy"
 mysqldump --single-transaction --routines --triggers \
   --default-character-set=utf8mb4 -h DB_HOST -u DB_USER -p DB_NAME \
-  > backups/$stamp/database.sql
-sha256sum backups/$stamp/* > backups/$stamp/SHA256SUMS
+  > "$backup_root/database.sql"
+sha256sum "$backup_root"/* > "$backup_root/SHA256SUMS"
 ```
 
 将备份复制到主机之外的加密存储，设置保留周期，并定期在隔离环境试恢复。`.env` 含密钥，必须加密且限制访问。生成静态站可由 Markdown 重建，通常无需长期备份全部 release 目录。

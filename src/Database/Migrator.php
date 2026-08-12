@@ -22,23 +22,18 @@ final readonly class Migrator
         }
 
         $installed = !$this->tableExists('admin_users');
-        if ($installed) {
-            $schema = file_get_contents($this->projectRoot . '/database/schema.sql');
-            if (!is_string($schema) || trim($schema) === '') {
-                throw new RuntimeException('Unable to read database/schema.sql.');
-            }
-            foreach (preg_split('/;\s*(?:\r?\n|$)/', $schema, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $statement) {
-                if (trim($statement) !== '') {
-                    $this->pdo->exec($statement);
-                }
+        $schema = file_get_contents($this->projectRoot . '/database/schema.sql');
+        if (!is_string($schema) || trim($schema) === '') {
+            throw new RuntimeException('Unable to read database/schema.sql.');
+        }
+        // CREATE TABLE IF NOT EXISTS makes an interrupted first install recoverable.
+        foreach (preg_split('/;\s*(?:\r?\n|$)/', $schema, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $statement) {
+            if (trim($statement) !== '') {
+                $this->pdo->exec($statement);
             }
         }
 
         $this->pdo->exec('CREATE TABLE IF NOT EXISTS `schema_migrations` (`version` VARCHAR(191) NOT NULL, `applied_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6), PRIMARY KEY (`version`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
-        if ($installed) {
-            $this->record(self::HARDENING);
-            return new MigrationResult(true, 1);
-        }
         if ($this->applied(self::HARDENING)) {
             return new MigrationResult(false, 0);
         }
