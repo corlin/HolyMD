@@ -64,10 +64,26 @@ final class StaticBuilderTest extends TestCase
         self::assertStringContainsString("</blockquote>\n<h2>Subheading</h2>", $html);
     }
 
+    public function test_closes_quote_before_list(): void
+    {
+        $article = new ArticleDocument('transitions', 'Transitions', "> quote\n- item", new FrontMatter(['title' => 'Transitions', 'slug' => 'transitions', 'date' => '2026-08-12']), '/transitions');
+        (new StaticBuilder())->build(new BuildInput([$article], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
+        $html = (string) file_get_contents($this->outputRoot . '/articles/transitions/index.html');
+        self::assertStringContainsString("</blockquote>\n<ul>", $html);
+    }
+
     public function test_rejects_duplicate_articles_and_topic_slug_collisions(): void
     {
         $one = new ArticleDocument('same', 'One', 'Body', new FrontMatter(['title' => 'One', 'slug' => 'same', 'date' => '2026-08-12']), '/one');
         $two = new ArticleDocument('same', 'Two', 'Body', new FrontMatter(['title' => 'Two', 'slug' => 'same', 'date' => '2026-08-11']), '/two');
+        $this->expectException(\RuntimeException::class);
+        (new StaticBuilder())->build(new BuildInput([$one, $two], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
+    }
+
+    public function test_rejects_topic_slug_collision_with_distinct_articles(): void
+    {
+        $one = new ArticleDocument('cpp', 'C++', 'Body', new FrontMatter(['title' => 'C++', 'slug' => 'cpp', 'date' => '2026-08-12', 'topics' => ['C++']]), '/cpp');
+        $two = new ArticleDocument('csharp', 'C#', 'Body', new FrontMatter(['title' => 'C#', 'slug' => 'csharp', 'date' => '2026-08-11', 'topics' => ['C#']]), '/csharp');
         $this->expectException(\RuntimeException::class);
         (new StaticBuilder())->build(new BuildInput([$one, $two], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
     }

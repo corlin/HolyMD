@@ -127,7 +127,7 @@ final class StaticBuilder
             if (str_starts_with(trim($line), '```')) { $flush(); if ($code) { $html[] = '<pre><code>' . htmlspecialchars(implode("\n", $codeLines), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '</code></pre>'; $codeLines = []; } $code = !$code; continue; }
             if ($code) { $codeLines[] = $line; continue; }
             if (preg_match('/^(#{1,6})\s+(.+)$/', $line, $m)) { $flush(); if ($list) { $html[] = '</ul>'; $list = false; } if ($quote) { $html[] = '</blockquote>'; $quote = false; } $level = strlen($m[1]); $html[] = '<h' . $level . '>' . $this->inline($m[2]) . '</h' . $level . '>'; continue; }
-            if (preg_match('/^[-*+]\s+(.+)$/', $line, $m)) { $flush(); if (!$list) { $html[] = '<ul>'; $list = true; } $html[] = '<li>' . $this->inline($m[1]) . '</li>'; continue; }
+            if (preg_match('/^[-*+]\s+(.+)$/', $line, $m)) { $flush(); if ($quote) { $html[] = '</blockquote>'; $quote = false; } if (!$list) { $html[] = '<ul>'; $list = true; } $html[] = '<li>' . $this->inline($m[1]) . '</li>'; continue; }
             if ($list) { $html[] = '</ul>'; $list = false; }
             if (str_starts_with($line, '> ')) { $flush(); if ($list) { $html[] = '</ul>'; $list = false; } if (!$quote) { $html[] = '<blockquote>'; $quote = true; } $html[] = '<p>' . $this->inline(substr($line, 2)) . '</p>'; continue; }
             if ($quote) { $html[] = '</blockquote>'; $quote = false; }
