@@ -9,12 +9,14 @@ use HolyMD\Http\Response;
 use HolyMD\Http\ServerRequest;
 use InvalidArgumentException;
 use LogicException;
+use HolyMD\Queue\MySqlJobQueue;
+use HolyMD\Admin\VersionService;
 final readonly class GeoController {
-    public function __construct(private ArticleRepository $articles, private GeoReviewService $reviews, private GeoProposalStore $proposals, private AdminGuard $guard, private Csrf $csrf) {}
+    public function __construct(private ArticleRepository $articles, private GeoReviewService $reviews, private GeoProposalStore $proposals, private AdminGuard $guard, private Csrf $csrf, private ?MySqlJobQueue $queue = null, private ?VersionService $versions = null) {}
     public function review(ServerRequest $request): Response {
         if (($failure = $this->authorize($request)) !== null) return $failure;
         $slug = $this->slug($request->path); if ($slug === null) return Response::json(['error' => 'Invalid article route.'], 404);
-        try { $result = $this->reviews->review($this->articles->read($slug)); foreach ($result->proposals as $proposal) $this->proposals->save($proposal); return Response::json(['articleSlug' => $result->articleSlug, 'bodyHash' => $result->bodyHash, 'findings' => $result->findings, 'proposals' => array_map(static fn (GeoProposal $p): array => ['id' => $p->id->value, 'type' => $p->type, 'value' => $p->value, 'status' => $p->status], $result->proposals)]); }
+        try { $document = $this->articles->read($slug); if ($this->queue !== null && $this->versions !== null) { $version = $this->versions->snapshot($document); $jobId = $this->queue->enqueueGeoReview($document, $version->value . '.md'); return Response::json(['articleSlug' => $slug, 'queued' => true, 'jobId' => $jobId], 202); } $result = $this->reviews->review($document); foreach ($result->proposals as $proposal) $this->proposals->save($proposal); return Response::json(['articleSlug' => $result->articleSlug, 'bodyHash' => $result->bodyHash, 'findings' => $result->findings, 'proposals' => array_map(static fn (GeoProposal $p): array => ['id' => $p->id->value, 'type' => $p->type, 'value' => $p->value, 'status' => $p->status], $result->proposals)]); }
         catch (InvalidArgumentException $exception) { return Response::json(['error' => $exception->getMessage()], 422); }
     }
     public function accept(ServerRequest $request): Response { return $this->decision($request, true); }

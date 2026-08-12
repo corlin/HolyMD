@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS `geo_reviews` (
     `provider` VARCHAR(100) NOT NULL,
     `model` VARCHAR(255) NOT NULL,
     `input_checksum` CHAR(64) NOT NULL,
+    `request_key` CHAR(64) NOT NULL,
     `failure_message` TEXT NULL,
     `completed_at` DATETIME(6) NULL,
     `created_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
@@ -55,6 +56,7 @@ CREATE TABLE IF NOT EXISTS `geo_reviews` (
     KEY `geo_reviews_article_index` (`article_id`),
     KEY `geo_reviews_version_index` (`article_version_id`),
     KEY `geo_reviews_status_index` (`status`),
+    UNIQUE KEY `geo_reviews_request_unique` (`request_key`),
     CONSTRAINT `geo_reviews_article_fk` FOREIGN KEY (`article_id`) REFERENCES `articles` (`id`) ON DELETE CASCADE,
     CONSTRAINT `geo_reviews_version_fk` FOREIGN KEY (`article_version_id`) REFERENCES `article_versions` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -64,6 +66,7 @@ CREATE TABLE IF NOT EXISTS `geo_proposals` (
     `geo_review_id` BIGINT UNSIGNED NOT NULL,
     `proposal_type` VARCHAR(100) NOT NULL,
     `proposed_metadata` JSON NOT NULL,
+    `proposal_key` CHAR(64) NOT NULL,
     `status` ENUM('pending', 'accepted', 'rejected') NOT NULL DEFAULT 'pending',
     `decision_by_admin_user_id` BIGINT UNSIGNED NULL,
     `decided_at` DATETIME(6) NULL,
@@ -71,6 +74,7 @@ CREATE TABLE IF NOT EXISTS `geo_proposals` (
     PRIMARY KEY (`id`),
     KEY `geo_proposals_review_index` (`geo_review_id`),
     KEY `geo_proposals_status_index` (`status`),
+    UNIQUE KEY `geo_proposals_key_unique` (`proposal_key`),
     CONSTRAINT `geo_proposals_review_fk` FOREIGN KEY (`geo_review_id`) REFERENCES `geo_reviews` (`id`) ON DELETE CASCADE,
     CONSTRAINT `geo_proposals_admin_user_fk` FOREIGN KEY (`decision_by_admin_user_id`) REFERENCES `admin_users` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -97,6 +101,7 @@ CREATE TABLE IF NOT EXISTS `jobs` (
     `article_id` BIGINT UNSIGNED NULL,
     `geo_review_id` BIGINT UNSIGNED NULL,
     `build_id` BIGINT UNSIGNED NULL,
+    `action` ENUM('publish', 'withdraw') NULL,
     `attempts` INT UNSIGNED NOT NULL DEFAULT 0,
     `available_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
     `locked_at` DATETIME(6) NULL,

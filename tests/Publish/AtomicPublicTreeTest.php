@@ -20,11 +20,7 @@ final class AtomicPublicTreeTest extends TestCase
 
     protected function tearDown(): void
     {
-        foreach (glob($this->root . '/*') ?: [] as $path) {
-            foreach (glob($path . '/*') ?: [] as $child) unlink($child);
-            is_dir($path) ? rmdir($path) : unlink($path);
-        }
-        rmdir($this->root);
+        $this->remove($this->root);
     }
 
     public function test_swap_replaces_a_complete_tree_only_after_temporary_tree_exists(): void
@@ -51,5 +47,15 @@ final class AtomicPublicTreeTest extends TestCase
         } finally {
             self::assertSame('old', file_get_contents($this->root . '/live/index.html'));
         }
+    }
+
+    private function remove(string $path): void
+    {
+        if (is_link($path) || is_file($path)) { unlink($path); return; }
+        foreach (scandir($path) ?: [] as $entry) {
+            if ($entry === '.' || $entry === '..') continue;
+            $this->remove($path . '/' . $entry);
+        }
+        rmdir($path);
     }
 }

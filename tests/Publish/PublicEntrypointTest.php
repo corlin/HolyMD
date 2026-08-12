@@ -20,5 +20,7 @@ final class PublicEntrypointTest extends TestCase
         self::assertStringContainsString('RewriteRule ^assets/', $rules);
         self::assertStringContainsString('site/$1', $rules);
         self::assertStringContainsString('site/$1/index.html', $rules);
+        self::assertStringContainsString('RewriteRule ^site(?:/|$) - [END]', $rules);
+        self::assertStringContainsString('site/$1 [END]', $rules);
     }
 }

@@ -1,0 +1,7 @@
+ALTER TABLE `jobs` ADD COLUMN `action` ENUM('publish', 'withdraw') NULL AFTER `build_id`;
+ALTER TABLE `geo_reviews` ADD COLUMN `request_key` CHAR(64) NULL AFTER `input_checksum`;
+UPDATE `geo_reviews` SET `request_key` = SHA2(CONCAT(`article_id`, ':', `article_version_id`, ':', `input_checksum`, ':', `id`), 256) WHERE `request_key` IS NULL;
+ALTER TABLE `geo_reviews` MODIFY `request_key` CHAR(64) NOT NULL, ADD UNIQUE KEY `geo_reviews_request_unique` (`request_key`);
+ALTER TABLE `geo_proposals` ADD COLUMN `proposal_key` CHAR(64) NULL AFTER `proposed_metadata`;
+UPDATE `geo_proposals` SET `proposal_key` = SHA2(CONCAT(`geo_review_id`, ':', `proposal_type`, ':', CAST(`proposed_metadata` AS CHAR), ':', `id`), 256) WHERE `proposal_key` IS NULL;
+ALTER TABLE `geo_proposals` MODIFY `proposal_key` CHAR(64) NOT NULL, ADD UNIQUE KEY `geo_proposals_key_unique` (`proposal_key`);

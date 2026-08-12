@@ -13,6 +13,7 @@ use HolyMD\Http\Response;
 use HolyMD\Http\ServerRequest;
 use HolyMD\Publish\ArticleId;
 use HolyMD\Publish\PublishService;
+use HolyMD\Queue\MySqlJobQueue;
 use InvalidArgumentException;
 
 final readonly class ArticleController
@@ -23,6 +24,7 @@ final readonly class ArticleController
         private AdminGuard $guard,
         private Csrf $csrf,
         private ?PublishService $publisher = null,
+        private ?MySqlJobQueue $queue = null,
     ) {
     }
 
@@ -155,6 +157,10 @@ final readonly class ArticleController
             return Response::json(['error' => 'Publishing is not configured.'], 503);
         }
         try {
+            if ($this->queue !== null) {
+                $jobId = $this->queue->enqueueBuild($this->articles->read($matches[1]), $matches[2]);
+                return Response::json(['action' => $matches[2], 'slug' => $matches[1], 'queued' => true, 'jobId' => $jobId], 202);
+            }
             $result = $matches[2] === 'publish' ? $this->publisher->publish(new ArticleId($matches[1])) : $this->publisher->withdraw(new ArticleId($matches[1]));
             return Response::json(['action' => $matches[2], 'slug' => $matches[1], 'articleCount' => $result->manifest->articleCount, 'validation' => $result->validation->text()]);
         } catch (InvalidArgumentException $exception) {

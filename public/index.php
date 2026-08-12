@@ -18,6 +18,7 @@ use HolyMD\Geo\GeoReviewService;
 use HolyMD\Publish\AtomicPublicTree;
 use HolyMD\Publish\PublishService;
 use HolyMD\Render\StaticBuilder;
+use HolyMD\Queue\MySqlJobQueue;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 
@@ -56,10 +57,12 @@ $controller = new ArticleController(
         (string) (getenv('HOLYMD_PUBLIC_TREE') ?: $root . '/public/site'), (string) (getenv('HOLYMD_SITE_NAME') ?: 'HolyMD'), (string) (getenv('HOLYMD_SITE_URL') ?: 'https://example.invalid'),
         (string) (getenv('HOLYMD_AUTHOR_NAME') ?: 'Author'), (string) (getenv('HOLYMD_ABOUT') ?: ''),
         getenv('HOLYMD_LLMS_TXT') === '1', $root . '/content/audit',
+        null, $root . '/content/holymd-publish.lock',
     ),
+    new MySqlJobQueue($container->get(\PDO::class)),
 );
 $geoStore = new FileGeoReviewStore($root . '/content/geo');
-$geo = new GeoController(new ArticleRepository($root . '/content/articles'), new GeoReviewService($container->get(\HolyMD\Geo\AiClient::class), $geoStore), $geoStore, new AdminGuard($_SESSION), new Csrf($_SESSION));
+$geo = new GeoController(new ArticleRepository($root . '/content/articles'), new GeoReviewService($container->get(\HolyMD\Geo\AiClient::class), $geoStore), $geoStore, new AdminGuard($_SESSION), new Csrf($_SESSION), new MySqlJobQueue($container->get(\PDO::class)), new VersionService($root . '/content/versions'));
 $response = (new Router($controller, $geo, new AuthController($container->get(\PDO::class), $_SESSION, new Csrf($_SESSION))))->dispatch(new ServerRequest(
     $_SERVER['REQUEST_METHOD'] ?? 'GET',
     $path,

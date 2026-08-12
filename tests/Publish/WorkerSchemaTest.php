@@ -14,10 +14,11 @@ final class WorkerSchemaTest extends TestCase
 
         self::assertStringContainsString('FROM jobs LEFT JOIN articles', $worker);
         self::assertStringContainsString('$job[\'job_type\'] === \'geo_review\'', $worker);
-        self::assertStringContainsString("UPDATE builds SET status = 'running'", $worker);
-        self::assertStringContainsString("UPDATE builds SET status = 'failed'", $worker);
-        self::assertStringContainsString("UPDATE geo_reviews SET status = 'running'", $worker);
-        self::assertStringContainsString("UPDATE geo_reviews SET status = 'failed'", $worker);
+        self::assertStringContainsString("builds.status = 'running'", $worker);
+        self::assertStringContainsString("geo_reviews.status = 'running'", $worker);
+        self::assertStringContainsString("builds.status = IF", $worker);
+        self::assertStringContainsString("geo_reviews.status = IF", $worker);
+        self::assertStringContainsString('jobs.lock_token = ?', $worker);
         self::assertStringContainsString('INTERVAL 15 MINUTE', $worker);
         self::assertStringContainsString("SET builds.status = 'queued'", $worker);
         self::assertStringContainsString("SET geo_reviews.status = 'queued'", $worker);
@@ -30,8 +31,9 @@ final class WorkerSchemaTest extends TestCase
     {
         $entrypoint = (string) file_get_contents(__DIR__ . '/../../bin/holymd-geo-review.php');
         self::assertStringContainsString('GeoReviewService', $entrypoint);
-        self::assertStringContainsString('save($proposal)', $entrypoint);
         self::assertStringContainsString('INSERT INTO geo_proposals', $entrypoint);
+        self::assertStringContainsString('GEO review is not bound to the current article version checksum', $entrypoint);
+        self::assertStringContainsString('ON DUPLICATE KEY UPDATE', $entrypoint);
         self::assertStringNotContainsString('GEO review queued for', $entrypoint);
     }
 }
