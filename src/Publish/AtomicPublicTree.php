@@ -24,7 +24,7 @@ final class AtomicPublicTree
             throw new RuntimeException('Unable to preserve the current public tree.');
         }
         if (!rename($temporaryRoot, $liveRoot)) {
-            if ($hadLiveTree) rename($backup, $liveRoot);
+            if ($hadLiveTree && !rename($backup, $liveRoot)) throw new RuntimeException('Unable to activate the new public tree and restore the previous tree.');
             throw new RuntimeException('Unable to activate the new public tree.');
         }
         if ($hadLiveTree) $this->remove($backup);

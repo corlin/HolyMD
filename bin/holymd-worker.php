@@ -13,7 +13,8 @@ $pdo = (new Connection(Settings::fromEnvironment($root)))->pdo();
 $token = bin2hex(random_bytes(16));
 $pdo->beginTransaction();
 try {
-    $job = $pdo->query("SELECT jobs.id, jobs.job_type, jobs.article_id, jobs.build_id, jobs.attempts, articles.slug FROM jobs LEFT JOIN articles ON articles.id = jobs.article_id WHERE jobs.status = 'queued' AND jobs.job_type = 'build' AND jobs.available_at <= UTC_TIMESTAMP(6) ORDER BY jobs.id LIMIT 1 FOR UPDATE SKIP LOCKED")->fetch();
+    $pdo->exec("UPDATE jobs SET status = 'queued', locked_at = NULL, lock_token = NULL, available_at = UTC_TIMESTAMP(6) WHERE status = 'running' AND locked_at < DATE_SUB(UTC_TIMESTAMP(6), INTERVAL 15 MINUTE)");
+    $job = $pdo->query("SELECT jobs.id, jobs.job_type, jobs.article_id, jobs.geo_review_id, jobs.build_id, jobs.attempts, articles.slug FROM jobs LEFT JOIN articles ON articles.id = jobs.article_id WHERE jobs.status = 'queued' AND jobs.available_at <= UTC_TIMESTAMP(6) ORDER BY jobs.id LIMIT 1 FOR UPDATE SKIP LOCKED")->fetch();
     if ($job === false) { $pdo->commit(); fwrite(STDOUT, "No queued jobs.\n"); exit(0); }
     $claim = $pdo->prepare("UPDATE jobs SET status = 'running', attempts = attempts + 1, locked_at = UTC_TIMESTAMP(6), lock_token = ? WHERE id = ? AND status = 'queued'");
     $claim->execute([$token, $job['id']]);
@@ -25,8 +26,9 @@ try {
 }
 
 try {
-    if (($job['job_type'] ?? '') !== 'build' || !is_string($job['slug'] ?? null)) throw new RuntimeException('Build job has no linked article slug.');
-    $command = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($root . '/bin/holymd-build.php') . ' --article ' . escapeshellarg($job['slug']);
+    if (!is_string($job['slug'] ?? null)) throw new RuntimeException('Job has no linked article slug.');
+    $entrypoint = $job['job_type'] === 'geo_review' ? $root . '/bin/holymd-geo-review.php' : $root . '/bin/holymd-build.php';
+    $command = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($entrypoint) . ' --article ' . escapeshellarg($job['slug']);
     exec($command, $output, $exitCode);
     if ($exitCode !== 0) throw new RuntimeException(implode("\n", $output));
     $done = $pdo->prepare("UPDATE jobs SET status = 'succeeded', locked_at = NULL, lock_token = NULL, last_error = NULL WHERE id = ? AND status = 'running' AND lock_token = ?");

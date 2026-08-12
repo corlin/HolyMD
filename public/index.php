@@ -22,15 +22,23 @@ require dirname(__DIR__) . '/vendor/autoload.php';
 
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 
-if (!is_string($path) || !str_starts_with($path, '/admin')) {
-    http_response_code(404);
+if (!is_string($path)) { http_response_code(400); exit; }
+$root = dirname(__DIR__);
+if (!str_starts_with($path, '/admin')) {
+    $siteRoot = realpath((string) (getenv('HOLYMD_PUBLIC_TREE') ?: $root . '/public/site'));
+    $relative = trim($path, '/');
+    $candidate = $siteRoot === false ? false : realpath($siteRoot . '/' . ($relative === '' ? 'index.html' : $relative . (str_ends_with($relative, '/') ? 'index.html' : '')));
+    if ($siteRoot === false || $candidate === false || !str_starts_with($candidate, $siteRoot . DIRECTORY_SEPARATOR) || !is_file($candidate)) { http_response_code(404); exit; }
+    $types = ['html' => 'text/html; charset=utf-8', 'xml' => 'application/xml', 'json' => 'application/feed+json', 'txt' => 'text/plain; charset=utf-8', 'css' => 'text/css', 'js' => 'text/javascript'];
+    $extension = strtolower(pathinfo($candidate, PATHINFO_EXTENSION));
+    header('Content-Type: ' . ($types[$extension] ?? 'application/octet-stream'));
+    readfile($candidate);
     exit;
 }
 
 $container = Bootstrap::createContainer();
 
 session_start();
-$root = dirname(__DIR__);
 $controller = new ArticleController(
     new ArticleRepository($root . '/content/articles'),
     new VersionService($root . '/content/versions'),

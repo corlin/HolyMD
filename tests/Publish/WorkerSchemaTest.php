@@ -13,7 +13,7 @@ final class WorkerSchemaTest extends TestCase
         $worker = (string) file_get_contents(__DIR__ . '/../../bin/holymd-worker.php');
 
         self::assertStringContainsString('FROM jobs LEFT JOIN articles', $worker);
-        self::assertStringContainsString("jobs.job_type = 'build'", $worker);
+        self::assertStringContainsString('$job[\'job_type\'] === \'geo_review\'', $worker);
         self::assertStringContainsString("status = 'succeeded'", $worker);
         self::assertStringNotContainsString('holymd_jobs', $worker);
         self::assertStringNotContainsString('payload_json', $worker);
