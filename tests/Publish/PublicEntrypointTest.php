@@ -11,6 +11,8 @@ final class PublicEntrypointTest extends TestCase
         self::assertStringContainsString("'index.html'", $source);
         self::assertStringContainsString('readfile($candidate)', $source);
         self::assertStringContainsString("str_starts_with(\$path, '/admin')", $source);
+        self::assertStringContainsString("str_starts_with(\$path, '/media/')", $source);
+        self::assertStringContainsString("/content/media/", $source);
     }
 
     public function test_apache_serves_generated_files_directly_and_preserves_admin_and_assets(): void

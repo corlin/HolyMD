@@ -43,6 +43,14 @@ final readonly class ArticleRepository
         return is_file($this->safePath($slug));
     }
 
+    public function delete(string $slug): void
+    {
+        $path = $this->safePath($slug);
+        if (!is_file($path) || !unlink($path)) {
+            throw new RuntimeException(sprintf('Unable to delete article "%s".', $slug));
+        }
+    }
+
     /** @return list<ArticleDocument> */
     public function all(): array
     {

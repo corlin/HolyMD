@@ -27,6 +27,17 @@ $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 
 if (!is_string($path)) { http_response_code(400); exit; }
 $root = dirname(__DIR__);
+if (str_starts_with($path, '/media/')) {
+    $name = basename(rawurldecode(substr($path, strlen('/media/'))));
+    if ($name === '' || $path !== '/media/' . rawurlencode($name) || preg_match('/^[a-z0-9][a-z0-9-]*\.(?:jpg|png|gif|webp)$/', $name) !== 1) { http_response_code(404); exit; }
+    $candidate = $root . '/content/media/' . $name;
+    if (!is_file($candidate)) { http_response_code(404); exit; }
+    $types = ['jpg' => 'image/jpeg', 'png' => 'image/png', 'gif' => 'image/gif', 'webp' => 'image/webp'];
+    header('Content-Type: ' . $types[strtolower(pathinfo($candidate, PATHINFO_EXTENSION))]);
+    header('X-Content-Type-Options: nosniff');
+    readfile($candidate);
+    exit;
+}
 if (!str_starts_with($path, '/admin')) {
     $siteRoot = realpath((string) (getenv('HOLYMD_PUBLIC_TREE') ?: $root . '/public/.holymd-current'));
     $relative = trim($path, '/');
@@ -61,6 +72,8 @@ $controller = new ArticleController(
         null, $root . '/content/holymd-publish.lock', (string) (getenv('HOLYMD_SITE_LANGUAGE') ?: 'zh-CN'),
     ),
     new MySqlJobQueue($container->get(\PDO::class)),
+    $root . '/content/media',
+    ['site_name' => (string) (getenv('HOLYMD_SITE_NAME') ?: 'HolyMD'), 'site_url' => (string) (getenv('HOLYMD_SITE_URL') ?: 'https://example.invalid'), 'author_name' => (string) (getenv('HOLYMD_AUTHOR_NAME') ?: 'Author'), 'about' => (string) (getenv('HOLYMD_ABOUT') ?: ''), 'site_language' => (string) (getenv('HOLYMD_SITE_LANGUAGE') ?: 'zh-CN')],
 );
 $geoStore = new MySqlGeoProposalStore($container->get(\PDO::class));
 $geo = new GeoController(new ArticleRepository($root . '/content/articles'), new GeoReviewService($container->get(\HolyMD\Geo\AiClient::class)), $geoStore, new AdminGuard($_SESSION), new Csrf($_SESSION), new MySqlJobQueue($container->get(\PDO::class)), new VersionService($root . '/content/versions'));
@@ -69,6 +82,7 @@ $response = (new Router($controller, $geo, new AuthController($container->get(\P
     $path,
     array_change_key_case(getallheaders() ?: [], CASE_UPPER),
     $_POST,
+    $_FILES,
 ));
 
 http_response_code($response->status);
