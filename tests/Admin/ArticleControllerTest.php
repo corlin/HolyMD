@@ -205,6 +205,22 @@ final class ArticleControllerTest extends TestCase
         self::assertSame(422, $response->status);
     }
 
+    public function test_media_upload_uses_actual_file_size_and_requires_decodable_image(): void
+    {
+        $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);
+        $fake = $this->root . '/fake.png';
+        file_put_contents($fake, "\x89PNG\r\n\x1a\nnot-a-decodable-image");
+        $response = $router->dispatch(new ServerRequest('POST', '/admin/media', [], ['csrf_token' => 'expected-token'], ['image' => ['name' => 'fake.png', 'tmp_name' => $fake, 'size' => 1, 'error' => UPLOAD_ERR_OK]]));
+        self::assertSame(422, $response->status);
+        self::assertStringContainsString('encoded', $response->body);
+
+        $empty = $this->root . '/empty.png';
+        file_put_contents($empty, '');
+        $response = $router->dispatch(new ServerRequest('POST', '/admin/media', [], ['csrf_token' => 'expected-token'], ['image' => ['name' => 'empty.png', 'tmp_name' => $empty, 'size' => 100, 'error' => UPLOAD_ERR_OK]]));
+        self::assertSame(422, $response->status);
+        self::assertStringContainsString('5 MB', $response->body);
+    }
+
     public function test_settings_page_is_explicitly_read_only_for_environment_managed_identity(): void
     {
         $response = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token'])->dispatch(new ServerRequest('GET', '/admin/settings'));
@@ -221,6 +237,32 @@ final class ArticleControllerTest extends TestCase
         $response = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/publish'));
 
         self::assertSame(419, $response->status);
+    }
+
+    public function test_browser_publication_failures_are_escaped_human_readable_html(): void
+    {
+        $repository = new ArticleRepository($this->root . '/articles');
+        $controller = new ArticleController($repository, new VersionService($this->root . '/versions'), new AdminGuard(['admin_user_id' => 7]), new Csrf(['csrf_token' => 'expected-token']));
+        $response = Router::admin($controller)->dispatch(new ServerRequest('POST', '/admin/articles/first-note/publish', ['ACCEPT' => 'text/html'], ['csrf_token' => 'expected-token']));
+
+        self::assertSame(503, $response->status);
+        self::assertSame('text/html; charset=utf-8', $response->headers['Content-Type']);
+        self::assertStringContainsString('Publishing is not configured', $response->body);
+        self::assertStringContainsString('href="/admin/articles/first-note/edit"', $response->body);
+        self::assertStringNotContainsString('{"error"', $response->body);
+    }
+
+    public function test_browser_publication_validation_error_is_escaped_in_html(): void
+    {
+        $repository = new ArticleRepository($this->root . '/articles');
+        $publisher = new PublishService($repository, new StaticBuilder(), new AtomicPublicTree(), $this->root . '/public', '<Bad Site>', 'https://example.invalid', '<script>alert(1)</script>', 'About');
+        $controller = new ArticleController($repository, new VersionService($this->root . '/versions'), new AdminGuard(['admin_user_id' => 7]), new Csrf(['csrf_token' => 'expected-token']), $publisher);
+        $response = Router::admin($controller)->dispatch(new ServerRequest('POST', '/admin/articles/first-note/publish', ['ACCEPT' => 'text/html'], ['csrf_token' => 'expected-token']));
+
+        self::assertSame(422, $response->status);
+        self::assertStringContainsString('Publication failed', $response->body);
+        self::assertStringNotContainsString('<script>', $response->body);
+        self::assertStringContainsString('placeholder domain', $response->body);
     }
 
     public function test_versions_are_scoped_to_the_current_article_for_listing_and_restore(): void

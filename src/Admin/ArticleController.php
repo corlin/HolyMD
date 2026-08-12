@@ -151,13 +151,14 @@ final readonly class ArticleController
     public function publish(ServerRequest $request): Response
     {
         if (($response = $this->authorizeMutation($request)) !== null) {
-            return $response;
+            $payload = json_decode($response->body, true);
+            return $this->publicationError(is_array($payload) && is_string($payload['error'] ?? null) ? $payload['error'] : 'Publication request was rejected.', $response->status);
         }
         if (preg_match('#^/admin/articles/([a-z0-9]+(?:-[a-z0-9]+)*)/(publish|withdraw)$#', $request->path, $matches) !== 1) {
-            return Response::json(['error' => 'Invalid publication route.'], 422);
+            return $this->publicationError('Invalid publication route.', 422);
         }
         if ($this->publisher === null) {
-            return Response::json(['error' => 'Publishing is not configured.'], 503);
+            return $this->publicationError('Publishing is not configured.', 503, $matches[1]);
         }
         try {
             if ($this->queue !== null) {
@@ -167,10 +168,18 @@ final readonly class ArticleController
             $result = $matches[2] === 'publish' ? $this->publisher->publish(new ArticleId($matches[1])) : $this->publisher->withdraw(new ArticleId($matches[1]));
             return $this->publicationResponse($matches[1], $matches[2]);
         } catch (InvalidArgumentException $exception) {
-            return Response::json(['error' => $exception->getMessage()], 422);
+            return $this->publicationError($exception->getMessage(), 422, $matches[1]);
         } catch (\RuntimeException $exception) {
-            return Response::json(['error' => $exception->getMessage()], 500);
+            return $this->publicationError($exception->getMessage(), 500, $matches[1]);
         }
+    }
+
+    private function publicationError(string $message, int $status, ?string $slug = null): Response
+    {
+        $escape = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+        $back = $slug === null ? '/admin/articles' : '/admin/articles/' . rawurlencode($slug) . '/edit';
+        $html = '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Publication failed</title><link rel="stylesheet" href="/assets/admin.css"></head><body><main class="result-page"><h1>Publication failed</h1><p role="alert">' . $escape($message) . '</p><p><a href="' . $escape($back) . '">Return to editor</a></p></main></body></html>';
+        return new Response($status, $html, ['Content-Type' => 'text/html; charset=utf-8']);
     }
 
     private function publicationResponse(string $slug, string $action, bool $queued = false, ?int $jobId = null): Response
@@ -211,14 +220,19 @@ final readonly class ArticleController
         try {
             if ($this->mediaRoot === null) throw new InvalidArgumentException('Media storage is not configured.');
             $upload = $request->files['image'] ?? null;
-            if (!is_array($upload) || ($upload['error'] ?? null) !== UPLOAD_ERR_OK || !is_string($upload['tmp_name'] ?? null) || !is_string($upload['name'] ?? null) || !is_int($upload['size'] ?? null)) throw new InvalidArgumentException('A valid image upload is required.');
-            if ($upload['size'] <= 0 || $upload['size'] > 5 * 1024 * 1024) throw new InvalidArgumentException('Images must be 5 MB or smaller.');
-            $mime = (new \finfo(FILEINFO_MIME_TYPE))->file($upload['tmp_name']);
-            $extensions = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/gif' => 'gif', 'image/webp' => 'webp'];
-            if (!isset($extensions[$mime])) throw new InvalidArgumentException('Only JPEG, PNG, GIF, and WebP images are allowed.');
+            if (!is_array($upload) || ($upload['error'] ?? null) !== UPLOAD_ERR_OK || !is_string($upload['tmp_name'] ?? null) || !is_string($upload['name'] ?? null) || !is_file($upload['tmp_name'])) throw new InvalidArgumentException('A valid image upload is required.');
+            $actualSize = filesize($upload['tmp_name']);
+            if ($actualSize === false || $actualSize <= 0 || $actualSize > 5 * 1024 * 1024) throw new InvalidArgumentException('Images must be larger than 0 bytes and 5 MB or smaller.');
+            $image = @getimagesize($upload['tmp_name']);
+            $imageType = @exif_imagetype($upload['tmp_name']);
+            if ($image === false || $imageType === false || ($image[0] ?? 0) <= 0 || ($image[1] ?? 0) <= 0) throw new InvalidArgumentException('The upload must be a decodable image with valid dimensions.');
+            $allowedTypes = [IMAGETYPE_JPEG => ['image/jpeg', 'jpg'], IMAGETYPE_PNG => ['image/png', 'png'], IMAGETYPE_GIF => ['image/gif', 'gif'], IMAGETYPE_WEBP => ['image/webp', 'webp']];
+            $detectedMime = (new \finfo(FILEINFO_MIME_TYPE))->file($upload['tmp_name']);
+            if (!isset($allowedTypes[$imageType]) || ($image['mime'] ?? null) !== $allowedTypes[$imageType][0] || $detectedMime !== $allowedTypes[$imageType][0]) throw new InvalidArgumentException('Only consistently encoded JPEG, PNG, GIF, and WebP images are allowed.');
+            [, $extension] = $allowedTypes[$imageType];
             $stem = pathinfo(basename($upload['name']), PATHINFO_FILENAME);
             $stem = trim((string) preg_replace('/[^a-z0-9]+/', '-', strtolower($stem)), '-') ?: 'image';
-            $name = $stem . '-' . bin2hex(random_bytes(4)) . '.' . $extensions[$mime];
+            $name = $stem . '-' . bin2hex(random_bytes(4)) . '.' . $extension;
             if (!is_dir($this->mediaRoot) && !mkdir($this->mediaRoot, 0775, true) && !is_dir($this->mediaRoot)) throw new \RuntimeException('Unable to create media storage.');
             $destination = $this->mediaRoot . '/' . $name;
             if (!move_uploaded_file($upload['tmp_name'], $destination) && !rename($upload['tmp_name'], $destination)) throw new \RuntimeException('Unable to store the image.');
