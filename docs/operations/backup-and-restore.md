@@ -17,7 +17,7 @@ cp .env "$backup_root/env.copy"
 mysqldump --single-transaction --routines --triggers \
   --default-character-set=utf8mb4 -h DB_HOST -u DB_USER -p DB_NAME \
   > "$backup_root/database.sql"
-sha256sum "$backup_root"/* > "$backup_root/SHA256SUMS"
+(cd "$backup_root" && sha256sum content.tar.gz env.copy database.sql > SHA256SUMS)
 ```
 
 将备份复制到主机之外的加密存储，设置保留周期，并定期在隔离环境试恢复。`.env` 含密钥，必须加密且限制访问。生成静态站可由 Markdown 重建，通常无需长期备份全部 release 目录。
@@ -26,7 +26,7 @@ sha256sum "$backup_root"/* > "$backup_root/SHA256SUMS"
 
 1. 停止 Cron，阻止管理员发布。
 2. 部署与备份兼容的 HolyMD 代码并运行 `composer install --no-dev --classmap-authoritative`。
-3. 校验 `sha256sum -c SHA256SUMS`。
+3. 进入已复制的备份目录并校验：`cd /path/to/restored-backup && sha256sum -c SHA256SUMS`。清单使用相对文件名，只验证当前恢复副本。
 4. 恢复 `content/` 与受保护的 `.env`，确认属主和最小写权限。
 5. 创建空数据库并导入：`mysql -h DB_HOST -u DB_USER -p DB_NAME < database.sql`。
 6. 运行 `php bin/holymd-migrate.php`，让恢复库升级到当前 schema。
