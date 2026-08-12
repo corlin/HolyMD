@@ -73,4 +73,26 @@ final class ProposalAcceptanceTest extends TestCase
         $this->expectException(LogicException::class);
         (new ProposalAcceptance($repository, $store))->accept($staleId);
     }
+
+    public function test_accept_maps_list_proposals_to_their_front_matter_fields(): void
+    {
+        $repository = new ArticleRepository($this->root);
+        $store = new InMemoryGeoProposalStore();
+        $original = $repository->read('first-note');
+        $id = new GeoProposalId('entities-list');
+        $store->save(new GeoProposal(
+            $id,
+            'first-note',
+            hash('sha256', $original->serialize()),
+            'entities',
+            ['Ada', 'PHP'],
+            'pending',
+            hash('sha256', $original->bodyMarkdown),
+        ));
+
+        $accepted = (new ProposalAcceptance($repository, $store))->accept($id);
+
+        self::assertSame(['Ada', 'PHP'], $accepted->frontMatter->get('entities'));
+        self::assertSame($original->bodyMarkdown, $accepted->bodyMarkdown);
+    }
 }

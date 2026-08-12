@@ -5,7 +5,7 @@ use HolyMD\Content\ArticleDocument;
 use HolyMD\Content\ArticleRepository;
 use LogicException;
 final readonly class ProposalAcceptance {
-    /** @var list<string> */ private const FRONT_MATTER_KEYS = ['summary', 'topics', 'entities', 'faq', 'sources', 'internal_links', 'structured_data'];
+    /** @var list<string> */ private const FRONT_MATTER_KEYS = ['summary', 'topics', 'entities', 'faq', 'sources', 'internal_links', 'structured_data', 'hierarchy', 'alt_text'];
     public function __construct(private ArticleRepository $articles, private GeoProposalStore $proposals) {}
     public function accept(GeoProposalId $id): ArticleDocument {
         $proposal = $this->proposals->get($id);
@@ -23,7 +23,18 @@ final readonly class ProposalAcceptance {
     }
     public function reject(GeoProposalId $id): void { $this->proposals->markRejected($id); }
     /** @return array<string,mixed> */ private function frontMatterChanges(GeoProposal $proposal): array {
-        $changes = $proposal->type === 'summary' ? ['summary' => $proposal->value] : $proposal->value;
+        $changes = match ($proposal->type) {
+            'summary' => ['summary' => $proposal->value],
+            'entities' => ['entities' => $proposal->value],
+            'faq_candidates' => ['faq' => $proposal->value],
+            'sources' => ['sources' => $proposal->value],
+            'internal_links' => ['internal_links' => $proposal->value],
+            'alt_text' => ['alt_text' => $proposal->value],
+            'hierarchy' => ['hierarchy' => $proposal->value],
+            'structured_data' => ['structured_data' => $proposal->value],
+            'metadata' => $proposal->value,
+            default => throw new LogicException('This GEO proposal cannot update front matter.'),
+        };
         if (!is_array($changes) || array_is_list($changes)) throw new LogicException('This GEO proposal cannot update front matter.');
         foreach ($changes as $key => $_) if (!is_string($key) || !in_array($key, self::FRONT_MATTER_KEYS, true)) throw new LogicException('GEO proposal includes a non-metadata change.');
         return $changes;
