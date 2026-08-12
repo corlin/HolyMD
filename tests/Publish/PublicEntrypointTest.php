@@ -12,4 +12,13 @@ final class PublicEntrypointTest extends TestCase
         self::assertStringContainsString('readfile($candidate)', $source);
         self::assertStringContainsString("str_starts_with(\$path, '/admin')", $source);
     }
+
+    public function test_apache_serves_generated_files_directly_and_preserves_admin_and_assets(): void
+    {
+        $rules = (string) file_get_contents(__DIR__ . '/../../public/.htaccess');
+        self::assertStringContainsString('RewriteRule ^admin', $rules);
+        self::assertStringContainsString('RewriteRule ^assets/', $rules);
+        self::assertStringContainsString('site/$1', $rules);
+        self::assertStringContainsString('site/$1/index.html', $rules);
+    }
 }

@@ -72,6 +72,16 @@ final class StaticBuilderTest extends TestCase
         self::assertStringContainsString("</blockquote>\n<ul>", $html);
     }
 
+    public function test_renders_visible_sources_and_propagates_them_to_json_ld(): void
+    {
+        $article = new ArticleDocument('sourced', 'Sourced', 'Evidence.', new FrontMatter(['title' => 'Sourced', 'slug' => 'sourced', 'date' => '2026-08-12', 'sources' => ['https://example.org/evidence']]), '/sourced');
+        (new StaticBuilder())->build(new BuildInput([$article], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
+        $html = (string) file_get_contents($this->outputRoot . '/articles/sourced/index.html');
+        self::assertStringContainsString('<section aria-labelledby="sources-heading">', $html);
+        self::assertStringContainsString('https://example.org/evidence', $html);
+        self::assertStringContainsString('"citation":["https://example.org/evidence"]', $html);
+    }
+
     public function test_rejects_duplicate_articles_and_topic_slug_collisions(): void
     {
         $one = new ArticleDocument('same', 'One', 'Body', new FrontMatter(['title' => 'One', 'slug' => 'same', 'date' => '2026-08-12']), '/one');

@@ -79,9 +79,10 @@ final class StaticBuilder
         $date = (string) $article->frontMatter->get('date');
         $modified = (string) $article->frontMatter->get('updated', $date);
         $summary = (string) $article->frontMatter->get('summary', '');
+        $sources = array_values(array_filter((array) $article->frontMatter->get('sources', []), 'is_string'));
         $structured = $article->frontMatter->get('structured_data');
         $graph = [
-                ['@type' => 'Article', 'headline' => $article->title, 'datePublished' => $date, 'dateModified' => $modified, 'author' => ['@type' => 'Person', 'name' => $input->authorName], 'mainEntityOfPage' => $url, 'description' => $summary],
+                ['@type' => 'Article', 'headline' => $article->title, 'datePublished' => $date, 'dateModified' => $modified, 'author' => ['@type' => 'Person', 'name' => $input->authorName], 'mainEntityOfPage' => $url, 'description' => $summary, 'citation' => $sources],
                 ['@type' => 'Person', 'name' => $input->authorName],
                 ['@type' => 'WebSite', 'name' => $input->siteName, 'url' => rtrim($input->siteUrl, '/') . '/'],
                 ['@type' => 'BreadcrumbList', 'itemListElement' => [['@type' => 'ListItem', 'position' => 1, 'name' => 'Home', 'item' => $this->url($input, '/')], ['@type' => 'ListItem', 'position' => 2, 'name' => $article->title, 'item' => $url]]],
@@ -89,7 +90,7 @@ final class StaticBuilder
         if (is_array($structured)) $graph[] = $structured;
         return [
             'siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'article' => $article,
-            'url' => $url, 'date' => $date, 'modified' => $modified, 'summary' => $summary, 'contentHtml' => $this->markdown($article->bodyMarkdown),
+            'url' => $url, 'date' => $date, 'modified' => $modified, 'summary' => $summary, 'sources' => $sources, 'contentHtml' => $this->markdown($article->bodyMarkdown),
             'jsonLd' => json_encode(['@context' => 'https://schema.org', '@graph' => $graph], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR),
         ];
     }
