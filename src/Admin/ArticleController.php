@@ -226,6 +226,11 @@ final readonly class ArticleController
             $image = @getimagesize($upload['tmp_name']);
             $imageType = @exif_imagetype($upload['tmp_name']);
             if ($image === false || $imageType === false || ($image[0] ?? 0) <= 0 || ($image[1] ?? 0) <= 0) throw new InvalidArgumentException('The upload must be a decodable image with valid dimensions.');
+            if (!function_exists('imagecreatefromstring')) throw new InvalidArgumentException('Image uploads require the PHP GD extension for safe decoding.');
+            $encodedImage = file_get_contents($upload['tmp_name']);
+            $decodedImage = is_string($encodedImage) ? @imagecreatefromstring($encodedImage) : false;
+            if ($decodedImage === false) throw new InvalidArgumentException('The upload must contain complete, decodable image pixels.');
+            imagedestroy($decodedImage);
             $allowedTypes = [IMAGETYPE_JPEG => ['image/jpeg', 'jpg'], IMAGETYPE_PNG => ['image/png', 'png'], IMAGETYPE_GIF => ['image/gif', 'gif'], IMAGETYPE_WEBP => ['image/webp', 'webp']];
             $detectedMime = (new \finfo(FILEINFO_MIME_TYPE))->file($upload['tmp_name']);
             if (!isset($allowedTypes[$imageType]) || ($image['mime'] ?? null) !== $allowedTypes[$imageType][0] || $detectedMime !== $allowedTypes[$imageType][0]) throw new InvalidArgumentException('Only consistently encoded JPEG, PNG, GIF, and WebP images are allowed.');

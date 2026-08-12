@@ -214,6 +214,12 @@ final class ArticleControllerTest extends TestCase
         self::assertSame(422, $response->status);
         self::assertStringContainsString('encoded', $response->body);
 
+        $truncated = $this->root . '/truncated.png';
+        file_put_contents($truncated, hex2bin('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489'));
+        $response = $router->dispatch(new ServerRequest('POST', '/admin/media', [], ['csrf_token' => 'expected-token'], ['image' => ['name' => 'truncated.png', 'tmp_name' => $truncated, 'size' => filesize($truncated), 'error' => UPLOAD_ERR_OK]]));
+        self::assertSame(422, $response->status);
+        self::assertStringContainsString('decodable image pixels', $response->body);
+
         $empty = $this->root . '/empty.png';
         file_put_contents($empty, '');
         $response = $router->dispatch(new ServerRequest('POST', '/admin/media', [], ['csrf_token' => 'expected-token'], ['image' => ['name' => 'empty.png', 'tmp_name' => $empty, 'size' => 100, 'error' => UPLOAD_ERR_OK]]));
