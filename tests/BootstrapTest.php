@@ -11,9 +11,17 @@ use PHPUnit\Framework\TestCase;
 
 final class BootstrapTest extends TestCase
 {
+    /** @var array<string, string|false> */
+    private array $environment = [];
+
     protected function setUp(): void
     {
         parent::setUp();
+
+        foreach (['HOLYMD_DSN', 'HOLYMD_DB_USERNAME', 'HOLYMD_DB_PASSWORD'] as $name) {
+            $this->environment[$name] = getenv($name);
+        }
+
         putenv('HOLYMD_DSN=sqlite::memory:');
         putenv('HOLYMD_DB_USERNAME');
         putenv('HOLYMD_DB_PASSWORD');
@@ -21,9 +29,15 @@ final class BootstrapTest extends TestCase
 
     protected function tearDown(): void
     {
-        putenv('HOLYMD_DSN');
-        putenv('HOLYMD_DB_USERNAME');
-        putenv('HOLYMD_DB_PASSWORD');
+        foreach ($this->environment as $name => $value) {
+            if ($value === false) {
+                putenv($name);
+            } else {
+                putenv(sprintf('%s=%s', $name, $value));
+            }
+        }
+
+        $this->environment = [];
         parent::tearDown();
     }
 
