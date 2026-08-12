@@ -22,4 +22,4 @@ The acceptance test explicitly proves that accepted `summary` and `topics` updat
 
 ## P1 follow-up
 
-Commit `TODO` wires `GeoController` into the admin router and public entry point, persists proposals/jobs through `FileGeoReviewStore`, adds authenticated review/accept/reject/edit endpoints, and connects the admin panel to live JSON responses. The validator now rejects top-level extras and nested body/content/markdown/rewrite fields, and route integration tests cover authentication and front-matter-only acceptance.
+Commit `31c5247` wires `GeoController` into the admin router and public entry point, persists proposals/jobs through `FileGeoReviewStore`, adds authenticated review/accept/reject/edit endpoints, and connects the admin panel to live JSON responses. The validator now rejects top-level extras and nested body/content/markdown/rewrite fields, and route integration tests cover authentication and front-matter-only acceptance.
