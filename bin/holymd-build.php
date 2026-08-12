@@ -12,6 +12,7 @@ use HolyMD\Render\StaticBuilder;
 require dirname(__DIR__) . '/vendor/autoload.php';
 
 $root = dirname(__DIR__);
+\HolyMD\Config\Settings::fromEnvironment($root);
 $articles = new ArticleRepository($root . '/content/articles');
 $dryRun = in_array('--dry-run', $argv, true);
 $articleIndex = array_search('--article', $argv, true);
