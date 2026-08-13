@@ -20,4 +20,10 @@ final readonly class ServerRequest
     {
         return $this->parsedBody[$name] ?? $default;
     }
+
+    public function stringInput(string $name): ?string
+    {
+        $value = $this->parsedBody[$name] ?? null;
+        return is_string($value) ? $value : null;
+    }
 }

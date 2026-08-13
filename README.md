@@ -31,6 +31,14 @@ php -S 127.0.0.1:8789 -t public bin/holymd-dev-router.php
 
 后台地址为 `http://127.0.0.1:8789/admin/login`。在后台提交发布或 GEO 审核任务后，在本地终端运行 Worker 即可完成异步处理：
 
+如需 GEO 审核，先生成 `.env` 所需的两项加密值；明文只存在于这个命令的进程环境中：
+
+```bash
+HOLYMD_GEO_PLAINTEXT_KEY='sk-your-provider-key' php bin/holymd-admin.php encrypt-geo-key
+```
+
+把输出的 `HOLYMD_GEO_API_CREDENTIAL` 与 `HOLYMD_GEO_API_KEY` 放入 `.env`，不要提交该文件。
+
 ```bash
 php bin/holymd-worker.php
 # 或在本地开发时启动轮询 Worker：

@@ -20,6 +20,7 @@ final class ConfiguredAiClientTest extends TestCase
         self::assertSame('{"proposals":[],"findings":[]}', $response->json);
         self::assertSame(12, $transport->timeout);
         self::assertSame(4096, $transport->maxBytes);
+        self::assertSame(['8.8.8.8'], $transport->resolvedAddresses);
         self::assertSame('Bearer secret', $transport->headers['Authorization']);
         $payload = json_decode($transport->body, true, flags: JSON_THROW_ON_ERROR);
         self::assertSame('geo-model', $payload['model']);
@@ -35,11 +36,20 @@ final class ConfiguredAiClientTest extends TestCase
         try { $client->analyze('prompt', 'body'); self::fail('Expected exception.'); }
         catch (GeoAiException $exception) { self::assertTrue($exception->retryable); self::assertStringContainsString('HTTP 429', $exception->getMessage()); self::assertStringNotContainsString('secret', $exception->getMessage()); }
     }
+
+    public function test_marks_an_empty_deepseek_json_response_retryable(): void
+    {
+        $response = new HttpResponse(200, json_encode(['choices' => [['message' => ['content' => '']]]], JSON_THROW_ON_ERROR));
+        $client = new ConfiguredAiClient('secret', 'https://provider.test/v1/chat/completions', 'geo-model', new RecordingTransport($response), 10, 2048, new EndpointPolicy(static fn (string $host): array => ['8.8.8.8']));
+
+        try { $client->analyze('Return JSON only.', 'body'); self::fail('Expected exception.'); }
+        catch (GeoAiException $exception) { self::assertTrue($exception->retryable); self::assertStringContainsString('structured review content', $exception->getMessage()); }
+    }
 }
 
 final class RecordingTransport implements HttpTransport
 {
-    public array $headers = []; public string $body = ''; public int $timeout = 0; public int $maxBytes = 0;
+    public array $headers = []; public string $body = ''; public int $timeout = 0; public int $maxBytes = 0; public array $resolvedAddresses = [];
     public function __construct(private readonly HttpResponse $response) {}
-    public function post(string $url, array $headers, string $body, int $timeoutSeconds, int $maxResponseBytes): HttpResponse { $this->headers=$headers;$this->body=$body;$this->timeout=$timeoutSeconds;$this->maxBytes=$maxResponseBytes;return $this->response; }
+    public function post(string $url, array $headers, string $body, int $timeoutSeconds, int $maxResponseBytes, array $resolvedAddresses = []): HttpResponse { $this->headers=$headers;$this->body=$body;$this->timeout=$timeoutSeconds;$this->maxBytes=$maxResponseBytes;$this->resolvedAddresses=$resolvedAddresses;return $this->response; }
 }

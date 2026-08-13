@@ -6,7 +6,7 @@ namespace HolyMD\Render;
 
 use League\CommonMark\GithubFlavoredMarkdownConverter;
 
-final readonly class MarkdownRenderer
+final readonly class MarkdownRenderer implements MarkdownRendererInterface
 {
     private GithubFlavoredMarkdownConverter $converter;
 

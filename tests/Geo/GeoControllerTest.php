@@ -41,7 +41,7 @@ final class GeoControllerTest extends TestCase
         self::assertStringContainsString('waiting for Cron worker', $javascript);
         self::assertStringContainsString('Refresh GEO status', $javascript);
         self::assertStringNotContainsString('payload.proposals.map', $javascript);
-        self::assertStringContainsString('item.dataset.proposalValue = JSON.stringify(proposal.value)', $javascript);
+        self::assertStringContainsString("typeof proposal.value === 'string'", $javascript);
         self::assertStringContainsString('resumeStatus()', $javascript);
         self::assertStringContainsString("payload.status === 'running'", $javascript);
         self::assertStringContainsString("payload.status === 'failed'", $javascript);
@@ -57,6 +57,17 @@ final class GeoControllerTest extends TestCase
         $current=(new ArticleRepository($this->root))->read('first-note'); $store->save(new \HolyMD\Geo\GeoProposal(new \HolyMD\Geo\GeoProposalId('entities-edit'),'first-note',hash('sha256',$current->bodyMarkdown),'entities',['Old']));
         self::assertSame(200,$router->dispatch(new ServerRequest('POST','/admin/geo/proposals/entities-edit/edit',[],['csrf_token'=>'token','value'=>'["Ada","PHP"]']))->status);
         self::assertSame(['Ada','PHP'],$store->get(new \HolyMD\Geo\GeoProposalId('entities-edit'))->value);
+    }
+    public function test_edit_preserves_plain_string_values_for_every_string_shaped_proposal(): void {
+        $store = new InMemoryGeoProposalStore(); $router = $this->router(['admin_user_id'=>1,'csrf_token'=>'token'],$store);
+        $document=(new ArticleRepository($this->root))->read('first-note'); $hash=hash('sha256',$document->bodyMarkdown);
+        foreach (['summary', 'metadata', 'hierarchy', 'sources', 'internal_links', 'alt_text', 'structured_data'] as $type) {
+            $id = new \HolyMD\Geo\GeoProposalId('plain-' . str_replace('_', '-', $type));
+            $store->save(new \HolyMD\Geo\GeoProposal($id, 'first-note', $hash, $type, 'Original text'));
+            $response = $router->dispatch(new ServerRequest('POST', '/admin/geo/proposals/' . $id->value . '/edit', [], ['csrf_token'=>'token','value'=>'Edited text']));
+            self::assertSame(200, $response->status, $type);
+            self::assertSame('Edited text', $store->get($id)->value, $type);
+        }
     }
     private function router(array $session, GeoProposalStore $store): Router {
         $articles = new ArticleRepository($this->root); $controller = new ArticleController($articles, new VersionService($this->root . '/versions'), new AdminGuard($session), new Csrf($session));

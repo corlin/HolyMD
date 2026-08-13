@@ -10,6 +10,7 @@ use RuntimeException;
 final readonly class Migrator
 {
     private const HARDENING = '20260812_queue_release_hardening';
+    private const ACCOUNT_LOCKOUT = '20260813_admin_account_lockout';
 
     public function __construct(private PDO $pdo, private string $projectRoot)
     {
@@ -34,13 +35,26 @@ final readonly class Migrator
         }
 
         $this->pdo->exec('CREATE TABLE IF NOT EXISTS `schema_migrations` (`version` VARCHAR(191) NOT NULL, `applied_at` DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6), PRIMARY KEY (`version`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
-        if ($this->applied(self::HARDENING)) {
-            return new MigrationResult(false, 0);
-        }
 
-        $this->hardenLegacySchema();
-        $this->record(self::HARDENING);
-        return new MigrationResult(false, 1);
+        $applied = 0;
+        foreach ($this->migrations() as [$version, $method]) {
+            if ($this->applied($version)) {
+                continue;
+            }
+            $this->{$method}();
+            $this->record($version);
+            $applied++;
+        }
+        return new MigrationResult($installed, $applied);
+    }
+
+    /** @return list<array{string, string}> */
+    private function migrations(): array
+    {
+        return [
+            [self::HARDENING, 'hardenLegacySchema'],
+            [self::ACCOUNT_LOCKOUT, 'addAccountLockoutColumns'],
+        ];
     }
 
     private function hardenLegacySchema(): void
@@ -70,6 +84,19 @@ final readonly class Migrator
         $this->pdo->exec('ALTER TABLE `geo_proposals` MODIFY `proposal_key` CHAR(64) NOT NULL');
         if (!$this->indexExists('geo_proposals', 'geo_proposals_key_unique')) {
             $this->pdo->exec('ALTER TABLE `geo_proposals` ADD UNIQUE KEY `geo_proposals_key_unique` (`proposal_key`)');
+        }
+    }
+
+    private function addAccountLockoutColumns(): void
+    {
+        if (!$this->columnExists('admin_users', 'failed_attempts')) {
+            $this->pdo->exec('ALTER TABLE `admin_users` ADD COLUMN `failed_attempts` INT UNSIGNED NOT NULL DEFAULT 0 AFTER `display_name`');
+        }
+        if (!$this->columnExists('admin_users', 'locked_until')) {
+            $this->pdo->exec('ALTER TABLE `admin_users` ADD COLUMN `locked_until` DATETIME(6) NULL AFTER `failed_attempts`');
+        }
+        if (!$this->columnExists('admin_users', 'is_active')) {
+            $this->pdo->exec('ALTER TABLE `admin_users` ADD COLUMN `is_active` TINYINT(1) NOT NULL DEFAULT 1 AFTER `locked_until`');
         }
     }
 

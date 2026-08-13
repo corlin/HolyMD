@@ -17,6 +17,7 @@ final readonly class BuildInput
         public string $about,
         public bool $generateLlmsTxt = false,
         public string $siteLanguage = 'zh-CN',
+        public ?string $builtAt = null,
     ) {
     }
 }

@@ -2,10 +2,25 @@
 declare(strict_types=1);
 namespace HolyMD\Geo;
 use HolyMD\Content\ArticleDocument;
+use HolyMD\Content\ArticleMetadataValidator;
 use HolyMD\Content\ArticleRepository;
 use LogicException;
 final readonly class ProposalAcceptance {
-    /** @var list<string> */ private const FRONT_MATTER_KEYS = ['summary', 'topics', 'entities', 'faq', 'sources', 'internal_links', 'structured_data', 'hierarchy', 'alt_text'];
+    /** @var list<string> */
+    private const FRONT_MATTER_KEYS = [
+        'summary',
+        'topics',
+        'entities',
+        'faq',
+        'sources',
+        'sources_suggestion',
+        'internal_links',
+        'structured_data',
+        'structured_data_suggestion',
+        'hierarchy',
+        'alt_text',
+        'metadata_suggestion',
+    ];
     public function __construct(private ArticleRepository $articles, private GeoProposalStore $proposals) {}
     public function accept(GeoProposalId $id): ArticleDocument {
         $proposal = $this->proposals->get($id);
@@ -29,27 +44,85 @@ final readonly class ProposalAcceptance {
             'summary' => ['summary' => $proposal->value],
             'entities' => ['entities' => $proposal->value],
             'faq_candidates' => ['faq' => $proposal->value],
-            'sources' => is_array($proposal->value)
-                ? array_values(array_filter($proposal->value, static fn($v) => is_string($v) && filter_var($v, FILTER_VALIDATE_URL) !== false))
-                : (filter_var((string) $proposal->value, FILTER_VALIDATE_URL) !== false ? [(string) $proposal->value] : []),
-            'sources_suggestion' => !is_array($proposal->value) && filter_var((string) $proposal->value, FILTER_VALIDATE_URL) === false ? $proposal->value : null,
-            'structured_data' => is_array($proposal->value) && !array_is_list($proposal->value)
-                ? $proposal->value
-                : (is_string($proposal->value) && is_array(json_decode($proposal->value, true)) ? json_decode($proposal->value, true) : null),
-            'structured_data_suggestion' => is_string($proposal->value) && !is_array(json_decode($proposal->value, true)) ? $proposal->value : null,
+            'sources' => $this->sourceChanges($proposal->value),
             'internal_links' => ['internal_links' => $proposal->value],
             'alt_text' => ['alt_text' => $proposal->value],
             'hierarchy' => ['hierarchy' => $proposal->value],
+            'structured_data' => $this->structuredDataChanges($proposal->value),
             'metadata' => is_array($proposal->value) && !array_is_list($proposal->value) ? $proposal->value : ['metadata_suggestion' => $proposal->value],
             default => throw new LogicException('This GEO proposal cannot update front matter.'),
         };
-        $changes = array_filter($changes, static fn($v) => $v !== null);
         if (!is_array($changes) || array_is_list($changes)) throw new LogicException('This GEO proposal cannot update front matter.');
-        foreach ($changes as $key => $_) {
-            if (!is_string($key) || in_array(strtolower((string) preg_replace('/[^a-z0-9_]/i', '', $key)), ['body', 'content', 'markdown', 'body_markdown', 'bodymarkdown', 'rewrite'], true)) {
+        foreach ($changes as $key => $value) {
+            if (!is_string($key) || !in_array($key, self::FRONT_MATTER_KEYS, true)) {
                 throw new LogicException('GEO proposal includes a non-metadata change.');
             }
+            if (!$this->validFrontMatterValue($key, $value)) throw new LogicException('GEO proposal contains metadata that cannot be published safely.');
         }
         return $changes;
+    }
+
+    /** @param array<mixed>|string $value @return array<string, mixed> */
+    private function sourceChanges(array|string $value): array
+    {
+        if (is_string($value)) {
+            return filter_var($value, FILTER_VALIDATE_URL) !== false
+                ? ['sources' => [$value]]
+                : ['sources_suggestion' => $value];
+        }
+
+        return ['sources' => array_values($value)];
+    }
+
+    /** @param array<mixed>|string $value @return array<string, mixed> */
+    private function structuredDataChanges(array|string $value): array
+    {
+        if (is_array($value) && !array_is_list($value)) {
+            return ['structured_data' => $value];
+        }
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            if (is_array($decoded) && !array_is_list($decoded)) {
+                return ['structured_data' => $decoded];
+            }
+            return ['structured_data_suggestion' => $value];
+        }
+
+        return ['structured_data_suggestion' => json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)];
+    }
+
+    private function validFrontMatterValue(string $key, mixed $value): bool
+    {
+        if (in_array($key, ['summary', 'sources_suggestion', 'structured_data_suggestion', 'metadata_suggestion'], true)) {
+            return is_string($value) && trim($value) !== '';
+        }
+        if ($key === 'topics') return $this->stringList($value);
+        if ($key === 'sources') {
+            return $this->stringList($value) && array_reduce(
+                $value,
+                fn (bool $valid, string $source): bool => $valid && $this->webUrl($source),
+                true,
+            );
+        }
+        if ($key === 'structured_data') return is_array($value) && !array_is_list($value) && $value !== [] && !ArticleMetadataValidator::containsForbiddenKey($value);
+        if (in_array($key, ['entities', 'faq', 'internal_links', 'hierarchy', 'alt_text'], true)) {
+            return (is_string($value) && trim($value) !== '') || (is_array($value) && !ArticleMetadataValidator::containsForbiddenKey($value));
+        }
+        return false;
+    }
+
+    private function stringList(mixed $value): bool
+    {
+        return is_array($value) && array_is_list($value) && array_reduce(
+            $value,
+            static fn (bool $valid, mixed $item): bool => $valid && is_string($item) && trim($item) !== '',
+            true,
+        );
+    }
+
+    private function webUrl(string $value): bool
+    {
+        if (filter_var($value, FILTER_VALIDATE_URL) === false) return false;
+        return in_array(strtolower((string) parse_url($value, PHP_URL_SCHEME)), ['http', 'https'], true);
     }
 }

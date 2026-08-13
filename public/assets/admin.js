@@ -8,13 +8,23 @@
     const preview = document.querySelector('#markdown-preview');
     const state = document.querySelector('#save-state');
     const previewUrl='/admin/markdown/preview';
+    const publicationForm = document.querySelector('[data-publication-form]');
+    const publicationChecksum = document.querySelector('[data-publication-checksum]');
     let saveTimer;
     let previewTimer;
     let previewVersion = 0;
+    let currentChecksum = studio.dataset.articleChecksum;
+    let dirty = false;
+    let saveInFlight = null;
 
+    const saveIcons = {saved: 'check_circle', saving: 'sync', unsaved: 'edit_note', error: 'error'};
+    const saveIcon = state.querySelector('[data-save-icon]');
+    const saveLabel = state.querySelector('[data-save-label]');
     const setState = (value, label) => {
       state.dataset.state = value;
-      state.textContent = label;
+      if (saveIcon) saveIcon.textContent = saveIcons[value] || 'circle';
+      if (saveLabel) saveLabel.textContent = label;
+      else state.textContent = label;
     };
 
     const renderPreview = async () => {
@@ -41,30 +51,77 @@
       previewTimer = setTimeout(renderPreview, 120);
     };
 
+    const metadataFields = () => [...document.querySelectorAll('[data-metadata-input]')].reduce((fields, field) => ({...fields, [field.name]: field.value}), {});
+
     const save = async () => {
+      if (saveInFlight) return saveInFlight;
+      if (!dirty) return true;
+      const snapshot = {title: title.value, date: date.value, body: body.value, ...metadataFields()};
+      dirty = false;
       setState('saving', 'Saving…');
-      try {
+      saveInFlight = (async () => {
         const response = await fetch(studio.dataset.autosaveUrl, {
           method: 'POST',
           headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-          body: new URLSearchParams({title: title.value, date: date.value, body: body.value, csrf_token: token.value}),
+          body: new URLSearchParams({...snapshot, expected_checksum: currentChecksum, csrf_token: token.value}),
         });
+        const payload = await response.json();
         if (!response.ok) {
-          const payload = await response.json();
           throw Error(payload.error || 'Save failed');
         }
-        setState('saved', 'Saved draft');
+        currentChecksum = payload.checksum;
+        studio.dataset.articleChecksum = currentChecksum;
+        if (publicationChecksum) publicationChecksum.value = currentChecksum;
+        if (!dirty) setState('saved', 'Source saved');
+        return true;
+      })();
+      try {
+        return await saveInFlight;
       } catch (error) {
+        dirty = true;
         setState('error', error.message || 'Save failed');
+        throw error;
+      } finally {
+        saveInFlight = null;
+        if (dirty && state.dataset.state !== 'error') void save().catch(() => {});
       }
     };
 
-    [body, title, date].forEach(field => field.addEventListener('input', () => {
+    const flushSave = async () => {
+      clearTimeout(saveTimer);
+      while (dirty || saveInFlight) {
+        if (saveInFlight) await saveInFlight;
+        else await save();
+      }
+    };
+
+    const listen = field => field.addEventListener('input', () => {
       queuePreview();
+      dirty = true;
       setState('unsaved', 'Unsaved changes');
       clearTimeout(saveTimer);
-      saveTimer = setTimeout(save, 800);
-    }));
+      saveTimer = setTimeout(() => void save().catch(() => {}), 800);
+    });
+    [body, title, date].forEach(listen);
+    document.querySelectorAll('[data-metadata-input]').forEach(listen);
+
+    if (publicationForm) publicationForm.addEventListener('submit', async event => {
+      if (publicationForm.dataset.submitting === 'true') return;
+      event.preventDefault();
+      try {
+        await flushSave();
+        publicationForm.dataset.submitting = 'true';
+        HTMLFormElement.prototype.submit.call(publicationForm);
+      } catch (error) {
+        setState('error', error.message || 'Save failed; publication was cancelled.');
+      }
+    });
+
+    window.addEventListener('beforeunload', event => {
+      if (!dirty && !saveInFlight) return;
+      event.preventDefault();
+      event.returnValue = '';
+    });
     renderPreview();
   }
 
@@ -102,7 +159,7 @@
     const item = document.createElement('li');
     item.className = 'geo-proposal-card' + (proposal.status === 'accepted' ? ' is-accepted' : (proposal.status === 'rejected' ? ' is-rejected' : ''));
     item.dataset.proposalId = proposal.id;
-    item.dataset.proposalValue = JSON.stringify(proposal.value);
+    item.dataset.proposalValue = typeof proposal.value === 'string' ? proposal.value : JSON.stringify(proposal.value);
 
     const header = document.createElement('div');
     header.className = 'geo-card-header';
@@ -203,7 +260,7 @@
         const input = prompt('Edit metadata proposal value:', item.dataset.proposalValue);
         if (input === null) return;
         const result = await request(`/admin/geo/proposals/${id}/edit`, {value: input});
-        item.dataset.proposalValue = JSON.stringify(result.value);
+        item.dataset.proposalValue = typeof result.value === 'string' ? result.value : JSON.stringify(result.value);
         const cardBody = item.querySelector('.geo-card-body');
         if (cardBody) {
           cardBody.textContent = typeof result.value === 'string' ? result.value : JSON.stringify(result.value, null, 2);

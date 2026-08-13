@@ -3,7 +3,7 @@ RewriteEngine On
 
 # Keep the PHP admin runtime and authored admin assets at stable paths.
 RewriteRule ^admin(?:/|$) index.php [L,QSA]
-RewriteRule ^assets/ - [L]
+RewriteRule ^assets/(?:admin\.css|admin\.js|fonts/[a-z0-9.-]+\.woff2)$ - [END]
 RewriteRule ^(?:site|\.holymd-current)(?:/|$) - [END]
 
 # Serve generated static files directly. Clean routes resolve to index.html.

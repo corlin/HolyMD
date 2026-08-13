@@ -7,7 +7,9 @@ namespace HolyMD\Admin;
 use HolyMD\Auth\AdminGuard;
 use HolyMD\Auth\Unauthorized;
 use HolyMD\Content\ArticleDocument;
+use HolyMD\Content\ArticleMetadataValidator;
 use HolyMD\Content\ArticleRepository;
+use HolyMD\Content\FrontMatter;
 use HolyMD\Http\Csrf;
 use HolyMD\Http\Response;
 use HolyMD\Http\ServerRequest;
@@ -54,16 +56,13 @@ final readonly class ArticleController
         try {
             $slug = $this->slugFromPath($request->path);
             $existing = $this->articles->read($slug);
-            $title = $request->input('title', $existing->title);
-            $date = $request->input('date', $existing->frontMatter->get('date'));
-            $body = $request->input('body');
-            if (!is_string($title) || !is_string($date) || !is_string($body)) {
-                throw new InvalidArgumentException('Draft title, date, and Markdown body are required.');
+            $document = $this->submittedArticle($request, $existing);
+            $expectedChecksum = $request->input('expected_checksum');
+            if (!is_string($expectedChecksum) || !$this->articles->writeIfUnchanged($document, $expectedChecksum)) {
+                return Response::json(['error' => 'The article changed in another editor session. Reload before saving again.'], 409);
             }
-            $document = new ArticleDocument($slug, $title, $body, $existing->frontMatter->with('title', $title)->with('date', $date), $existing->sourcePath);
-            $this->articles->write($document);
             $version = $this->versions->snapshot($document);
-            return Response::json(['saved' => true, 'versionId' => $version->value]);
+            return Response::json(['saved' => true, 'versionId' => $version->value, 'checksum' => hash('sha256', $document->serialize())]);
         } catch (InvalidArgumentException $exception) {
             return Response::json(['error' => $exception->getMessage()], 422);
         }
@@ -115,7 +114,9 @@ final readonly class ArticleController
             if ($this->articles->exists($slug)) {
                 throw new InvalidArgumentException('An article with this slug already exists.');
             }
-            $document = new ArticleDocument($slug, $title, $body, new \HolyMD\Content\FrontMatter(['title' => $title, 'slug' => $slug, 'date' => $date]), $slug . '.md');
+            $frontMatter = $this->applyMetadataInputs($request, new FrontMatter(['title' => $title, 'slug' => $slug, 'date' => $date]));
+            $document = new ArticleDocument($slug, $title, $body, $frontMatter, $slug . '.md');
+            $this->assertValidMetadata($document);
             $this->articles->write($document);
             $this->versions->snapshot($document);
             return Response::redirect('/admin/articles/' . rawurlencode($slug) . '/edit');
@@ -138,6 +139,7 @@ final readonly class ArticleController
             return Response::json(['error' => 'Article not found.'], 404);
         }
         $versions = $this->versions->list($article->slug);
+        $articleChecksum = hash('sha256', $article->serialize());
         $csrfToken = $this->csrf->token();
         ob_start();
         require dirname(__DIR__, 2) . '/templates/admin/articles/edit.php';
@@ -176,8 +178,18 @@ final readonly class ArticleController
             return $this->publicationError('Publishing is not configured.', 503, $matches[1]);
         }
         try {
+            $article = $this->articles->read($matches[1]);
+            if ($matches[2] === 'publish' && $request->input('body') !== null) {
+                $updated = $this->submittedArticle($request, $article);
+                $expectedChecksum = $request->input('expected_checksum');
+                if (!is_string($expectedChecksum) || !$this->articles->writeIfUnchanged($updated, $expectedChecksum)) {
+                    return $this->publicationError('The article changed in another editor session. Reload before publishing.', 409, $matches[1]);
+                }
+                $this->versions->snapshot($updated);
+                $article = $updated;
+            }
             if ($this->queue !== null) {
-                $jobId = $this->queue->enqueueBuild($this->articles->read($matches[1]), $matches[2]);
+                $jobId = $this->queue->enqueueBuild($article, $matches[2]);
                 return $this->publicationResponse($matches[1], $matches[2], true, $jobId);
             }
             $result = $matches[2] === 'publish' ? $this->publisher->publish(new ArticleId($matches[1])) : $this->publisher->withdraw(new ArticleId($matches[1]));
@@ -276,12 +288,6 @@ final readonly class ArticleController
         return array_values(array_map('basename', array_filter(glob($this->mediaRoot . '/*') ?: [], 'is_file')));
     }
 
-    public function unsupportedMutation(ServerRequest $request): Response
-    {
-        if (($response = $this->authorizeMutation($request)) !== null) return $response;
-        return Response::json(['error' => 'Settings mutation is not configured.'], 503);
-    }
-
     private function authorizeMutation(ServerRequest $request): ?Response
     {
         try {
@@ -316,5 +322,104 @@ final readonly class ArticleController
             throw new InvalidArgumentException('Article title or slug must contain letters or numbers.');
         }
         return $slug;
+    }
+
+    private function submittedArticle(ServerRequest $request, ArticleDocument $existing): ArticleDocument
+    {
+        $title = $request->input('title');
+        $date = $request->input('date');
+        $body = $request->input('body');
+        if (!is_string($title) || trim($title) === '' || mb_strlen(trim($title), 'UTF-8') > 200 || !is_string($date) || !is_string($body) || strlen($body) > 1024 * 1024) {
+            throw new InvalidArgumentException('A title up to 200 characters, a date, and Markdown up to 1 MB are required.');
+        }
+        $parsedDate = \DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+        if ($parsedDate === false || $parsedDate->format('Y-m-d') !== $date) {
+            throw new InvalidArgumentException('Article date must use YYYY-MM-DD.');
+        }
+        $title = trim($title);
+        $frontMatter = $this->applyMetadataInputs($request, $existing->frontMatter->with('title', $title)->with('date', $date));
+        $document = new ArticleDocument(
+            $existing->slug,
+            $title,
+            $body,
+            $frontMatter,
+            $existing->sourcePath,
+        );
+        $this->assertValidMetadata($document);
+        return $document;
+    }
+
+    private function applyMetadataInputs(ServerRequest $request, FrontMatter $frontMatter): FrontMatter
+    {
+        $lines = static function (?string $input): ?array {
+            if ($input === null) {
+                return null;
+            }
+            return array_values(array_filter(array_map(static fn (string $item): string => trim($item), explode("\n", $input)), static fn (string $item): bool => $item !== ''));
+        };
+        $text = static function (?string $input): ?string {
+            return $input === null ? null : trim($input);
+        };
+
+        $summary = $text($request->stringInput('summary'));
+        if ($summary !== null) {
+            $frontMatter = $summary === '' ? $frontMatter->without('summary') : $frontMatter->with('summary', $summary);
+        }
+        foreach (['topics', 'sources', 'previous_slugs'] as $listKey) {
+            $items = $lines($request->stringInput($listKey));
+            if ($items !== null) {
+                $frontMatter = $items === [] ? $frontMatter->without($listKey) : $frontMatter->with($listKey, $items);
+            }
+        }
+        foreach (['entities', 'faq'] as $freeKey) {
+            $value = $text($request->stringInput($freeKey));
+            if ($value === null) {
+                continue;
+            }
+            if ($value === '') {
+                $frontMatter = $frontMatter->without($freeKey);
+                continue;
+            }
+            $frontMatter = is_array($frontMatter->get($freeKey))
+                ? $frontMatter->with($freeKey, $lines($value) ?? [$value])
+                : $frontMatter->with($freeKey, $value);
+        }
+        $structured = $request->stringInput('structured_data');
+        if ($structured !== null) {
+            $structured = trim($structured);
+            if ($structured === '') {
+                $frontMatter = $frontMatter->without('structured_data');
+            } else {
+                try {
+                    $decoded = json_decode($structured, true, 512, JSON_THROW_ON_ERROR);
+                } catch (\JsonException $exception) {
+                    throw new InvalidArgumentException('Structured data must be valid JSON.', previous: $exception);
+                }
+                if (!is_array($decoded) || array_is_list($decoded) || $decoded === []) {
+                    throw new InvalidArgumentException('Structured data must be a JSON object.');
+                }
+                $frontMatter = $frontMatter->with('structured_data', $decoded);
+            }
+        }
+        return $frontMatter;
+    }
+
+    private function assertValidMetadata(ArticleDocument $document): void
+    {
+        foreach (ArticleMetadataValidator::errors($document) as $error) {
+            throw new InvalidArgumentException($error);
+        }
+        $publishedSlugs = array_map(
+            static fn (ArticleDocument $article): string => $article->slug,
+            array_filter($this->articles->all(), static fn (ArticleDocument $article): bool => $article->frontMatter->get('status') === 'published'),
+        );
+        foreach ((array) $document->frontMatter->get('previous_slugs', []) as $oldSlug) {
+            if (!is_string($oldSlug) || preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/', $oldSlug) !== 1) {
+                continue;
+            }
+            if (in_array($oldSlug, $publishedSlugs, true)) {
+                throw new InvalidArgumentException(sprintf('Redirect slug "%s" collides with a published route.', $oldSlug));
+            }
+        }
     }
 }

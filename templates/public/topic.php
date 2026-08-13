@@ -1,10 +1,19 @@
-<!doctype html>
-<html lang="<?= htmlspecialchars($siteLanguage, ENT_QUOTES, 'UTF-8') ?>"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title><?= htmlspecialchars($topic) ?> | <?= htmlspecialchars($siteName) ?></title><meta name="description" content="Writing about <?= htmlspecialchars($topic) ?> by <?= htmlspecialchars($authorName) ?>">
-<meta property="og:type" content="website"><meta property="og:title" content="<?= htmlspecialchars($topic) ?> | <?= htmlspecialchars($siteName) ?>"><meta property="og:description" content="Writing about <?= htmlspecialchars($topic) ?> by <?= htmlspecialchars($authorName) ?>"><meta property="og:url" content="<?= htmlspecialchars(rtrim($siteUrl, '/') . $route) ?>"><meta property="og:site_name" content="<?= htmlspecialchars($siteName) ?>">
-<meta name="twitter:card" content="summary"><meta name="twitter:title" content="<?= htmlspecialchars($topic) ?> | <?= htmlspecialchars($siteName) ?>"><meta name="twitter:description" content="Writing about <?= htmlspecialchars($topic) ?> by <?= htmlspecialchars($authorName) ?>">
-<link rel="canonical" href="<?= htmlspecialchars(rtrim($siteUrl, '/') . $route) ?>"><link rel="stylesheet" href="/assets/site.css">
-<script>!function(){try{var t=localStorage.getItem("holymd_theme");t?document.documentElement.setAttribute("data-theme",t):"dark"===matchMedia("(prefers-color-scheme: dark)").matches&&document.documentElement.setAttribute("data-theme","dark")}catch(e){}}();</script>
-</head>
-<body><a class="skip-link" href="#main-content">Skip to content</a><header class="site-header"><div class="shell nav-row"><a class="wordmark" href="/" aria-label="<?= htmlspecialchars($siteName) ?> home"><?= htmlspecialchars($siteName) ?></a><nav aria-label="Primary"><a href="/">Writing</a><a href="/about/">About</a><a href="/rss.xml">RSS</a><div class="theme-switcher" aria-label="Theme switcher"><button type="button" data-theme-set="auto" title="System">Auto</button><button type="button" data-theme-set="light" title="Light">Light</button><button type="button" data-theme-set="dark" title="Dark">Dark</button></div></nav></div></header><main id="main-content" class="shell page-intro"><nav class="breadcrumb" aria-label="Breadcrumb"><a href="/">Writing</a><span aria-hidden="true">/</span><span aria-current="page"><?= htmlspecialchars($topic) ?></span></nav><p class="eyebrow">Topic</p><h1>Articles on <?= htmlspecialchars($topic) ?></h1><div class="article-list topic-articles"><?php foreach ($articles as $article): ?><article class="article-row"><div><p class="article-kicker"><time datetime="<?= htmlspecialchars((string) $article->frontMatter->get('date')) ?>"><?= htmlspecialchars((string) $article->frontMatter->get('date')) ?></time></p><h2><a href="/articles/<?= htmlspecialchars($article->slug) ?>/"><?= htmlspecialchars($article->title) ?></a></h2><?php $summary = (string) $article->frontMatter->get('summary', ''); if ($summary !== ''): ?><p><?= htmlspecialchars($summary) ?></p><?php endif; ?></div><a class="quiet-arrow" href="/articles/<?= htmlspecialchars($article->slug) ?>/" aria-label="Read <?= htmlspecialchars($article->title) ?>">→</a></article><?php endforeach; ?></div></main><footer class="site-footer"><div class="shell"><p><?= htmlspecialchars($siteName) ?> — writing by <?= htmlspecialchars($authorName) ?>.</p><nav aria-label="Footer"><a href="/">Writing</a><a href="/about/">About</a><a href="/rss.xml">RSS</a><a href="/feed.json">JSON Feed</a><a href="/llms.txt">llms.txt</a><a href="/llms-full.txt">llms-full.txt</a></nav></div></footer>
-<script>document.addEventListener("click",function(e){var t=e.target.closest("[data-theme-set]");if(t){var a=t.getAttribute("data-theme-set");"auto"===a?(localStorage.removeItem("holymd_theme"),document.documentElement.removeAttribute("data-theme")):(localStorage.setItem("holymd_theme",a),document.documentElement.setAttribute("data-theme",a)),document.querySelectorAll("[data-theme-set]").forEach(function(e){e.classList.toggle("active",e.getAttribute("data-theme-set")===(a||"auto"))})}});</script>
-</body></html>
+<?php
+declare(strict_types=1);
+$pageTitle = $topic . ' | ' . $siteName;
+$description = 'Writing about ' . $topic . ' by ' . $authorName;
+$ogType = 'website';
+$ogTitle = $pageTitle;
+$ogDescription = $description;
+$ogUrl = rtrim($siteUrl, '/') . $route;
+$canonical = $ogUrl;
+$jsonLd = null;
+$showAlternates = false;
+require __DIR__ . '/_head.php';
+$skipTarget = '#main-content';
+$skipLabel = 'Skip to content';
+$activeNav = null;
+require __DIR__ . '/_header.php';
+?>
+  <main id="main-content" class="shell page-intro"><nav class="breadcrumb" aria-label="Breadcrumb"><a href="/">Writing</a><span class="icon" aria-hidden="true">chevron_right</span><span aria-current="page"><?= htmlspecialchars($topic) ?></span></nav><p class="eyebrow">Topic</p><h1>Articles on <?= htmlspecialchars($topic) ?></h1><div class="article-list topic-articles"><?php foreach ($articles as $article): ?><article class="article-row"><div><p class="article-kicker"><time datetime="<?= htmlspecialchars((string) $article->frontMatter->get('date')) ?>"><?= htmlspecialchars((string) $article->frontMatter->get('date')) ?></time></p><h2><a href="/articles/<?= htmlspecialchars($article->slug) ?>/"><?= htmlspecialchars($article->title) ?></a></h2><?php $summary = (string) $article->frontMatter->get('summary', ''); if ($summary !== ''): ?><p><?= htmlspecialchars($summary) ?></p><?php endif; ?></div><a class="quiet-arrow" href="/articles/<?= htmlspecialchars($article->slug) ?>/" aria-label="Read <?= htmlspecialchars($article->title) ?>"><span class="icon" aria-hidden="true">arrow_forward</span></a></article><?php endforeach; ?></div></main>
+<?php require __DIR__ . '/_footer.php'; ?>

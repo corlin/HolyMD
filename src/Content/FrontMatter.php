@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace HolyMD\Content;
 
 use InvalidArgumentException;
+use Symfony\Component\Yaml\Exception\ParseException;
+use Symfony\Component\Yaml\Tag\TaggedValue;
+use Symfony\Component\Yaml\Yaml;
 
 final readonly class FrontMatter
 {
@@ -31,31 +34,54 @@ final readonly class FrontMatter
 
         $yaml = substr($markdown, 3 + strlen($lineEnding), $end - (3 + strlen($lineEnding)));
         $body = substr($markdown, $end + strlen($marker));
-        $values = [];
-        $activeList = null;
-        foreach (explode($lineEnding, $yaml) as $line) {
-            if ($line === '') {
-                continue;
-            }
-            if (preg_match('/^  - (.+)$/', $line, $matches) === 1 && $activeList !== null) {
-                $values[$activeList][] = self::scalar($matches[1]);
-                continue;
-            }
-            if (preg_match('/^([A-Za-z][A-Za-z0-9_-]*):(?: (.*))?$/', $line, $matches) !== 1) {
+        try {
+            $values = Yaml::parse($yaml, Yaml::PARSE_CUSTOM_TAGS);
+        } catch (ParseException $exception) {
+            throw new InvalidArgumentException('Unsupported YAML front matter syntax.', previous: $exception);
+        }
+        if (!is_array($values)) {
+            if ($values === null) {
+                $values = [];
+            } else {
                 throw new InvalidArgumentException('Unsupported YAML front matter syntax.');
             }
-            $key = $matches[1];
-            $value = $matches[2] ?? '';
-            if ($value === '') {
-                $values[$key] = [];
-                $activeList = $key;
-            } else {
-                $values[$key] = self::scalar($value);
-                $activeList = null;
-            }
         }
+        return [new self(self::resolve($values)), $body];
+    }
 
-        return [new self($values), $body];
+    /** @param array<string, mixed> $values @return array<string, mixed> */
+    private static function resolve(array $values): array
+    {
+        $resolved = [];
+        foreach ($values as $key => $value) {
+            $value = self::resolveValue($value);
+            // Legacy files leave `date: 2026-08-12` unquoted; symfony/yaml parses
+            // YAML 1.1 timestamps as ints. Restore the Y-m-d string so content
+            // semantics do not change (the dumper quotes these strings on save).
+            if (($key === 'date' || $key === 'updated') && is_int($value)) {
+                $value = gmdate('Y-m-d', $value);
+            }
+            $resolved[$key] = $value;
+        }
+        return $resolved;
+    }
+
+    private static function resolveValue(mixed $value): mixed
+    {
+        if ($value instanceof TaggedValue) {
+            if ($value->getTag() !== 'holymd-json') {
+                throw new InvalidArgumentException('Unsupported YAML front matter tag.');
+            }
+            $decoded = $value->getValue();
+            if (!is_array($decoded)) {
+                throw new InvalidArgumentException('JSON front matter values must decode to an array.');
+            }
+            return self::resolve($decoded);
+        }
+        if (is_array($value)) {
+            return self::resolve($value);
+        }
+        return $value;
     }
 
     public function get(string $key, mixed $default = null): mixed
@@ -70,6 +96,13 @@ final readonly class FrontMatter
         return new self($values);
     }
 
+    public function without(string $key): self
+    {
+        $values = $this->values;
+        unset($values[$key]);
+        return new self($values);
+    }
+
     /** @return array<string, mixed> */
     public function all(): array
     {
@@ -78,35 +111,6 @@ final readonly class FrontMatter
 
     public function toYaml(): string
     {
-        $lines = [];
-        foreach ($this->values as $key => $value) {
-            if (is_array($value)) {
-                $lines[] = $key . ':';
-                foreach ($value as $item) {
-                    $lines[] = '  - ' . self::encodeScalar($item);
-                }
-                continue;
-            }
-            $lines[] = $key . ': ' . self::encodeScalar($value);
-        }
-        return implode("\n", $lines);
-    }
-
-    private static function scalar(string $value): string
-    {
-        $value = trim($value);
-        if (str_starts_with($value, '"') && str_ends_with($value, '"')) {
-            return stripcslashes(substr($value, 1, -1));
-        }
-        if (str_starts_with($value, "'") && str_ends_with($value, "'")) {
-            return str_replace("''", "'", substr($value, 1, -1));
-        }
-        return $value;
-    }
-
-    private static function encodeScalar(mixed $value): string
-    {
-        $value = (string) $value;
-        return preg_match('/[:#\[\]{}",]|[\\\r\n]|^\s|\s$/', $value) === 1 ? '"' . addcslashes($value, "\\\"\n\r") . '"' : $value;
+        return rtrim(Yaml::dump($this->values, 2, 2, Yaml::DUMP_MULTI_LINE_LITERAL_BLOCK | Yaml::DUMP_EMPTY_ARRAY_AS_SEQUENCE), "\n");
     }
 }

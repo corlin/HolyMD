@@ -7,6 +7,8 @@ namespace HolyMD\Tests\EndToEnd;
 use HolyMD\Content\ArticleDocument;
 use HolyMD\Content\ArticleRepository;
 use HolyMD\Content\FrontMatter;
+use HolyMD\Geo\AiClient;
+use HolyMD\Geo\AiResponse;
 use HolyMD\Geo\GeoPrompt;
 use HolyMD\Geo\GeoProposal;
 use HolyMD\Geo\GeoProposalId;
@@ -61,7 +63,7 @@ final class GeoBoundaryTest extends TestCase
         $document = $this->loadDocument();
 
         $this->expectException(InvalidArgumentException::class);
-        (new GeoReviewService(new FakeAiClient(
+        (new GeoReviewService(new BoundaryAiClient(
             '{"proposals":[{"type":"body","value":"Here is your rewritten article"}],"findings":[]}',
         )))->review($document);
     }
@@ -79,7 +81,7 @@ final class GeoBoundaryTest extends TestCase
             ], JSON_THROW_ON_ERROR);
 
             try {
-                (new GeoReviewService(new FakeAiClient($json)))->review($document);
+                (new GeoReviewService(new BoundaryAiClient($json)))->review($document);
             } catch (InvalidArgumentException) {
                 $rejected++;
             }
@@ -168,7 +170,7 @@ final class GeoBoundaryTest extends TestCase
                 'findings' => [],
             ], JSON_THROW_ON_ERROR);
             $store = new InMemoryGeoProposalStore();
-            $review = (new GeoReviewService(new FakeAiClient($aiJson), $store))->review($original);
+            $review = (new GeoReviewService(new BoundaryAiClient($aiJson), $store))->review($original);
             self::assertSame($bodyHashOriginal, $review->bodyHash, 'Review must record the original body hash.');
 
             // Step 2: Accept proposal
@@ -220,5 +222,18 @@ final class GeoBoundaryTest extends TestCase
             is_dir($childPath) && !is_link($childPath) ? $this->removeDirectory($childPath) : unlink($childPath);
         }
         rmdir($path);
+    }
+}
+
+/** @internal */
+final readonly class BoundaryAiClient implements AiClient
+{
+    public function __construct(private string $json)
+    {
+    }
+
+    public function analyze(string $systemPrompt, string $articleMarkdown): AiResponse
+    {
+        return new AiResponse($this->json);
     }
 }

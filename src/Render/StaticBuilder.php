@@ -11,9 +11,9 @@ use RuntimeException;
 final class StaticBuilder
 {
     private TemplateRenderer $renderer;
-    private MarkdownRenderer $markdownRenderer;
+    private MarkdownRendererInterface $markdownRenderer;
 
-    public function __construct(?TemplateRenderer $renderer = null, ?MarkdownRenderer $markdownRenderer = null)
+    public function __construct(?TemplateRenderer $renderer = null, ?MarkdownRendererInterface $markdownRenderer = null)
     {
         $this->renderer = $renderer ?? new TemplateRenderer(dirname(__DIR__, 2) . '/templates/public');
         $this->markdownRenderer = $markdownRenderer ?? new MarkdownRenderer();
@@ -37,44 +37,60 @@ final class StaticBuilder
             $slugs[$article->slug] = true;
         }
         usort($articles, static fn (ArticleDocument $a, ArticleDocument $b): int => strcmp((string) $b->frontMatter->get('date'), (string) $a->frontMatter->get('date')));
+        $builtAt = $input->builtAt ?? gmdate(DATE_ATOM);
+        $styles = $this->siteStyles();
+        $script = $this->siteScript();
+        $cssHash = substr(hash('sha256', $styles), 0, 10);
+        $scriptHash = substr(hash('sha256', $script), 0, 10);
+        $assetCss = '/assets/site.' . $cssHash . '.css';
+        $assetSearch = '/assets/search.' . $scriptHash . '.js';
         $files = [];
-        foreach ($articles as $article) {
-            $route = '/articles/' . $article->slug . '/';
-            $path = $temporaryRoot . $route . 'index.html';
-            $this->write($path, $this->renderer->render('article', $this->articleData($article, $articles, $input, $route)));
-            $files[] = $route . 'index.html';
-        }
         $topics = [];
         foreach ($articles as $article) {
             foreach ((array) $article->frontMatter->get('topics', []) as $topic) {
-                $topics[(string) $topic][] = $article;
+                if (!is_string($topic) || trim($topic) === '') throw new RuntimeException(sprintf('Article "%s" has an invalid topic.', $article->slug));
+                $topics[$topic][] = $article;
             }
         }
         $topicRoutes = [];
+        $topicSlugs = [];
         foreach ($topics as $topic => $topicArticles) {
-            $slug = $this->topicSlug($topic);
-            if ($slug === '' || (isset($topicRoutes[$slug]) && $topicRoutes[$slug] !== $topic)) throw new RuntimeException(sprintf('Topic "%s" has an unsafe or colliding slug.', $topic));
-            $topicRoutes[$slug] = $topic;
+            $topicLabel = (string) $topic;
+            $slug = $this->topicSlug($topicLabel);
+            if (isset($topicRoutes[$slug]) && $topicRoutes[$slug] !== $topicLabel) throw new RuntimeException(sprintf('Topic "%s" has an unsafe or colliding slug.', $topicLabel));
+            $topicRoutes[$slug] = $topicLabel;
+            $topicSlugs[$topicLabel] = $slug;
             $route = '/topics/' . $slug . '/';
             $this->write($temporaryRoot . $route . 'index.html', $this->renderer->render('topic', [
-                'siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'siteLanguage' => $input->siteLanguage, 'topic' => $topic, 'articles' => $topicArticles, 'route' => $route,
+                'siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'siteLanguage' => $input->siteLanguage, 'topic' => $topicLabel, 'articles' => $topicArticles, 'route' => $route, 'generateLlmsTxt' => $input->generateLlmsTxt, 'assetCss' => $assetCss, 'assetSearch' => $assetSearch,
             ]));
             $files[] = $route . 'index.html';
         }
+        $rendered = [];
+        foreach ($articles as $article) {
+            $route = '/articles/' . $article->slug . '/';
+            $path = $temporaryRoot . $route . 'index.html';
+            $data = $this->articleData($article, $articles, $input, $route, $topicSlugs, $assetCss, $assetSearch);
+            $this->write($path, $this->renderer->render('article', $data));
+            $files[] = $route . 'index.html';
+            $rendered[] = $data;
+        }
         $this->write($temporaryRoot . '/index.html', $this->renderer->render('index', [
-            'siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'about' => $input->about, 'siteLanguage' => $input->siteLanguage, 'articles' => $articles, 'topics' => $topics,
+            'siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'about' => $input->about, 'siteLanguage' => $input->siteLanguage, 'articles' => $articles, 'topics' => $topics, 'topicSlugs' => $topicSlugs, 'generateLlmsTxt' => $input->generateLlmsTxt, 'assetCss' => $assetCss, 'assetSearch' => $assetSearch,
         ]));
-        $this->write($temporaryRoot . '/about/index.html', $this->renderer->render('about', ['siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'about' => $input->about, 'siteLanguage' => $input->siteLanguage]));
-        $this->write($temporaryRoot . '/assets/site.css', $this->siteStyles());
-        $this->write($temporaryRoot . '/rss.xml', $this->rss($articles, $input));
-        $this->write($temporaryRoot . '/feed.json', $this->jsonFeed($articles, $input));
-        $this->write($temporaryRoot . '/sitemap.xml', $this->sitemap($articles, $input, array_keys($topicRoutes)));
+        $this->write($temporaryRoot . '/about/index.html', $this->renderer->render('about', ['siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'about' => $input->about, 'siteLanguage' => $input->siteLanguage, 'generateLlmsTxt' => $input->generateLlmsTxt, 'assetCss' => $assetCss, 'assetSearch' => $assetSearch]));
+        $this->write($temporaryRoot . $assetCss, $styles);
+        $this->write($temporaryRoot . $assetSearch, $script);
+        $this->write($temporaryRoot . '/rss.xml', $this->rss($articles, $input, $builtAt));
+        $this->write($temporaryRoot . '/feed.json', $this->jsonFeed($rendered, $input));
+        $this->write($temporaryRoot . '/sitemap.xml', $this->sitemap($articles, $input, array_keys($topicRoutes), $builtAt));
+        $this->write($temporaryRoot . '/search-index.json', $this->searchIndex($rendered, $builtAt));
         $robotsTxt = "User-agent: *\nAllow: /\nSitemap: " . $this->url($input, '/sitemap.xml') . "\n";
         if ($input->generateLlmsTxt) {
             $robotsTxt .= "LLMs-Txt: " . $this->url($input, '/llms.txt') . "\nLLMs-Full-Txt: " . $this->url($input, '/llms-full.txt') . "\n";
         }
         $this->write($temporaryRoot . '/robots.txt', $robotsTxt);
-        $files = [...$files, 'index.html', 'about/index.html', 'assets/site.css', 'rss.xml', 'feed.json', 'sitemap.xml', 'robots.txt'];
+        $files = [...$files, 'index.html', 'about/index.html', substr($assetCss, 1), substr($assetSearch, 1), 'rss.xml', 'feed.json', 'sitemap.xml', 'search-index.json', 'robots.txt'];
         if ($input->generateLlmsTxt) {
             $lines = ['# ' . $input->siteName, '', $input->about, ''];
             foreach ($articles as $article) {
@@ -103,15 +119,11 @@ final class StaticBuilder
                     $fullLines[] = 'Topics: ' . implode(', ', array_map('strval', $topics));
                 }
                 $entities = $article->frontMatter->get('entities');
-                if (is_string($entities) && $entities !== '') {
-                    $fullLines[] = 'Entities: ' . str_replace(["\r", "\n"], ' ', $entities);
-                } elseif (is_array($entities) && $entities !== []) {
-                    $fullLines[] = 'Entities: ' . implode(', ', array_map('strval', $entities));
-                }
+                $entityText = $this->metadataText($entities, ', ');
+                if ($entityText !== null) $fullLines[] = 'Entities: ' . $entityText;
                 $faq = $article->frontMatter->get('faq');
-                if (is_array($faq) && $faq !== []) {
-                    $fullLines[] = 'FAQ: ' . implode(' | ', array_map('strval', $faq));
-                }
+                $faqText = $this->metadataText($faq, ' | ');
+                if ($faqText !== null) $fullLines[] = 'FAQ: ' . $faqText;
                 $metadataSuggestion = $article->frontMatter->get('metadata_suggestion');
                 if (is_string($metadataSuggestion) && $metadataSuggestion !== '') {
                     $fullLines[] = 'Metadata: ' . str_replace(["\r", "\n"], ' ', $metadataSuggestion);
@@ -128,7 +140,7 @@ final class StaticBuilder
 
     /** @return array<string, mixed> */
     /** @param list<ArticleDocument> $articles */
-    private function articleData(ArticleDocument $article, array $articles, BuildInput $input, string $route): array
+    private function articleData(ArticleDocument $article, array $articles, BuildInput $input, string $route, array $topicSlugs, string $assetCss, string $assetSearch): array
     {
         $url = $this->url($input, $route);
         $date = (string) $article->frontMatter->get('date');
@@ -150,61 +162,93 @@ final class StaticBuilder
         }));
 
         $contentHtml = $this->markdownRenderer->render($article->bodyMarkdown);
+        $feedContentHtml = $contentHtml;
+        $searchText = mb_substr(html_entity_decode(strip_tags($contentHtml), ENT_QUOTES | ENT_HTML5, 'UTF-8'), 0, 12288);
         $toc = [];
+        $usedHeadingIds = [];
+        $headingIdSequences = [];
         $contentHtmlWithIds = preg_replace_callback(
             '/<h([23])(\b[^>]*)>(.*?)<\/h\1>/s',
-            static function (array $matches) use (&$toc): string {
+            static function (array $matches) use (&$toc, &$usedHeadingIds, &$headingIdSequences): string {
                 $level = (int) $matches[1];
                 $attrs = $matches[2];
                 $innerHtml = $matches[3];
-                $plainText = trim(strip_tags($innerHtml));
+                $plainText = trim(html_entity_decode(strip_tags($innerHtml), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
                 if ($plainText === '') return $matches[0];
-                $id = trim((string) preg_replace('/[^a-z0-9]+/i', '-', strtolower($plainText)), '-');
-                if ($id === '') $id = 'heading-' . (count($toc) + 1);
+                $baseId = trim((string) preg_replace('/[^a-z0-9]+/i', '-', strtolower($plainText)), '-');
+                if ($baseId === '') $baseId = 'heading-' . (count($toc) + 1);
+                $sequence = ($headingIdSequences[$baseId] ?? 0) + 1;
+                $id = $sequence === 1 ? $baseId : $baseId . '-' . $sequence;
+                while (isset($usedHeadingIds[$id])) {
+                    $sequence++;
+                    $id = $baseId . '-' . $sequence;
+                }
+                $headingIdSequences[$baseId] = $sequence;
+                $usedHeadingIds[$id] = true;
                 $toc[] = ['level' => $level, 'title' => $plainText, 'id' => $id];
                 return sprintf('<h%d id="%s"%s>%s</h%d>', $level, $id, $attrs, $innerHtml, $level);
             },
             $contentHtml
         ) ?? $contentHtml;
 
-        $cleanText = preg_replace('/\s+/', '', strip_tags($article->bodyMarkdown)) ?? '';
-        $wordCount = mb_strlen($cleanText, 'UTF-8');
-        $readingMinutes = max(1, (int) ceil($wordCount / 300));
+        $readingMinutes = $this->readingMinutes($contentHtml);
 
         return [
             'siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'siteLanguage' => $input->siteLanguage, 'article' => $article,
-            'url' => $url, 'date' => $date, 'modified' => $modified, 'summary' => $summary, 'sources' => $sources, 'topics' => $articleTopics, 'related' => array_slice($related, 0, 3),
-            'contentHtml' => $contentHtmlWithIds, 'toc' => $toc, 'readingMinutes' => $readingMinutes,
+            'url' => $url, 'date' => $date, 'modified' => $modified, 'summary' => $summary, 'sources' => $sources, 'topics' => $articleTopics, 'topicSlugs' => $topicSlugs, 'related' => array_slice($related, 0, 3),
+            'contentHtml' => $contentHtmlWithIds, 'feedContentHtml' => $feedContentHtml, 'searchText' => $searchText, 'toc' => $toc, 'readingMinutes' => $readingMinutes, 'generateLlmsTxt' => $input->generateLlmsTxt, 'assetCss' => $assetCss, 'assetSearch' => $assetSearch,
             'jsonLd' => json_encode(['@context' => 'https://schema.org', '@graph' => $graph], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR),
         ];
     }
 
     /** @param list<ArticleDocument> $articles */
-    private function rss(array $articles, BuildInput $input): string
+    private function rss(array $articles, BuildInput $input, string $builtAt): string
     {
         $items = array_map(function (ArticleDocument $article) use ($input): string {
             $url = $this->url($input, '/articles/' . $article->slug . '/');
             return '<item><title>' . $this->xml($article->title) . '</title><link>' . $this->xml($url) . '</link><guid>' . $this->xml($url) . '</guid><pubDate>' . $this->date((string) $article->frontMatter->get('date')) . '</pubDate><description>' . $this->xml((string) $article->frontMatter->get('summary', '')) . '</description></item>';
         }, $articles);
-        return '<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>' . $this->xml($input->siteName) . '</title><link>' . $this->xml($input->siteUrl) . '</link><description>' . $this->xml($input->about) . '</description>' . implode('', $items) . '</channel></rss>';
+        return '<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>' . $this->xml($input->siteName) . '</title><link>' . $this->xml($input->siteUrl) . '</link><description>' . $this->xml($input->about) . '</description><lastBuildDate>' . $this->date($builtAt) . '</lastBuildDate>' . implode('', $items) . '</channel></rss>';
     }
 
-    /** @param list<ArticleDocument> $articles */
-    private function jsonFeed(array $articles, BuildInput $input): string
+    /** @param list<array<string, mixed>> $rendered */
+    private function jsonFeed(array $rendered, BuildInput $input): string
     {
-        $items = array_map(fn (ArticleDocument $article): array => ['id' => $this->url($input, '/articles/' . $article->slug . '/'), 'url' => $this->url($input, '/articles/' . $article->slug . '/'), 'title' => $article->title, 'date_published' => (string) $article->frontMatter->get('date'), 'summary' => (string) $article->frontMatter->get('summary', ''), 'content_html' => $this->markdownRenderer->render($article->bodyMarkdown), 'authors' => [['name' => $input->authorName]]], $articles);
+        $items = array_map(function (array $data) use ($input): array {
+            $article = $data['article'];
+            return ['id' => $this->url($input, '/articles/' . $article->slug . '/'), 'url' => $this->url($input, '/articles/' . $article->slug . '/'), 'title' => $article->title, 'date_published' => (string) $article->frontMatter->get('date'), 'date_modified' => (string) $data['modified'], 'summary' => (string) $article->frontMatter->get('summary', ''), 'content_html' => (string) $data['feedContentHtml'], 'authors' => [['name' => $input->authorName]]];
+        }, $rendered);
         return json_encode(['version' => 'https://jsonfeed.org/version/1.1', 'title' => $input->siteName, 'home_page_url' => $input->siteUrl, 'feed_url' => $this->url($input, '/feed.json'), 'authors' => [['name' => $input->authorName]], 'items' => $items], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
     }
 
     /** @param list<ArticleDocument> $articles */
-    private function sitemap(array $articles, BuildInput $input, array $topicSlugs = []): string
+    private function sitemap(array $articles, BuildInput $input, array $topicSlugs, string $builtAt): string
     {
-        $urls = [$this->url($input, '/'), $this->url($input, '/about/')];
+        $siteLastmod = substr($builtAt, 0, 10);
+        $urls = [[$this->url($input, '/'), $siteLastmod], [$this->url($input, '/about/'), $siteLastmod]];
         foreach ($articles as $article) {
-            $urls[] = $this->url($input, '/articles/' . $article->slug . '/');
+            $urls[] = [$this->url($input, '/articles/' . $article->slug . '/'), (string) $article->frontMatter->get('updated', (string) $article->frontMatter->get('date'))];
         }
-        foreach ($topicSlugs as $topicSlug) $urls[] = $this->url($input, '/topics/' . $topicSlug . '/');
-        return '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . implode('', array_map(fn (string $url): string => '<url><loc>' . $this->xml($url) . '</loc></url>', $urls)) . '</urlset>';
+        foreach ($topicSlugs as $topicSlug) $urls[] = [$this->url($input, '/topics/' . $topicSlug . '/'), $siteLastmod];
+        return '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' . implode('', array_map(fn (array $entry): string => '<url><loc>' . $this->xml($entry[0]) . '</loc><lastmod>' . $this->xml($entry[1]) . '</lastmod></url>', $urls)) . '</urlset>';
+    }
+
+    /** @param list<array<string, mixed>> $rendered */
+    private function searchIndex(array $rendered, string $builtAt): string
+    {
+        $articles = array_map(function (array $data): array {
+            $article = $data['article'];
+            return [
+                'slug' => $article->slug,
+                'title' => $article->title,
+                'date' => (string) $article->frontMatter->get('date'),
+                'updated' => (string) $article->frontMatter->get('updated', (string) $article->frontMatter->get('date')),
+                'summary' => (string) $article->frontMatter->get('summary', ''),
+                'topics' => array_values(array_filter((array) $article->frontMatter->get('topics', []), 'is_string')),
+                'text' => (string) $data['searchText'],
+            ];
+        }, $rendered);
+        return json_encode(['builtAt' => $builtAt, 'articles' => $articles], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
     }
 
     private function siteStyles(): string
@@ -213,6 +257,14 @@ final class StaticBuilder
         $styles = file_get_contents($path);
         if ($styles === false) throw new RuntimeException('Unable to read the public site stylesheet.');
         return $styles;
+    }
+
+    private function siteScript(): string
+    {
+        $path = dirname(__DIR__, 2) . '/templates/public/search.js';
+        $script = file_get_contents($path);
+        if ($script === false) throw new RuntimeException('Unable to read the public search script.');
+        return $script;
     }
 
     private function write(string $path, string $contents): void
@@ -227,7 +279,36 @@ final class StaticBuilder
     }
 
     private function url(BuildInput $input, string $path): string { return rtrim($input->siteUrl, '/') . $path; }
-    private function topicSlug(string $topic): string { return trim((string) preg_replace('/-+/', '-', preg_replace('/[^a-z0-9]+/', '-', strtolower($topic)) ?? ''), '-'); }
+    private function topicSlug(string $topic): string
+    {
+        $base = trim((string) preg_replace('/-+/', '-', preg_replace('/[^a-z0-9]+/', '-', strtolower($topic)) ?? ''), '-');
+        $losslessAscii = preg_match('/^[A-Za-z0-9]+(?:[ _-][A-Za-z0-9]+)*$/D', trim($topic)) === 1;
+        if ($base !== '' && $losslessAscii) return $base;
+        return ($base === '' ? 'topic' : $base) . '-' . substr(hash('sha256', $topic), 0, 10);
+    }
     private function xml(string $value): string { return htmlspecialchars($value, ENT_XML1 | ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
     private function date(string $date): string { return (new DateTimeImmutable($date))->format(DATE_RSS); }
+    private function metadataText(mixed $value, string $separator): ?string
+    {
+        if (is_string($value)) {
+            $value = trim(str_replace(["\r", "\n"], ' ', $value));
+            return $value === '' ? null : $value;
+        }
+        if (!is_array($value) || $value === []) return null;
+        if (array_is_list($value) && array_reduce($value, static fn (bool $valid, mixed $item): bool => $valid && is_scalar($item), true)) {
+            return implode($separator, array_map(static fn (mixed $item): string => (string) $item, $value));
+        }
+        return json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+    }
+
+    private function readingMinutes(string $html): int
+    {
+        $text = html_entity_decode(strip_tags($html), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $cjkPattern = '/[\x{3400}-\x{4DBF}\x{4E00}-\x{9FFF}\x{F900}-\x{FAFF}\x{3040}-\x{30FF}\x{AC00}-\x{D7AF}]/u';
+        $cjkCharacters = preg_match_all($cjkPattern, $text);
+        $latinText = preg_replace($cjkPattern, ' ', $text) ?? '';
+        $latinWords = preg_match_all('/[\p{L}\p{N}]+(?:[\x{2019}\x{0027}-][\p{L}\p{N}]+)*/u', $latinText);
+        $minutes = (($cjkCharacters === false ? 0 : $cjkCharacters) / 300) + (($latinWords === false ? 0 : $latinWords) / 200);
+        return max(1, (int) ceil($minutes));
+    }
 }

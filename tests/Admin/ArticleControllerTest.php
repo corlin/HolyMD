@@ -103,19 +103,133 @@ final class ArticleControllerTest extends TestCase
     public function test_draft_save_writes_markdown_creates_a_version_and_round_trips_the_body(): void
     {
         $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);
+        $checksum = hash('sha256', (string) file_get_contents($this->root . '/articles/first-note.md'));
 
         $response = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/draft', [], [
             'title' => 'Revised note',
             'date' => '2026-08-12',
             'body' => "# Exact body\n\nTrailing spaces  \n",
+            'expected_checksum' => $checksum,
             'csrf_token' => 'expected-token',
         ]));
 
         self::assertSame(200, $response->status);
         $payload = json_decode($response->body, true, flags: JSON_THROW_ON_ERROR);
         self::assertArrayHasKey('versionId', $payload);
+        self::assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $payload['checksum']);
         self::assertSame("# Exact body\n\nTrailing spaces  \n", (new ArticleRepository($this->root . '/articles'))->read('first-note')->bodyMarkdown);
         self::assertSame(1, count(glob($this->root . '/versions/*.md') ?: []));
+    }
+
+    public function test_editor_exposes_metadata_fields_for_editing(): void
+    {
+        $response = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token'])->dispatch(new ServerRequest('GET', '/admin/articles/first-note/edit'));
+
+        self::assertSame(200, $response->status);
+        self::assertStringContainsString('name="summary"', $response->body);
+        self::assertStringContainsString('name="structured_data"', $response->body);
+        self::assertStringContainsString('data-metadata-input', $response->body);
+    }
+
+    public function test_draft_save_round_trips_metadata_fields(): void
+    {
+        $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);
+        $checksum = hash('sha256', (string) file_get_contents($this->root . '/articles/first-note.md'));
+
+        $response = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/draft', [], [
+            'title' => 'First note', 'date' => '2026-08-12', 'body' => 'Original body',
+            'summary' => 'A short summary.', 'topics' => "Health\nResearch", 'sources' => 'https://example.test/evidence',
+            'structured_data' => '{"@type": "MedicalWebPage"}',
+            'expected_checksum' => $checksum, 'csrf_token' => 'expected-token',
+        ]));
+
+        self::assertSame(200, $response->status);
+        $article = (new ArticleRepository($this->root . '/articles'))->read('first-note');
+        self::assertSame('A short summary.', $article->frontMatter->get('summary'));
+        self::assertSame(['Health', 'Research'], $article->frontMatter->get('topics'));
+        self::assertSame(['https://example.test/evidence'], $article->frontMatter->get('sources'));
+        self::assertSame(['@type' => 'MedicalWebPage'], $article->frontMatter->get('structured_data'));
+        $onDisk = (string) file_get_contents($this->root . '/articles/first-note.md');
+        self::assertStringContainsString("topics:\n  - Health\n  - Research", $onDisk);
+    }
+
+    public function test_draft_save_rejects_invalid_metadata_values(): void
+    {
+        $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);
+        $checksum = hash('sha256', (string) file_get_contents($this->root . '/articles/first-note.md'));
+        $base = ['title' => 'First note', 'date' => '2026-08-12', 'body' => 'Original body', 'expected_checksum' => $checksum, 'csrf_token' => 'expected-token'];
+
+        $invalidJson = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/draft', [], $base + ['structured_data' => '{broken']));
+        self::assertSame(422, $invalidJson->status);
+        self::assertStringContainsString('valid JSON', $invalidJson->body);
+
+        $badSource = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/draft', [], $base + ['sources' => 'not a url']));
+        self::assertSame(422, $badSource->status);
+        self::assertStringContainsString('invalid citation URL', $badSource->body);
+
+        self::assertStringNotContainsString('summary', (string) file_get_contents($this->root . '/articles/first-note.md'));
+    }
+
+    public function test_draft_save_clears_emptied_metadata_keys(): void
+    {
+        file_put_contents($this->root . '/articles/first-note.md', "---\ntitle: First note\nslug: first-note\ndate: 2026-08-12\nsummary: Old summary\n---\nOriginal body\n");
+        $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);
+        $checksum = hash('sha256', (string) file_get_contents($this->root . '/articles/first-note.md'));
+
+        $response = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/draft', [], [
+            'title' => 'First note', 'date' => '2026-08-12', 'body' => 'Original body',
+            'summary' => '', 'topics' => "  \n", 'expected_checksum' => $checksum, 'csrf_token' => 'expected-token',
+        ]));
+
+        self::assertSame(200, $response->status);
+        $article = (new ArticleRepository($this->root . '/articles'))->read('first-note');
+        self::assertArrayNotHasKey('summary', $article->frontMatter->all());
+        self::assertArrayNotHasKey('topics', $article->frontMatter->all());
+    }
+
+    public function test_draft_save_rejects_a_redirect_collision_with_a_published_route(): void
+    {
+        file_put_contents($this->root . '/articles/published.md', "---\ntitle: Published\nslug: published\ndate: 2026-08-11\nstatus: published\n---\nLive\n");
+        $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);
+        $checksum = hash('sha256', (string) file_get_contents($this->root . '/articles/first-note.md'));
+
+        $response = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/draft', [], [
+            'title' => 'First note', 'date' => '2026-08-12', 'body' => 'Original body', 'previous_slugs' => 'published',
+            'expected_checksum' => $checksum, 'csrf_token' => 'expected-token',
+        ]));
+
+        self::assertSame(422, $response->status);
+        self::assertStringContainsString('collides with a published route', $response->body);
+    }
+
+    public function test_create_accepts_metadata_fields(): void
+    {
+        $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);
+
+        $response = $router->dispatch(new ServerRequest('POST', '/admin/articles/new', [], [
+            'title' => 'With metadata', 'slug' => 'with-metadata', 'date' => '2026-08-12', 'body' => "Body\n",
+            'summary' => 'Summary.', 'topics' => "One\nTwo", 'csrf_token' => 'expected-token',
+        ]));
+
+        self::assertSame(303, $response->status);
+        $article = (new ArticleRepository($this->root . '/articles'))->read('with-metadata');
+        self::assertSame('Summary.', $article->frontMatter->get('summary'));
+        self::assertSame(['One', 'Two'], $article->frontMatter->get('topics'));
+    }
+
+    public function test_draft_save_rejects_a_stale_editor_checksum_without_overwriting_newer_content(): void
+    {
+        $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);
+        $originalChecksum = hash('sha256', (string) file_get_contents($this->root . '/articles/first-note.md'));
+        $base = ['title' => 'First note', 'date' => '2026-08-12', 'expected_checksum' => $originalChecksum, 'csrf_token' => 'expected-token'];
+
+        $first = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/draft', [], $base + ['body' => "Newer body\n"]));
+        $stale = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/draft', [], $base + ['body' => "Older body\n"]));
+
+        self::assertSame(200, $first->status);
+        self::assertSame(409, $stale->status);
+        self::assertStringContainsString('another editor session', $stale->body);
+        self::assertSame("Newer body\n", (new ArticleRepository($this->root . '/articles'))->read('first-note')->bodyMarkdown);
     }
 
     public function test_editor_requests_server_rendered_markdown_for_live_preview(): void
@@ -162,6 +276,35 @@ final class ArticleControllerTest extends TestCase
         self::assertStringContainsString('Article published', $response->body);
         self::assertStringContainsString('href="/articles/first-note/"', $response->body);
         self::assertFileExists($this->root . '/public/articles/first-note/index.html');
+    }
+
+    public function test_published_editor_can_update_public_with_the_latest_submitted_markdown(): void
+    {
+        file_put_contents($this->root . '/articles/first-note.md', "---\ntitle: Public note\nslug: first-note\ndate: 2026-08-12\nstatus: published\n---\nOld public body\n");
+        $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);
+
+        $editor = $router->dispatch(new ServerRequest('GET', '/admin/articles/first-note/edit'));
+        self::assertStringContainsString('Update public', $editor->body);
+        self::assertStringContainsString('id="publication-form"', $editor->body);
+        self::assertStringContainsString('name="body"', $editor->body);
+
+        $checksum = hash('sha256', (string) file_get_contents($this->root . '/articles/first-note.md'));
+        $response = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/publish', [], [
+            'title' => 'Updated public note',
+            'date' => '2026-08-13',
+            'body' => "Latest submitted **Markdown**.\n",
+            'expected_checksum' => $checksum,
+            'csrf_token' => 'expected-token',
+        ]));
+
+        self::assertSame(200, $response->status);
+        $saved = (new ArticleRepository($this->root . '/articles'))->read('first-note');
+        self::assertSame('Updated public note', $saved->title);
+        self::assertSame("Latest submitted **Markdown**.\n", $saved->bodyMarkdown);
+        $public = (string) file_get_contents($this->root . '/public/articles/first-note/index.html');
+        self::assertStringContainsString('Updated public note', $public);
+        self::assertStringContainsString('<strong>Markdown</strong>', $public);
+        self::assertStringNotContainsString('Old public body', $public);
     }
 
     public function test_article_index_shows_workflow_status_modified_date_and_published_link(): void
@@ -246,6 +389,14 @@ final class ArticleControllerTest extends TestCase
         self::assertStringContainsString('Environment-managed', $response->body);
         self::assertStringContainsString('HOLYMD_SITE_LANGUAGE', $response->body);
         self::assertStringContainsString('zh-CN', $response->body);
+        self::assertStringContainsString('holymd-build.php', $response->body);
+    }
+
+    public function test_settings_post_is_not_a_route(): void
+    {
+        $response = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token'])->dispatch(new ServerRequest('POST', '/admin/settings', [], ['csrf_token' => 'expected-token']));
+
+        self::assertSame(404, $response->status);
     }
 
     public function test_publish_rejects_a_missing_csrf_token(): void

@@ -62,6 +62,9 @@ final class PublishServiceTest extends TestCase
         self::assertSame(2, $result->manifest->articleCount);
         self::assertFileExists($this->root . '/public/.holymd-current/articles/old-name/index.html');
         self::assertStringContainsString('/articles/renamed/', (string) file_get_contents($this->root . '/public/.holymd-current/articles/old-name/index.html'));
+        $htaccess = (string) file_get_contents($this->root . '/public/.holymd-current/.htaccess');
+        self::assertStringContainsString('RewriteRule ^articles/old-name/?$ /articles/renamed/ [R=301,L]', $htaccess);
+        self::assertContains('.htaccess', $result->manifest->files);
         self::assertStringNotContainsString('withdrawn', (string) file_get_contents($this->root . '/public/.holymd-current/feed.json'));
         self::assertStringNotContainsString('withdrawn', (string) file_get_contents($this->root . '/public/.holymd-current/sitemap.xml'));
         self::assertSame('admin asset', file_get_contents($this->root . '/public/assets.css'));
@@ -91,6 +94,28 @@ final class PublishServiceTest extends TestCase
         $this->expectExceptionMessage('disk full');
         try { $service->publish(new ArticleId('first-note')); }
         finally { self::assertSame('previous site', file_get_contents($this->root . '/public/site/index.html')); }
+    }
+
+    public function test_no_htaccess_is_generated_without_previous_slugs(): void
+    {
+        $this->service()->publish(new ArticleId('first-note'));
+
+        self::assertFileDoesNotExist($this->root . '/public/.holymd-current/.htaccess');
+    }
+
+    public function test_rejects_invalid_article_metadata_at_publish(): void
+    {
+        file_put_contents($this->root . '/articles/bad-metadata.md', "---\ntitle: Bad metadata\nslug: bad-metadata\ndate: 2026-08-11\nstatus: published\ntopics:\n  - ''\nsources:\n  - ftp://example.test/file\n---\nBad\n");
+
+        try {
+            $this->service()->publish(new ArticleId('first-note'));
+            self::fail('Expected metadata validation to fail.');
+        } catch (\InvalidArgumentException $exception) {
+            self::assertStringContainsString('invalid citation URL', $exception->getMessage());
+            self::assertStringContainsString('invalid topic', $exception->getMessage());
+        }
+
+        self::assertSame('previous site', file_get_contents($this->root . '/public/site/index.html'));
     }
 
     public function test_rejects_redirect_collision_with_a_published_route(): void

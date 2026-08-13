@@ -8,3 +8,4 @@
 /public/..holymd-current-releases/
 /public/.holymd-publish.lock
 /backups/
+.gstack/

@@ -6,7 +6,13 @@ use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 use PHPUnit\Framework\Attributes\DataProvider;
 final class EndpointPolicyTest extends TestCase {
- public function test_accepts_https_host_resolving_only_public_addresses(): void { (new EndpointPolicy(static fn(string $host):array=>['8.8.8.8','2606:4700:4700::1111']))->validate('https://provider.test/v1/chat/completions',true); self::assertTrue(true); }
+ public function test_returns_the_public_addresses_that_were_validated_for_the_transport(): void { $addresses=(new EndpointPolicy(static fn(string $host):array=>['8.8.8.8','2606:4700:4700::1111']))->validate('https://provider.test/v1/chat/completions',true); self::assertSame(['8.8.8.8','2606:4700:4700::1111'],$addresses); }
+ public function test_accepts_a_bracketed_public_ipv6_literal_without_dns_resolution(): void { $addresses=(new EndpointPolicy())->validate('https://[2606:4700:4700::1111]/v1/chat/completions',true); self::assertSame(['2606:4700:4700::1111'],$addresses); }
+ public function test_rejects_the_benchmark_network_without_an_injected_resolver_or_tun_setting(): void {
+  $previous=getenv('HOLYMD_ALLOW_TUN_PROXY');putenv('HOLYMD_ALLOW_TUN_PROXY');
+  try{$this->expectException(InvalidArgumentException::class);(new EndpointPolicy())->validate('https://198.18.0.1/v1/chat/completions',true);}
+  finally{$previous===false?putenv('HOLYMD_ALLOW_TUN_PROXY'):putenv('HOLYMD_ALLOW_TUN_PROXY='.$previous);}
+ }
  #[DataProvider('blocked')] public function test_rejects_unsafe_endpoint(string $url,array $addresses): void { $this->expectException(InvalidArgumentException::class);(new EndpointPolicy(static fn(string $host):array=>$addresses))->validate($url,true); }
  public static function blocked(): array{return [['http://provider.test/api',['8.8.8.8']],['https://user@provider.test/api',['8.8.8.8']],['https://127.0.0.1/api',['127.0.0.1']],['https://provider.test/api',['10.0.0.1']],['https://provider.test/api',['169.254.1.1']]];}
  #[DataProvider('nonGlobalAddresses')] public function test_rejects_every_non_global_unicast_range(string $address): void { $this->expectException(InvalidArgumentException::class);(new EndpointPolicy(static fn(string $host):array=>[$address]))->validate('https://provider.test/api',true); }

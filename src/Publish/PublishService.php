@@ -6,6 +6,7 @@ namespace HolyMD\Publish;
 
 use DateTimeImmutable;
 use HolyMD\Content\ArticleDocument;
+use HolyMD\Content\ArticleMetadataValidator;
 use HolyMD\Content\ArticleRepository;
 use HolyMD\Render\BuildInput;
 use HolyMD\Render\BuildManifest;
@@ -93,15 +94,12 @@ final readonly class PublishService
         foreach ($published as $article) {
             if (isset($slugs[$article->slug])) $errors[] = sprintf('Duplicate published slug "%s".', $article->slug);
             $slugs[$article->slug] = true;
-            try { new DateTimeImmutable((string) $article->frontMatter->get('date')); } catch (Throwable) { $errors[] = sprintf('Article "%s" has an invalid date.', $article->slug); }
+            $errors = [...$errors, ...ArticleMetadataValidator::errors($article)];
             foreach ((array) $article->frontMatter->get('previous_slugs', []) as $oldSlug) {
-                if (!is_string($oldSlug) || preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/', $oldSlug) !== 1) { $errors[] = sprintf('Article "%s" has an invalid historical slug.', $article->slug); continue; }
+                if (!is_string($oldSlug) || preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/', $oldSlug) !== 1) continue;
                 if (isset($slugs[$oldSlug]) || isset($redirects[$oldSlug])) $errors[] = sprintf('Redirect slug "%s" collides with a published route.', $oldSlug);
                 $redirects[$oldSlug] = true;
             }
-            foreach ((array) $article->frontMatter->get('sources', []) as $source) if (!is_string($source) || filter_var($source, FILTER_VALIDATE_URL) === false) $errors[] = sprintf('Article "%s" has an invalid citation URL.', $article->slug);
-            $structured = $article->frontMatter->get('structured_data');
-            if ($structured !== null && !is_array($structured)) $errors[] = sprintf('Article "%s" has invalid structured data.', $article->slug);
         }
         foreach ($redirects as $slug => $_) if (isset($slugs[$slug])) $errors[] = sprintf('Redirect slug "%s" collides with a published route.', $slug);
         return new ValidationReport($errors);
@@ -111,6 +109,7 @@ final readonly class PublishService
     private function writeRedirects(string $temporaryRoot, array $articles, BuildManifest $manifest): BuildManifest
     {
         $files = $manifest->files;
+        $rules = [];
         foreach ($articles as $article) {
             foreach ((array) $article->frontMatter->get('previous_slugs', []) as $oldSlug) {
                 if (!is_string($oldSlug) || preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/', $oldSlug) !== 1 || $oldSlug === $article->slug) continue;
@@ -120,7 +119,14 @@ final readonly class PublishService
                 $html = '<!doctype html><meta http-equiv="refresh" content="0; url=' . htmlspecialchars($target, ENT_QUOTES, 'UTF-8') . '"><link rel="canonical" href="' . htmlspecialchars(rtrim($this->siteUrl, '/') . $target, ENT_QUOTES, 'UTF-8') . '">';
                 if (file_put_contents($path, $html, LOCK_EX) === false) throw new RuntimeException('Unable to write redirect.');
                 $files[] = 'articles/' . $oldSlug . '/index.html';
+                // Server-side 301 for Apache; the meta-refresh page above stays as the non-Apache fallback.
+                $rules[] = 'RewriteRule ^articles/' . $oldSlug . '/?$ /articles/' . $article->slug . '/ [R=301,L]';
             }
+        }
+        if ($rules !== []) {
+            $htaccess = "RewriteEngine On\n" . implode("\n", $rules) . "\n";
+            if (file_put_contents($temporaryRoot . '/.htaccess', $htaccess, LOCK_EX) === false) throw new RuntimeException('Unable to write redirect rules.');
+            $files[] = '.htaccess';
         }
         return new BuildManifest($manifest->articleCount, $files);
     }

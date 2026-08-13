@@ -59,4 +59,14 @@ MARKDOWN;
             self::assertStringContainsString($selector, $public);
         }
     }
+
+    public function test_admin_mobile_navigation_releases_sticky_viewport_height(): void
+    {
+        $admin = (string) file_get_contents(dirname(__DIR__, 2) . '/public/assets/admin.css');
+
+        self::assertMatchesRegularExpression(
+            '/@media\(max-width:650px\).*?\.left-rail\{[^}]*position:static;[^}]*height:auto;[^}]*max-height:none;/s',
+            $admin,
+        );
+    }
 }

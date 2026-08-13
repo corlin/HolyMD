@@ -38,6 +38,40 @@ final readonly class ArticleRepository
         }
     }
 
+    public function writeIfUnchanged(ArticleDocument $document, string $expectedChecksum): bool
+    {
+        if (preg_match('/^[a-f0-9]{64}$/', $expectedChecksum) !== 1) {
+            throw new InvalidArgumentException('Article checksum must be a SHA-256 value.');
+        }
+
+        $this->ensureArticlesRootExists();
+        $sourcePath = $this->safePath($document->slug);
+        $handle = @fopen($sourcePath, 'c+');
+        if ($handle === false) {
+            throw new RuntimeException(sprintf('Unable to lock article "%s".', $document->slug));
+        }
+
+        try {
+            if (!flock($handle, LOCK_EX)) {
+                throw new RuntimeException(sprintf('Unable to lock article "%s".', $document->slug));
+            }
+            rewind($handle);
+            $current = stream_get_contents($handle);
+            if (!is_string($current) || !hash_equals($expectedChecksum, hash('sha256', $current))) {
+                return false;
+            }
+            $serialized = $document->serialize();
+            rewind($handle);
+            if (!ftruncate($handle, 0) || fwrite($handle, $serialized) !== strlen($serialized) || !fflush($handle)) {
+                throw new RuntimeException(sprintf('Unable to write article "%s".', $document->slug));
+            }
+            return true;
+        } finally {
+            flock($handle, LOCK_UN);
+            fclose($handle);
+        }
+    }
+
     public function exists(string $slug): bool
     {
         return is_file($this->safePath($slug));

@@ -20,7 +20,7 @@ final class AuthControllerTest extends TestCase
     protected function setUp(): void
     {
         $this->pdo = new PDO('sqlite::memory:');
-        $this->pdo->exec('CREATE TABLE admin_users (id INTEGER PRIMARY KEY, email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, display_name TEXT NOT NULL)');
+        $this->pdo->exec('CREATE TABLE admin_users (id INTEGER PRIMARY KEY, email TEXT NOT NULL UNIQUE, password_hash TEXT NOT NULL, display_name TEXT NOT NULL, failed_attempts INTEGER NOT NULL DEFAULT 0, locked_until TEXT NULL, is_active INTEGER NOT NULL DEFAULT 1)');
         $this->pdo->prepare('INSERT INTO admin_users (id, email, password_hash, display_name) VALUES (?, ?, ?, ?)')->execute([9, 'admin@example.test', password_hash('correct horse', PASSWORD_DEFAULT), 'Admin']);
     }
 
@@ -62,6 +62,64 @@ final class AuthControllerTest extends TestCase
         self::assertSame(200, $this->router()->dispatch(new ServerRequest('GET', '/admin/login'))->status);
         self::assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $this->session['csrf_token']);
         self::assertSame(419, $this->router()->dispatch(new ServerRequest('POST', '/admin/login', [], ['email' => 'admin@example.test', 'password' => 'correct horse']))->status);
+    }
+
+    public function test_five_failed_attempts_lock_the_account_even_with_the_correct_password(): void
+    {
+        $this->session['csrf_token'] = 'login-token';
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            self::assertSame(422, $this->router()->dispatch(new ServerRequest('POST', '/admin/login', [], ['email' => 'admin@example.test', 'password' => 'wrong', 'csrf_token' => 'login-token']))->status);
+        }
+
+        $response = $this->router()->dispatch(new ServerRequest('POST', '/admin/login', [], ['email' => 'admin@example.test', 'password' => 'correct horse', 'csrf_token' => 'login-token']));
+
+        self::assertSame(429, $response->status);
+        self::assertStringContainsString('temporarily locked', $response->body);
+        self::assertArrayNotHasKey('admin_user_id', $this->session);
+        $statement = $this->pdo->query('SELECT failed_attempts, locked_until FROM admin_users WHERE id = 9');
+        $row = $statement->fetch();
+        self::assertSame(5, (int) $row['failed_attempts']);
+        self::assertNotNull($row['locked_until']);
+    }
+
+    public function test_an_expired_lock_allows_login_and_resets_the_counters(): void
+    {
+        $this->pdo->exec('UPDATE admin_users SET failed_attempts = 5, locked_until = ' . $this->pdo->quote(gmdate('Y-m-d H:i:s.u', time() - 60)) . ' WHERE id = 9');
+        $this->session['csrf_token'] = 'login-token';
+
+        $response = $this->router()->dispatch(new ServerRequest('POST', '/admin/login', [], ['email' => 'admin@example.test', 'password' => 'correct horse', 'csrf_token' => 'login-token']));
+
+        self::assertSame(303, $response->status);
+        self::assertSame(9, $this->session['admin_user_id']);
+        $statement = $this->pdo->query('SELECT failed_attempts, locked_until FROM admin_users WHERE id = 9');
+        $row = $statement->fetch();
+        self::assertSame(0, (int) $row['failed_attempts']);
+        self::assertNull($row['locked_until']);
+    }
+
+    public function test_a_disabled_account_is_rejected_without_counting_failures(): void
+    {
+        $this->pdo->exec('UPDATE admin_users SET is_active = 0 WHERE id = 9');
+        $this->session['csrf_token'] = 'login-token';
+
+        $response = $this->router()->dispatch(new ServerRequest('POST', '/admin/login', [], ['email' => 'admin@example.test', 'password' => 'correct horse', 'csrf_token' => 'login-token']));
+
+        self::assertSame(422, $response->status);
+        self::assertArrayNotHasKey('admin_user_id', $this->session);
+        $statement = $this->pdo->query('SELECT failed_attempts FROM admin_users WHERE id = 9');
+        self::assertSame(0, (int) $statement->fetchColumn());
+    }
+
+    public function test_successful_login_resets_previous_failures(): void
+    {
+        $this->pdo->exec('UPDATE admin_users SET failed_attempts = 4 WHERE id = 9');
+        $this->session['csrf_token'] = 'login-token';
+
+        $response = $this->router()->dispatch(new ServerRequest('POST', '/admin/login', [], ['email' => 'admin@example.test', 'password' => 'correct horse', 'csrf_token' => 'login-token']));
+
+        self::assertSame(303, $response->status);
+        $statement = $this->pdo->query('SELECT failed_attempts FROM admin_users WHERE id = 9');
+        self::assertSame(0, (int) $statement->fetchColumn());
     }
 
     public function test_login_page_classes_have_dedicated_admin_styles(): void

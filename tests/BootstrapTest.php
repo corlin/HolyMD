@@ -77,5 +77,7 @@ final class BootstrapTest extends TestCase
             $matches[1],
         );
         self::assertDoesNotMatchRegularExpression('/\b(?:article_)?body\b/i', $schema);
+        self::assertStringContainsString('`failed_attempts`', $schema);
+        self::assertStringContainsString('`is_active`', $schema);
     }
 }
