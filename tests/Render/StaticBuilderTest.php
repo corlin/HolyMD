@@ -119,9 +119,14 @@ final class StaticBuilderTest extends TestCase
         self::assertStringContainsString('class="site-footer"', $home);
 
         $article = (string) file_get_contents($this->outputRoot . '/articles/featured/index.html');
+        self::assertStringContainsString('class="reading-layout shell"', $article);
         self::assertStringContainsString('class="reading-meta"', $article);
         self::assertStringContainsString('class="prose"', $article);
         self::assertStringContainsString('class="author-box"', $article);
+        self::assertStringContainsString('role="progressbar" aria-label="Reading progress"', $article);
+        self::assertStringContainsString('class="image-viewer" aria-labelledby="image-viewer-title"', $article);
+        self::assertStringContainsString('data-image-zoom="in"', $article);
+        self::assertStringContainsString('data-image-close', $article);
         self::assertStringContainsString('id="related-heading"', $article);
         self::assertStringContainsString('Published', $article);
         self::assertStringContainsString('Sources', $article);
@@ -247,6 +252,7 @@ final class StaticBuilderTest extends TestCase
         (new StaticBuilder())->build(new BuildInput([$article], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
 
         $articleHtml = (string) file_get_contents($this->outputRoot . '/articles/accessible-controls/index.html');
+        self::assertStringContainsString('class="toc-rail" aria-labelledby="desktop-toc-heading"', $articleHtml);
         self::assertStringContainsString('<details class="toc-box">', $articleHtml);
         self::assertStringNotContainsString('<details class="toc-box" open>', $articleHtml);
 
