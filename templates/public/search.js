@@ -8,7 +8,7 @@
   input.removeAttribute('hidden');
 
   var index = null;
-  fetch('/search-index.json')
+  fetch('search-index.json')
     .then(function (response) {
       if (!response.ok) throw new Error('search index unavailable');
       return response.json();
@@ -51,7 +51,7 @@
         kicker.textContent = article.date;
         var heading = document.createElement('h3');
         var link = document.createElement('a');
-        link.href = '/articles/' + encodeURIComponent(article.slug) + '/';
+        link.href = 'articles/' + encodeURIComponent(article.slug) + '/';
         link.textContent = article.title;
         heading.appendChild(link);
         body.appendChild(kicker);

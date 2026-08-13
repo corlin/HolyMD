@@ -6,6 +6,7 @@ namespace HolyMD\Tests;
 
 use DI\Container;
 use HolyMD\Bootstrap;
+use HolyMD\Config\Env;
 use PDO;
 use HolyMD\Geo\AiClient;
 use HolyMD\Geo\ConfiguredAiClient;
@@ -13,7 +14,7 @@ use PHPUnit\Framework\TestCase;
 
 final class BootstrapTest extends TestCase
 {
-    /** @var array<string, string|false> */
+    /** @var array<string, ?string> */
     private array $environment = [];
 
     protected function setUp(): void
@@ -21,22 +22,18 @@ final class BootstrapTest extends TestCase
         parent::setUp();
 
         foreach (['HOLYMD_DSN', 'HOLYMD_DB_USERNAME', 'HOLYMD_DB_PASSWORD'] as $name) {
-            $this->environment[$name] = getenv($name);
+            $this->environment[$name] = Env::get($name);
         }
 
-        putenv('HOLYMD_DSN=sqlite::memory:');
-        putenv('HOLYMD_DB_USERNAME');
-        putenv('HOLYMD_DB_PASSWORD');
+        Env::set('HOLYMD_DSN', 'sqlite::memory:');
+        Env::set('HOLYMD_DB_USERNAME', null);
+        Env::set('HOLYMD_DB_PASSWORD', null);
     }
 
     protected function tearDown(): void
     {
         foreach ($this->environment as $name => $value) {
-            if ($value === false) {
-                putenv($name);
-            } else {
-                putenv(sprintf('%s=%s', $name, $value));
-            }
+            Env::set($name, $value);
         }
 
         $this->environment = [];

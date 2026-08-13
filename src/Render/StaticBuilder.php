@@ -42,8 +42,8 @@ final class StaticBuilder
         $script = $this->siteScript();
         $cssHash = substr(hash('sha256', $styles), 0, 10);
         $scriptHash = substr(hash('sha256', $script), 0, 10);
-        $assetCss = '/assets/site.' . $cssHash . '.css';
-        $assetSearch = '/assets/search.' . $scriptHash . '.js';
+        $assetCss = $input->basePath . '/assets/site.' . $cssHash . '.css';
+        $assetSearch = $input->basePath . '/assets/search.' . $scriptHash . '.js';
         $files = [];
         $topics = [];
         foreach ($articles as $article) {
@@ -62,7 +62,7 @@ final class StaticBuilder
             $topicSlugs[$topicLabel] = $slug;
             $route = '/topics/' . $slug . '/';
             $this->write($temporaryRoot . $route . 'index.html', $this->renderer->render('topic', [
-                'siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'siteLanguage' => $input->siteLanguage, 'topic' => $topicLabel, 'articles' => $topicArticles, 'route' => $route, 'generateLlmsTxt' => $input->generateLlmsTxt, 'assetCss' => $assetCss, 'assetSearch' => $assetSearch,
+                'siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'siteLanguage' => $input->siteLanguage, 'topic' => $topicLabel, 'articles' => $topicArticles, 'route' => $route, 'generateLlmsTxt' => $input->generateLlmsTxt, 'assetCss' => $assetCss, 'assetSearch' => $assetSearch, 'basePath' => $input->basePath,
             ]));
             $files[] = $route . 'index.html';
         }
@@ -76,9 +76,9 @@ final class StaticBuilder
             $rendered[] = $data;
         }
         $this->write($temporaryRoot . '/index.html', $this->renderer->render('index', [
-            'siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'about' => $input->about, 'siteLanguage' => $input->siteLanguage, 'articles' => $articles, 'topics' => $topics, 'topicSlugs' => $topicSlugs, 'generateLlmsTxt' => $input->generateLlmsTxt, 'assetCss' => $assetCss, 'assetSearch' => $assetSearch,
+            'siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'about' => $input->about, 'siteLanguage' => $input->siteLanguage, 'articles' => $articles, 'topics' => $topics, 'topicSlugs' => $topicSlugs, 'generateLlmsTxt' => $input->generateLlmsTxt, 'assetCss' => $assetCss, 'assetSearch' => $assetSearch, 'basePath' => $input->basePath,
         ]));
-        $this->write($temporaryRoot . '/about/index.html', $this->renderer->render('about', ['siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'about' => $input->about, 'siteLanguage' => $input->siteLanguage, 'generateLlmsTxt' => $input->generateLlmsTxt, 'assetCss' => $assetCss, 'assetSearch' => $assetSearch]));
+        $this->write($temporaryRoot . '/about/index.html', $this->renderer->render('about', ['siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'about' => $input->about, 'siteLanguage' => $input->siteLanguage, 'generateLlmsTxt' => $input->generateLlmsTxt, 'assetCss' => $assetCss, 'assetSearch' => $assetSearch, 'basePath' => $input->basePath]));
         $this->write($temporaryRoot . $assetCss, $styles);
         $this->write($temporaryRoot . $assetSearch, $script);
         $this->write($temporaryRoot . '/rss.xml', $this->rss($articles, $input, $builtAt));
@@ -196,7 +196,7 @@ final class StaticBuilder
         return [
             'siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'siteLanguage' => $input->siteLanguage, 'article' => $article,
             'url' => $url, 'date' => $date, 'modified' => $modified, 'summary' => $summary, 'sources' => $sources, 'topics' => $articleTopics, 'topicSlugs' => $topicSlugs, 'related' => array_slice($related, 0, 3),
-            'contentHtml' => $contentHtmlWithIds, 'feedContentHtml' => $feedContentHtml, 'searchText' => $searchText, 'toc' => $toc, 'readingMinutes' => $readingMinutes, 'generateLlmsTxt' => $input->generateLlmsTxt, 'assetCss' => $assetCss, 'assetSearch' => $assetSearch,
+            'contentHtml' => $contentHtmlWithIds, 'feedContentHtml' => $feedContentHtml, 'searchText' => $searchText, 'toc' => $toc, 'readingMinutes' => $readingMinutes, 'generateLlmsTxt' => $input->generateLlmsTxt, 'assetCss' => $assetCss, 'assetSearch' => $assetSearch, 'basePath' => $input->basePath,
             'jsonLd' => json_encode(['@context' => 'https://schema.org', '@graph' => $graph], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR),
         ];
     }

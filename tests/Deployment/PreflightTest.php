@@ -56,7 +56,7 @@ final class PreflightTest extends TestCase
         mkdir($root . '/content/versions', 0775, true);
         mkdir($root . '/content/audit', 0775, true);
         mkdir($root . '/public/site', 0775, true);
-        symlink($root . '/public/site', $root . '/public/.holymd-current');
+        file_put_contents($root . '/public/.holymd-current', "site\n");
 
         try {
             $report = (new Preflight(static fn (): bool => true, static fn (): bool => true))->check($root, [
@@ -89,7 +89,7 @@ final class PreflightTest extends TestCase
         mkdir($root . '/content/articles', 0775, true);
         mkdir($root . '/content/media', 0775, true);
         mkdir($root . '/public/site', 0775, true);
-        symlink($root . '/public/site', $root . '/public/.holymd-current');
+        file_put_contents($root . '/public/.holymd-current', "site\n");
         try {
             $report = (new Preflight(static fn (): bool => true, static fn (): bool => true, static fn (): bool => false))->check($root, [
                 'HOLYMD_DSN' => 'mysql:host=localhost;dbname=holymd',

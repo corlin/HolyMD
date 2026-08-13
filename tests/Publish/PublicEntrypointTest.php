@@ -23,10 +23,8 @@ final class PublicEntrypointTest extends TestCase
         self::assertStringContainsString('RewriteRule ^admin', $rules);
         self::assertStringContainsString('RewriteRule ^assets/(?:admin\\.css|admin\\.js|fonts/[a-z0-9.-]+\\.woff2)$', $rules);
         self::assertStringNotContainsString('RewriteRule ^assets/ -', $rules);
-        self::assertStringContainsString('.holymd-current/$1', $rules);
-        self::assertStringContainsString('.holymd-current/$1/index.html', $rules);
-        self::assertStringContainsString('(?:site|\\.holymd-current)', $rules);
-        self::assertStringContainsString('.holymd-current/$1 [END]', $rules);
+        self::assertStringContainsString('RewriteCond %{REQUEST_FILENAME} !-f', $rules);
+        self::assertStringContainsString('RewriteRule ^ index.php [L,QSA]', $rules);
     }
 
     public function test_entrypoint_serves_the_self_hosted_icon_font(): void

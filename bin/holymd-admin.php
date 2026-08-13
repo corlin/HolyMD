@@ -24,7 +24,7 @@ $usage = "Usage:\n"
 $command = $argv[1] ?? null;
 
 if ($command === 'encrypt-geo-key') {
-    $plain = getenv('HOLYMD_GEO_PLAINTEXT_KEY');
+    $plain = \HolyMD\Config\Env::get('HOLYMD_GEO_PLAINTEXT_KEY');
     if (!is_string($plain) || $plain === '') {
         fwrite(STDERR, "Set HOLYMD_GEO_PLAINTEXT_KEY for this command only.\n");
         exit(64);
@@ -52,7 +52,7 @@ if (in_array($command, ['password-reset', 'disable', 'enable', 'unlock'], true) 
     exit(64);
 }
 
-$password = getenv('HOLYMD_ADMIN_PASSWORD');
+$password = \HolyMD\Config\Env::get('HOLYMD_ADMIN_PASSWORD');
 if (in_array($command, ['create', 'password-reset'], true) && (!is_string($password) || strlen($password) < 12)) {
     fwrite(STDERR, "Set HOLYMD_ADMIN_PASSWORD in the environment (minimum 12 characters).\n");
     exit(64);

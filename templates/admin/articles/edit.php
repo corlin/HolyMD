@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require dirname(__DIR__) . '/_base.php';
 ob_start();
 $escape = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 $status = (string) $article->frontMatter->get('status', 'draft');
@@ -8,14 +9,15 @@ $activeNav = 'articles';
 ?>
 <main
   class="studio"
-  data-autosave-url="/admin/articles/<?= rawurlencode($article->slug) ?>/draft"
+  data-base-path="<?= $escape($basePath) ?>"
+  data-autosave-url="<?= $path('/admin/articles/' . rawurlencode($article->slug) . '/draft') ?>"
   data-article-checksum="<?= $escape($articleChecksum) ?>"
 >
 <?php require dirname(__DIR__) . '/_nav.php'; ?>
 
   <section class="editor-panel">
     <div class="editor-topline">
-      <a href="/admin/articles"><span class="icon" aria-hidden="true">arrow_back</span>All articles</a>
+      <a href="<?= $path('/admin/articles') ?>"><span class="icon" aria-hidden="true">arrow_back</span>All articles</a>
       <output id="save-state" aria-live="polite" data-state="saved"><span class="icon" aria-hidden="true" data-save-icon>check_circle</span><span data-save-label>Source saved</span></output>
     </div>
     <label>
@@ -36,15 +38,15 @@ $activeNav = 'articles';
       <p class="eyebrow">Live preview</p>
       <div class="publication-actions">
         <?php if ($status === 'published'): ?>
-          <a href="/articles/<?= rawurlencode($article->slug) ?>/"><span class="icon" aria-hidden="true">open_in_new</span>View public</a>
+          <a href="<?= $path('/articles/' . rawurlencode($article->slug) . '/') ?>"><span class="icon" aria-hidden="true">open_in_new</span>View public</a>
         <?php endif; ?>
-        <form id="<?= $publicationFormId ?>" data-publication-form method="post" action="/admin/articles/<?= rawurlencode($article->slug) ?>/publish">
+        <form id="<?= $publicationFormId ?>" data-publication-form method="post" action="<?= $path('/admin/articles/' . rawurlencode($article->slug) . '/publish') ?>">
           <input type="hidden" name="csrf_token" value="<?= $escape($csrfToken) ?>">
           <input data-publication-checksum type="hidden" name="expected_checksum" value="<?= $escape($articleChecksum) ?>">
           <button id="publish-button" type="submit"><span class="icon" aria-hidden="true">publish</span><?= $status === 'published' ? 'Update public' : 'Publish' ?></button>
         </form>
         <?php if ($status === 'published'): ?>
-          <form method="post" action="/admin/articles/<?= rawurlencode($article->slug) ?>/withdraw">
+          <form method="post" action="<?= $path('/admin/articles/' . rawurlencode($article->slug) . '/withdraw') ?>">
             <input type="hidden" name="csrf_token" value="<?= $escape($csrfToken) ?>">
             <button type="submit" class="secondary"><span class="icon" aria-hidden="true">unpublished</span>Withdraw</button>
           </form>
@@ -61,7 +63,7 @@ $activeNav = 'articles';
       <p class="muted">Each save stores a Markdown snapshot.</p>
       <ul class="versions">
         <?php foreach ($versions as $version): ?>
-          <li><form method="post" action="/admin/articles/<?= rawurlencode($article->slug) ?>/restore/<?= $escape($version->value) ?>"><input type="hidden" name="csrf_token" value="<?= $escape($csrfToken) ?>"><button type="submit"><span class="icon" aria-hidden="true">history</span>Restore <?= $escape(substr($version->value, 0, 8)) ?></button></form></li>
+          <li><form method="post" action="<?= $path('/admin/articles/' . rawurlencode($article->slug) . '/restore/' . $version->value) ?>"><input type="hidden" name="csrf_token" value="<?= $escape($csrfToken) ?>"><button type="submit"><span class="icon" aria-hidden="true">history</span>Restore <?= $escape(substr($version->value, 0, 8)) ?></button></form></li>
         <?php endforeach; ?>
       </ul>
     </details>
@@ -69,7 +71,7 @@ $activeNav = 'articles';
       <details class="danger-zone">
         <summary>Delete draft</summary>
         <p>This permanently removes the Markdown file. Type <strong><?= $escape($article->slug) ?></strong> to confirm.</p>
-        <form method="post" action="/admin/articles/<?= rawurlencode($article->slug) ?>/delete">
+        <form method="post" action="<?= $path('/admin/articles/' . rawurlencode($article->slug) . '/delete') ?>">
           <input type="hidden" name="csrf_token" value="<?= $escape($csrfToken) ?>">
           <input name="confirm_slug" required autocomplete="off">
           <button class="danger" type="submit"><span class="icon" aria-hidden="true">delete</span>Delete draft</button>

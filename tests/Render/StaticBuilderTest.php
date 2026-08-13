@@ -298,6 +298,21 @@ final class StaticBuilderTest extends TestCase
         self::assertStringContainsString('"date_modified": "2026-08-10"', $feed);
     }
 
+    public function test_base_path_prefixes_internal_links_and_assets(): void
+    {
+        $article = new ArticleDocument('based', 'Based', 'Body.', new FrontMatter(['title' => 'Based', 'slug' => 'based', 'date' => '2026-08-12', 'topics' => ['Notes']]), '/based');
+        (new StaticBuilder())->build(new BuildInput([$article], 'Site', 'https://example.test/holymd', 'Author', 'About', false, 'zh-CN', null, '/holymd'), $this->outputRoot);
+
+        $styles = (string) file_get_contents(dirname(__DIR__, 2) . '/templates/public/site.css');
+        $cssUrl = '/holymd/assets/site.' . substr(hash('sha256', $styles), 0, 10) . '.css';
+        $home = (string) file_get_contents($this->outputRoot . '/index.html');
+        self::assertStringContainsString('<link rel="stylesheet" href="' . $cssUrl . '">', $home);
+        self::assertStringContainsString('href="/holymd/about/"', $home);
+        self::assertStringContainsString('href="/holymd/rss.xml"', $home);
+        $topic = (string) file_get_contents($this->outputRoot . '/topics/notes/index.html');
+        self::assertStringContainsString('href="/holymd/"', $topic);
+    }
+
     public function test_search_index_exposes_plain_text_and_metadata_with_a_size_cap(): void
     {
         $article = new ArticleDocument('long', 'Long', str_repeat('word ', 5000), new FrontMatter(['title' => 'Long', 'slug' => 'long', 'date' => '2026-08-12', 'summary' => 'Sum', 'topics' => ['Notes']]), '/long');

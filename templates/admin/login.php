@@ -1,6 +1,7 @@
 <?php
 
 declare(strict_types=1);
+require __DIR__ . '/_base.php';
 
 /** @var ?string $error */
 ob_start();
@@ -12,7 +13,7 @@ ob_start();
     <?php if ($error !== null): ?>
       <p class="login-error" role="alert"><?= htmlspecialchars($error, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></p>
     <?php endif; ?>
-    <form method="post" action="/admin/login">
+    <form method="post" action="<?= $path('/admin/login') ?>">
       <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>">
       <label>Email <input type="email" name="email" autocomplete="username" required></label>
       <label>Password <input type="password" name="password" autocomplete="current-password" required></label>

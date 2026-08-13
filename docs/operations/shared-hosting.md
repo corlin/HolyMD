@@ -2,7 +2,7 @@
 
 ## 1. 主机与目录
 
-选择 PHP 8.4、MySQL 8、Apache 2.4 主机。必须支持 `mod_rewrite`、`.htaccess` 和同一文件系统内的符号链接。域名的 DocumentRoot 指向项目的 `public/`，不能指向项目根目录。
+选择 PHP 8.4、MySQL 8、Apache 2.4 主机。必须支持 `mod_rewrite` 与 `.htaccess`；发布指针使用普通文件，不再依赖符号链接。域名的 DocumentRoot 指向项目的 `public/`，不能指向项目根目录。
 
 推荐目录：
 
@@ -78,11 +78,11 @@ php bin/holymd-prepare-release.php
 php bin/holymd-check.php
 ```
 
-`holymd-prepare-release.php` 不移动或隐藏旧站。后续发布会先生成完整不可变版本，再原子替换 `public/.holymd-current` 符号链接。若主机禁止符号链接，准备命令会失败；不要绕过检查上线，因为 HolyMD 不会用有可见空窗的双重目录重命名降级替代。
+`holymd-prepare-release.php` 不移动或隐藏旧站。后续发布会先生成完整不可变版本，再原子替换 `public/.holymd-current` **指针文件**（内容为 release 目录相对路径，由 `public/index.php` 解析）。指针机制不依赖符号链接，`symlink()` 被禁用的共享主机同样可用。
 
 ## 5. Apache 与路由验收
 
-保留仓库的 `public/.htaccess`。它让 `/admin` 进入 PHP，而首页、文章、主题、RSS、sitemap 和静态资源直接从 `.holymd-current` 提供。
+保留仓库的 `public/.htaccess`。所有请求统一进入 `public/index.php`，由它解析指针文件并从 release 树提供页面与资源；`assets/admin.css|admin.js|fonts/*.woff2` 与真实文件直通 Apache，`.env` 与项目内部路径被显式拒绝。
 
 部署后检查：
 
@@ -118,4 +118,37 @@ Cron 内置非阻塞文件锁，单次领取一个任务；GEO 暂时错误最�
 
 部署代码前先备份：`php bin/holymd-backup.php`（见备份与恢复手册）。推荐顺序：维护窗口内上传新代码、`composer install`、迁移、测试 dry-run、运行 check，再恢复 Cron。代码回滚时，数据库只向前兼容；不要删除迁移列。
 
-静态站回滚可以把 `public/.holymd-current` 原子指向 `public/..holymd-current-releases/` 中已验证的旧版本。先创建新符号链接并用 `mv` 在同一目录替换，禁止先删除当前指针。完成后重新运行 HTTP 验收。
+静态站回滚可以把 `public/.holymd-current` 指针文件原子改写为 `public/..holymd-current-releases/` 中已验证的旧版本（写入临时文件后 `mv` 替换，禁止先删除当前指针）。完成后重新运行 HTTP 验收。
+
+## 8. nginx 伪静态与扁平部署（固定 DocumentRoot 的虚机）
+
+部分共享主机（如万网系）DocumentRoot 固定在 `htdocs/`、只有 nginx 且不读 `.htaccess`。部署方式：
+
+1. 项目文件直接铺到 `htdocs/`（项目根 = docroot），把 `public/` 内容（index.php、.htaccess、assets/）也移到 `htdocs/` 根。`public/index.php` 检测到 `.env` 与自身同目录时自动按扁平布局计算项目根、指针与资源路径；标准部署（DocumentRoot 指向 `public/`）行为不变。
+2. `.env` 设置 `HOLYMD_BASE_PATH`（子目录部署如 `/holymd`；根部署留空）与 `HOLYMD_SYNC_PUBLISH="1"`（无 `exec`/`proc_open` 的主机无法运行 cron worker，发布与 GEO 审查改为请求内同步执行）。
+3. 在控制台"伪静态设置"写入 nginx 规则：
+
+```nginx
+location / {
+    if (!-e $request_filename) {
+        rewrite ^/(.*)$ /index.php last;
+    }
+}
+location ~ /\.ht {
+    deny all;
+}
+location ^~ /src/ { deny all; }
+location ^~ /vendor/ { deny all; }
+location ^~ /content/ { deny all; }
+location ^~ /bin/ { deny all; }
+location ^~ /database/ { deny all; }
+location ^~ /templates/ { deny all; }
+location ^~ /cron/ { deny all; }
+location ^~ /docs/ { deny all; }
+location ~ ^/(\.env|composer\.(json|lock)|\.holymd|README) { deny all; }
+```
+
+4. 此类主机通常禁用 `exec`/`proc_open`/`putenv`/`symlink` 且缺少 `ext-sodium`——HolyMD 已适配：环境走内存覆盖表（`src/Config/Env.php`）、凭据加密用 OpenSSL AES-256-GCM（`ext-sodium` 不再要求）、换链用指针文件、队列可选同步。
+5. 无 SSH 时，数据库迁移与管理员创建用一次性 Web 脚本执行后立即删除（`Migrator` + `AccountCommands`）；初始 release 也可本地预构建后上传并改写指针。
+
+验收同 §5，另需确认 `.env`、`/content/`、`/src/` 返回 403，登录与发布全流程可用。

@@ -68,14 +68,21 @@ try {
             $connection[] = '-P ' . escapeshellarg($parts['port']);
         }
     }
-    // MYSQL_PWD keeps the password out of the process argument list.
-    $previousPassword = getenv('MYSQL_PWD');
-    putenv('MYSQL_PWD=' . ($settings->password ?? ''));
-    $code = $run('mysqldump --single-transaction --routines --triggers --default-character-set=utf8mb4 ' . implode(' ', $connection) . ' -u ' . escapeshellarg($settings->username) . ' ' . escapeshellarg($parts['dbname']) . ' > ' . escapeshellarg($target . '/holymd.sql'));
-    if ($previousPassword === false) {
-        putenv('MYSQL_PWD');
+    // MYSQL_PWD keeps the password out of the process argument list. Some
+    // shared hosts disable putenv, in which case the password goes via argv.
+    if (function_exists('putenv')) {
+        $previousPassword = getenv('MYSQL_PWD');
+        putenv('MYSQL_PWD=' . ($settings->password ?? ''));
     } else {
-        putenv('MYSQL_PWD=' . $previousPassword);
+        $connection[] = '-p ' . escapeshellarg($settings->password ?? '');
+    }
+    $code = $run('mysqldump --single-transaction --routines --triggers --default-character-set=utf8mb4 ' . implode(' ', $connection) . ' -u ' . escapeshellarg($settings->username) . ' ' . escapeshellarg($parts['dbname']) . ' > ' . escapeshellarg($target . '/holymd.sql'));
+    if (function_exists('putenv')) {
+        if ($previousPassword === false) {
+            putenv('MYSQL_PWD');
+        } else {
+            putenv('MYSQL_PWD=' . $previousPassword);
+        }
     }
     if ($code !== 0) {
         fwrite(STDERR, "Database dump failed; partial output kept in {$target}.\n");

@@ -34,7 +34,7 @@ final class AtomicPublicTreeTest extends TestCase
         $tree->prepare($this->root . '/live', $this->root . '/legacy');
         $tree->swap($this->root . '/temporary', $this->root . '/live');
 
-        self::assertSame('new', file_get_contents($this->root . '/live/index.html'));
+        self::assertSame('new', file_get_contents($this->resolve($this->root . '/live') . '/index.html'));
         self::assertDirectoryDoesNotExist($this->root . '/temporary');
     }
 
@@ -44,7 +44,7 @@ final class AtomicPublicTreeTest extends TestCase
         file_put_contents($this->root . '/legacy/index.html', 'old');
         $tree = new AtomicPublicTree();
         $tree->prepare($this->root . '/current', $this->root . '/legacy');
-        self::assertSame('old', file_get_contents($this->root . '/current/index.html'));
+        self::assertSame('old', file_get_contents($this->resolve($this->root . '/current') . '/index.html'));
         self::assertSame('old', file_get_contents($this->root . '/legacy/index.html'));
         mkdir($this->root . '/directory-pointer');
         mkdir($this->root . '/temporary');
@@ -63,6 +63,19 @@ final class AtomicPublicTreeTest extends TestCase
         } finally {
             self::assertSame('old', file_get_contents($this->root . '/live/index.html'));
         }
+    }
+
+    private function resolve(string $pointer): string
+    {
+        $resolved = realpath($pointer);
+        if (($resolved === false || !is_dir($resolved)) && is_file($pointer)) {
+            $target = trim((string) file_get_contents($pointer));
+            $resolved = realpath(dirname($pointer) . '/' . $target);
+        }
+        if ($resolved === false || !is_dir($resolved)) {
+            self::fail('Release pointer does not resolve.');
+        }
+        return $resolved;
     }
 
     private function remove(string $path): void

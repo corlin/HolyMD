@@ -26,6 +26,9 @@ final class ArticleControllerTest extends TestCase
         mkdir($this->root . '/articles', 0777, true);
         mkdir($this->root . '/versions', 0777, true);
         mkdir($this->root . '/media', 0777, true);
+        mkdir($this->root . '/public/site', 0777, true);
+        file_put_contents($this->root . '/public/site/index.html', 'legacy');
+        file_put_contents($this->root . '/public/.holymd-current', "site\n");
         file_put_contents($this->root . '/articles/first-note.md', "---\ntitle: First note\nslug: first-note\ndate: 2026-08-12\n---\nOriginal body\n");
     }
 
@@ -239,7 +242,7 @@ final class ArticleControllerTest extends TestCase
 
         self::assertSame(200, $response->status);
         self::assertStringContainsString('id="markdown-preview"', $response->body);
-        self::assertStringContainsString("const previewUrl='/admin/markdown/preview'", $javascript);
+        self::assertStringContainsString("base + '/admin/markdown/preview'", $javascript);
         self::assertStringContainsString('preview.innerHTML', $javascript);
         self::assertStringNotContainsString('preview.textContent=body.value', $javascript);
     }
@@ -275,7 +278,7 @@ final class ArticleControllerTest extends TestCase
         self::assertSame(200, $response->status);
         self::assertStringContainsString('Article published', $response->body);
         self::assertStringContainsString('href="/articles/first-note/"', $response->body);
-        self::assertFileExists($this->root . '/public/articles/first-note/index.html');
+        self::assertFileExists($this->publishedRoot() . '/articles/first-note/index.html');
     }
 
     public function test_published_editor_can_update_public_with_the_latest_submitted_markdown(): void
@@ -301,7 +304,7 @@ final class ArticleControllerTest extends TestCase
         $saved = (new ArticleRepository($this->root . '/articles'))->read('first-note');
         self::assertSame('Updated public note', $saved->title);
         self::assertSame("Latest submitted **Markdown**.\n", $saved->bodyMarkdown);
-        $public = (string) file_get_contents($this->root . '/public/articles/first-note/index.html');
+        $public = (string) file_get_contents($this->publishedRoot() . '/articles/first-note/index.html');
         self::assertStringContainsString('Updated public note', $public);
         self::assertStringContainsString('<strong>Markdown</strong>', $public);
         self::assertStringNotContainsString('Old public body', $public);
@@ -473,9 +476,23 @@ final class ArticleControllerTest extends TestCase
     private function router(array $session): Router
     {
         $repository = new ArticleRepository($this->root . '/articles');
-        $publisher = new PublishService($repository, new StaticBuilder(), new AtomicPublicTree(), $this->root . '/public', 'Test publication', 'https://example.test', 'Ada Test', 'About Ada.');
+        $publisher = new PublishService($repository, new StaticBuilder(), new AtomicPublicTree(), $this->root . '/public/.holymd-current', 'Test publication', 'https://example.test', 'Ada Test', 'About Ada.');
         $controller = new ArticleController($repository, new VersionService($this->root . '/versions'), new AdminGuard($session), new Csrf($session), $publisher, null, $this->root . '/media', ['site_name' => 'Test publication', 'site_url' => 'https://example.test', 'author_name' => 'Ada Test', 'about' => 'About Ada.', 'site_language' => 'zh-CN']);
         return Router::admin($controller);
+    }
+
+    private function publishedRoot(): string
+    {
+        $pointer = $this->root . '/public/.holymd-current';
+        $resolved = realpath($pointer);
+        if (($resolved === false || !is_dir($resolved)) && is_file($pointer)) {
+            $target = trim((string) file_get_contents($pointer));
+            $resolved = realpath(dirname($pointer) . '/' . $target);
+        }
+        if ($resolved === false || !is_dir($resolved)) {
+            self::fail('Release pointer does not resolve.');
+        }
+        return $resolved;
     }
 
     private function removeDirectory(string $path): void

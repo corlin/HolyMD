@@ -26,7 +26,7 @@ final class PublishServiceTest extends TestCase
         file_put_contents($this->root . '/public/assets.css', 'admin asset');
         file_put_contents($this->root . '/public/site/index.html', 'previous site');
         file_put_contents($this->root . '/public/site/.holymd-manifest.json', '{"build":"previous"}');
-        symlink($this->root . '/public/site', $this->root . '/public/.holymd-current');
+        file_put_contents($this->root . '/public/.holymd-current', "site\n");
         file_put_contents($this->root . '/articles/first-note.md', "---\ntitle: First note\nslug: first-note\ndate: 2026-08-12\nstatus: draft\n---\nBody\n");
     }
 
@@ -60,15 +60,29 @@ final class PublishServiceTest extends TestCase
         $result = $this->service()->publish(new ArticleId('first-note'));
 
         self::assertSame(2, $result->manifest->articleCount);
-        self::assertFileExists($this->root . '/public/.holymd-current/articles/old-name/index.html');
-        self::assertStringContainsString('/articles/renamed/', (string) file_get_contents($this->root . '/public/.holymd-current/articles/old-name/index.html'));
-        $htaccess = (string) file_get_contents($this->root . '/public/.holymd-current/.htaccess');
-        self::assertStringContainsString('RewriteRule ^articles/old-name/?$ /articles/renamed/ [R=301,L]', $htaccess);
-        self::assertContains('.htaccess', $result->manifest->files);
-        self::assertStringNotContainsString('withdrawn', (string) file_get_contents($this->root . '/public/.holymd-current/feed.json'));
-        self::assertStringNotContainsString('withdrawn', (string) file_get_contents($this->root . '/public/.holymd-current/sitemap.xml'));
+        self::assertFileExists($this->released() . '/articles/old-name/index.html');
+        self::assertStringContainsString('/articles/renamed/', (string) file_get_contents($this->released() . '/articles/old-name/index.html'));
+        $redirects = json_decode((string) file_get_contents($this->released() . '/.holymd-redirects.json'), true, flags: JSON_THROW_ON_ERROR);
+        self::assertSame('/articles/renamed/', $redirects['old-name/']);
+        self::assertContains('.holymd-redirects.json', $result->manifest->files);
+        self::assertStringNotContainsString('withdrawn', (string) file_get_contents($this->released() . '/feed.json'));
+        self::assertStringNotContainsString('withdrawn', (string) file_get_contents($this->released() . '/sitemap.xml'));
         self::assertSame('admin asset', file_get_contents($this->root . '/public/assets.css'));
         self::assertSame('published', (new ArticleRepository($this->root . '/articles'))->read('first-note')->frontMatter->get('status'));
+    }
+
+    private function released(): string
+    {
+        $pointer = $this->root . '/public/.holymd-current';
+        $resolved = realpath($pointer);
+        if (($resolved === false || !is_dir($resolved)) && is_file($pointer)) {
+            $target = trim((string) file_get_contents($pointer));
+            $resolved = realpath(dirname($pointer) . '/' . $target);
+        }
+        if ($resolved === false || !is_dir($resolved)) {
+            self::fail('Release pointer does not resolve.');
+        }
+        return $resolved;
     }
 
     private function service(?StaticBuilder $builder = null): PublishService
@@ -96,11 +110,11 @@ final class PublishServiceTest extends TestCase
         finally { self::assertSame('previous site', file_get_contents($this->root . '/public/site/index.html')); }
     }
 
-    public function test_no_htaccess_is_generated_without_previous_slugs(): void
+    public function test_no_redirect_manifest_is_generated_without_previous_slugs(): void
     {
         $this->service()->publish(new ArticleId('first-note'));
 
-        self::assertFileDoesNotExist($this->root . '/public/.holymd-current/.htaccess');
+        self::assertFileDoesNotExist($this->released() . '/.holymd-redirects.json');
     }
 
     public function test_rejects_invalid_article_metadata_at_publish(): void

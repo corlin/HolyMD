@@ -59,7 +59,7 @@ final readonly class PublishService
             $validation = $this->validate($published);
             if (!$validation->isValid()) throw new InvalidArgumentException($validation->text());
             if (!mkdir($temporaryRoot, 0775, true) && !is_dir($temporaryRoot)) throw new RuntimeException('Unable to create temporary build directory.');
-            $manifest = $this->builder->build(new BuildInput($published, $this->siteName, $this->siteUrl, $this->authorName, $this->about, $this->generateLlmsTxt, $this->siteLanguage), $temporaryRoot);
+            $manifest = $this->builder->build(new BuildInput($published, $this->siteName, $this->siteUrl, $this->authorName, $this->about, $this->generateLlmsTxt, $this->siteLanguage, null, $this->basePath()), $temporaryRoot);
             $manifest = $this->writeRedirects($temporaryRoot, $published, $manifest);
             $this->writeManifest($temporaryRoot, $manifest);
             $this->persist($updated);
@@ -109,7 +109,7 @@ final readonly class PublishService
     private function writeRedirects(string $temporaryRoot, array $articles, BuildManifest $manifest): BuildManifest
     {
         $files = $manifest->files;
-        $rules = [];
+        $redirects = [];
         foreach ($articles as $article) {
             foreach ((array) $article->frontMatter->get('previous_slugs', []) as $oldSlug) {
                 if (!is_string($oldSlug) || preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*$/', $oldSlug) !== 1 || $oldSlug === $article->slug) continue;
@@ -119,16 +119,22 @@ final readonly class PublishService
                 $html = '<!doctype html><meta http-equiv="refresh" content="0; url=' . htmlspecialchars($target, ENT_QUOTES, 'UTF-8') . '"><link rel="canonical" href="' . htmlspecialchars(rtrim($this->siteUrl, '/') . $target, ENT_QUOTES, 'UTF-8') . '">';
                 if (file_put_contents($path, $html, LOCK_EX) === false) throw new RuntimeException('Unable to write redirect.');
                 $files[] = 'articles/' . $oldSlug . '/index.html';
-                // Server-side 301 for Apache; the meta-refresh page above stays as the non-Apache fallback.
-                $rules[] = 'RewriteRule ^articles/' . $oldSlug . '/?$ /articles/' . $article->slug . '/ [R=301,L]';
+                // 301 map consumed by the PHP router; the meta-refresh page above
+                // stays as the fallback for non-PHP serving.
+                $redirects[$oldSlug . '/'] = $target;
             }
         }
-        if ($rules !== []) {
-            $htaccess = "RewriteEngine On\n" . implode("\n", $rules) . "\n";
-            if (file_put_contents($temporaryRoot . '/.htaccess', $htaccess, LOCK_EX) === false) throw new RuntimeException('Unable to write redirect rules.');
-            $files[] = '.htaccess';
+        if ($redirects !== []) {
+            if (file_put_contents($temporaryRoot . '/.holymd-redirects.json', json_encode($redirects, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n", LOCK_EX) === false) throw new RuntimeException('Unable to write redirect manifest.');
+            $files[] = '.holymd-redirects.json';
         }
         return new BuildManifest($manifest->articleCount, $files);
+    }
+
+    private function basePath(): string
+    {
+        $base = '/' . trim((string) \HolyMD\Config\Env::get('HOLYMD_BASE_PATH'), '/');
+        return $base === '/' ? '' : $base;
     }
 
     private function writeManifest(string $root, BuildManifest $manifest): void

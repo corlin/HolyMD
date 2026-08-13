@@ -6,28 +6,34 @@ namespace HolyMD\Publish;
 
 use RuntimeException;
 
-/** Activates immutable versioned releases through an atomically renamed symlink pointer. */
+/**
+ * Activates immutable versioned releases through an atomically replaced
+ * pointer FILE (no symlink support required — shared hosts disable symlink()).
+ * The pointer contains the release directory path relative to the pointer's
+ * parent directory; public/index.php resolves it for static serving.
+ */
 final class AtomicPublicTree
 {
-    public function swap(string $temporaryRoot, string $liveRoot): void
+    public function swap(string $temporaryRoot, string $pointerPath): void
     {
         if (!is_dir($temporaryRoot)) {
             throw new RuntimeException('Temporary build tree does not exist.');
         }
-        if (dirname($temporaryRoot) !== dirname($liveRoot)) {
+        if (dirname($temporaryRoot) !== dirname($pointerPath)) {
             throw new RuntimeException('Temporary and live public trees must share a parent directory.');
         }
 
-        $parent = dirname($liveRoot);
-        $releases = $parent . '/.' . basename($liveRoot) . '-releases';
+        $parent = dirname($pointerPath);
+        $releases = $parent . '/.' . basename($pointerPath) . '-releases';
         if (!is_dir($releases) && !mkdir($releases, 0775, true) && !is_dir($releases)) throw new RuntimeException('Unable to create static release directory.');
         $release = $releases . '/release-' . gmdate('YmdHis') . '-' . bin2hex(random_bytes(6));
         if (!rename($temporaryRoot, $release)) throw new RuntimeException('Unable to store the completed static release.');
 
-        if (file_exists($liveRoot) && !is_link($liveRoot)) { $this->remove($release); throw new RuntimeException('The static release pointer must be prepared before publishing.'); }
-        $pointer = $parent . '/.' . basename($liveRoot) . '-next-' . bin2hex(random_bytes(6));
-        if (!symlink($release, $pointer)) { $this->remove($release); throw new RuntimeException('Unable to create static release pointer.'); }
-        if (!rename($pointer, $liveRoot)) { unlink($pointer); $this->remove($release); throw new RuntimeException('Unable to atomically activate the static release pointer.'); }
+        if (is_dir($pointerPath)) { $this->remove($release); throw new RuntimeException('The static release pointer must be prepared before publishing.'); }
+        $pointer = $parent . '/.' . basename($pointerPath) . '-next-' . bin2hex(random_bytes(6));
+        $target = basename($releases) . '/' . basename($release);
+        if (file_put_contents($pointer, $target . "\n", LOCK_EX) === false) { $this->remove($release); throw new RuntimeException('Unable to write the static release pointer.'); }
+        if (!rename($pointer, $pointerPath)) { unlink($pointer); $this->remove($release); throw new RuntimeException('Unable to atomically activate the static release pointer.'); }
     }
 
     /** Prepare a stable pointer without moving or hiding the legacy public/site tree. */
@@ -35,8 +41,8 @@ final class AtomicPublicTree
     {
         if (file_exists($pointer) || is_link($pointer)) return;
         if (!is_dir($legacyTree)) throw new RuntimeException('Legacy static tree does not exist.');
-        $probe = dirname($pointer) . '/.holymd-symlink-probe-' . bin2hex(random_bytes(4));
-        if (!symlink($legacyTree, $probe)) throw new RuntimeException('This host does not support static release symlinks.');
+        $probe = dirname($pointer) . '/.holymd-pointer-probe-' . bin2hex(random_bytes(4));
+        if (file_put_contents($probe, basename($legacyTree) . "\n", LOCK_EX) === false) throw new RuntimeException('Unable to write the static release pointer.');
         if (!rename($probe, $pointer)) { unlink($probe); throw new RuntimeException('Unable to install the static release pointer.'); }
     }
 

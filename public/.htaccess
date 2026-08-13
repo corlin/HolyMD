@@ -4,15 +4,18 @@ RewriteEngine On
 # Keep the PHP admin runtime and authored admin assets at stable paths.
 RewriteRule ^admin(?:/|$) index.php [L,QSA]
 RewriteRule ^assets/(?:admin\.css|admin\.js|fonts/[a-z0-9.-]+\.woff2)$ - [END]
-RewriteRule ^(?:site|\.holymd-current)(?:/|$) - [END]
 
-# Serve generated static files directly. Clean routes resolve to index.html.
-RewriteCond %{DOCUMENT_ROOT}/.holymd-current/$1 -f
-RewriteRule ^(.+)$ .holymd-current/$1 [END]
-RewriteCond %{DOCUMENT_ROOT}/.holymd-current/$1/index.html -f
-RewriteRule ^(.+?)/?$ .holymd-current/$1/index.html [END]
-RewriteCond %{DOCUMENT_ROOT}/.holymd-current/index.html -f
-RewriteRule ^$ .holymd-current/index.html [END]
-
-# Local/shared-host fallback retains the guarded PHP resolver and truthful 404s.
+# Everything else resolves through the PHP router, which follows the release
+# pointer file at .holymd-current. No symlink support is required.
+RewriteCond %{REQUEST_FILENAME} !-f
 RewriteRule ^ index.php [L,QSA]
+
+# Flattened/subdirectory deployments place the project root inside the
+# docroot: never expose the environment file, dotfiles, deployment artifacts,
+# or project internals.
+RewriteRule (^|/)\.env$ - [F,L]
+RewriteRule (^|/)\. - [F,L]
+RewriteRule ^holymd-deploy\.zip$ - [F,L]
+RewriteRule ^(?:content|src|vendor|bin|database|templates|cron|docs)/ - [F,L]
+RewriteRule ^composer\.(?:json|lock)$ - [F,L]
+RewriteRule ^README(?:-holymd)?\.md$ - [F,L]

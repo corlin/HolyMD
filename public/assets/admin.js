@@ -7,7 +7,8 @@
     const token = document.querySelector('#csrf-token');
     const preview = document.querySelector('#markdown-preview');
     const state = document.querySelector('#save-state');
-    const previewUrl='/admin/markdown/preview';
+    const base = studio.dataset.basePath || '';
+    const previewUrl=base + '/admin/markdown/preview';
     const publicationForm = document.querySelector('[data-publication-form]');
     const publicationChecksum = document.querySelector('[data-publication-checksum]');
     let saveTimer;
@@ -203,7 +204,7 @@
   const poll = async () => {
     reviewButton.disabled = true;
     for (let attempt = 0; attempt < 60; attempt++) {
-      const response = await fetch(`/admin/articles/${slug}/geo/review`);
+      const response = await fetch(`${base}/admin/articles/${slug}/geo/review`);
       const payload = await response.json();
       if (!response.ok) throw Error(payload.error || 'GEO status failed');
       if (payload.status === 'completed') {
@@ -233,7 +234,7 @@
         await poll();
         return;
       }
-      const payload = await request(`/admin/articles/${slug}/geo/review`);
+      const payload = await request(`${base}/admin/articles/${slug}/geo/review`);
       if (payload.queued) {
         status.textContent = 'Review queued — waiting for Cron worker…';
         await poll();
@@ -259,7 +260,7 @@
       if (action === 'edit') {
         const input = prompt('Edit metadata proposal value:', item.dataset.proposalValue);
         if (input === null) return;
-        const result = await request(`/admin/geo/proposals/${id}/edit`, {value: input});
+        const result = await request(`${base}/admin/geo/proposals/${id}/edit`, {value: input});
         item.dataset.proposalValue = typeof result.value === 'string' ? result.value : JSON.stringify(result.value);
         const cardBody = item.querySelector('.geo-card-body');
         if (cardBody) {
@@ -270,7 +271,7 @@
       }
 
       if (action === 'accept') {
-        await request(`/admin/geo/proposals/${id}/accept`);
+        await request(`${base}/admin/geo/proposals/${id}/accept`);
         item.classList.add('is-accepted');
         const header = item.querySelector('.geo-card-header');
         if (header && !header.querySelector('.geo-status-pill')) {
@@ -286,7 +287,7 @@
       }
 
       if (action === 'reject') {
-        await request(`/admin/geo/proposals/${id}/reject`);
+        await request(`${base}/admin/geo/proposals/${id}/reject`);
         item.classList.add('is-rejected');
         const header = item.querySelector('.geo-card-header');
         if (header && !header.querySelector('.geo-status-pill')) {
@@ -307,7 +308,7 @@
 
   const resumeStatus = async () => {
     try {
-      const response = await fetch(`/admin/articles/${slug}/geo/review`);
+      const response = await fetch(`${base}/admin/articles/${slug}/geo/review`);
       const payload = await response.json();
       if (!response.ok) return;
       if (payload.status === 'completed') {

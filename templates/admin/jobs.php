@@ -1,4 +1,4 @@
-<?php declare(strict_types=1); ob_start(); $escape = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); $activeNav = 'jobs'; $jobIcons = ['queued' => 'schedule', 'running' => 'sync', 'succeeded' => 'check_circle', 'failed' => 'error']; ?>
+<?php declare(strict_types=1); require __DIR__ . '/_base.php'; ob_start(); $escape = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); $activeNav = 'jobs'; $jobIcons = ['queued' => 'schedule', 'running' => 'sync', 'succeeded' => 'check_circle', 'failed' => 'error']; ?>
 <main class="admin-shell">
 <?php require __DIR__ . '/_nav.php'; ?>
 <section class="article-index">

@@ -51,7 +51,7 @@ final class PackageTest extends TestCase
     public function test_composer_declares_runtime_extensions_used_by_production_code(): void
     {
         $composer = json_decode((string) file_get_contents(dirname(__DIR__, 2) . '/composer.json'), true, flags: JSON_THROW_ON_ERROR);
-        foreach (['ext-pdo_mysql', 'ext-mbstring', 'ext-fileinfo', 'ext-gd', 'ext-exif', 'ext-sodium', 'ext-openssl', 'ext-json', 'ext-curl'] as $extension) {
+        foreach (['ext-pdo_mysql', 'ext-mbstring', 'ext-fileinfo', 'ext-gd', 'ext-exif', 'ext-openssl', 'ext-json', 'ext-curl'] as $extension) {
             self::assertArrayHasKey($extension, $composer['require']);
         }
     }
@@ -81,17 +81,19 @@ final class PackageTest extends TestCase
         preg_match('/HOLYMD_GEO_API_KEY="([^"]+)"/', $output, $key);
         self::assertArrayHasKey(1, $credential);
         self::assertArrayHasKey(1, $key);
-        $nonceAndCiphertext = base64_decode($credential[1], true);
+        $payload = base64_decode($credential[1], true);
         $decodedKey = base64_decode($key[1], true);
-        self::assertIsString($nonceAndCiphertext);
+        self::assertIsString($payload);
         self::assertIsString($decodedKey);
-        self::assertSame(
-            $plain,
-            sodium_crypto_secretbox_open(
-                substr($nonceAndCiphertext, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES),
-                substr($nonceAndCiphertext, 0, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES),
-                $decodedKey,
-            ),
+        // AES-256-GCM layout: iv (12) || tag (16) || ciphertext.
+        $decrypted = openssl_decrypt(
+            substr($payload, 28),
+            'aes-256-gcm',
+            $decodedKey,
+            OPENSSL_RAW_DATA,
+            substr($payload, 0, 12),
+            substr($payload, 12, 16),
         );
+        self::assertSame($plain, $decrypted);
     }
 }

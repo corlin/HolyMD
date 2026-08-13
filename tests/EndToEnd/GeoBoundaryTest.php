@@ -151,7 +151,7 @@ final class GeoBoundaryTest extends TestCase
         mkdir($pubRoot . '/public/site', 0777, true);
         file_put_contents($pubRoot . '/public/site/index.html', 'old');
         file_put_contents($pubRoot . '/public/site/.holymd-manifest.json', '{}');
-        symlink($pubRoot . '/public/site', $pubRoot . '/public/.holymd-current');
+        file_put_contents($pubRoot . '/public/.holymd-current', "site\n");
 
         $bodyText = "# Deep Dive\n\nThis body is the single source of truth and must survive unchanged.\n";
         file_put_contents(

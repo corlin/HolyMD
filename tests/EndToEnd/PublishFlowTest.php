@@ -29,7 +29,7 @@ final class PublishFlowTest extends TestCase
         mkdir($this->root . '/public/site', 0777, true);
         file_put_contents($this->root . '/public/site/index.html', 'previous site');
         file_put_contents($this->root . '/public/site/.holymd-manifest.json', '{"build":"previous"}');
-        symlink($this->root . '/public/site', $this->root . '/public/.holymd-current');
+        file_put_contents($this->root . '/public/.holymd-current', "site\n");
     }
 
     protected function tearDown(): void
@@ -84,7 +84,7 @@ final class PublishFlowTest extends TestCase
         self::assertSame(1, $result->manifest->articleCount);
 
         // --- Assert generated static files ---
-        $currentRoot = $this->root . '/public/.holymd-current';
+        $currentRoot = $this->released();
         self::assertFileExists($currentRoot . '/articles/php-84-features/index.html');
 
         $articleHtml = (string) file_get_contents($currentRoot . '/articles/php-84-features/index.html');
@@ -117,7 +117,7 @@ final class PublishFlowTest extends TestCase
 
         $this->publishService()->publish(new ArticleId('active'));
 
-        $currentRoot = $this->root . '/public/.holymd-current';
+        $currentRoot = $this->released();
         $feedJson = (string) file_get_contents($currentRoot . '/feed.json');
         $rss = (string) file_get_contents($currentRoot . '/rss.xml');
         $sitemap = (string) file_get_contents($currentRoot . '/sitemap.xml');
@@ -128,6 +128,20 @@ final class PublishFlowTest extends TestCase
         self::assertStringNotContainsString('removed', $rss);
         self::assertStringContainsString('active', $sitemap);
         self::assertStringNotContainsString('removed', $sitemap);
+    }
+
+    private function released(): string
+    {
+        $pointer = $this->root . '/public/.holymd-current';
+        $resolved = realpath($pointer);
+        if (($resolved === false || !is_dir($resolved)) && is_file($pointer)) {
+            $target = trim((string) file_get_contents($pointer));
+            $resolved = realpath(dirname($pointer) . '/' . $target);
+        }
+        if ($resolved === false || !is_dir($resolved)) {
+            self::fail('Release pointer does not resolve.');
+        }
+        return $resolved;
     }
 
     private function publishService(): PublishService

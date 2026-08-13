@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use HolyMD\Bootstrap;
+use HolyMD\Config\Env;
 use HolyMD\Admin\ArticleController;
 use HolyMD\Admin\JobsController;
 use HolyMD\Admin\VersionService;
@@ -24,12 +25,27 @@ use HolyMD\Render\MarkdownRenderer;
 use HolyMD\Queue\JobStatusRepository;
 use HolyMD\Queue\MySqlJobQueue;
 
-require dirname(__DIR__) . '/vendor/autoload.php';
+// Flattened deployments (shared hosts with a fixed document root) place
+// index.php next to .env; standard deployments keep it in public/.
+$root = is_file(__DIR__ . '/.env') ? __DIR__ : dirname(__DIR__);
+$flattened = $root === __DIR__;
+require $root . '/vendor/autoload.php';
 
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 
 if (!is_string($path)) { http_response_code(400); exit; }
-$root = dirname(__DIR__);
+
+// Subdirectory deployments: HOLYMD_BASE_PATH (e.g. /holymd) is stripped from
+// the request path before any routing decisions are made.
+$basePath = '/' . trim((string) (Env::get('HOLYMD_BASE_PATH') ?: ''), '/');
+if ($basePath === '/') {
+    $basePath = '';
+}
+if ($basePath !== '' && $path !== $basePath && !str_starts_with($path, $basePath . '/')) { http_response_code(404); exit; }
+if ($basePath !== '') {
+    $path = substr($path, strlen($basePath));
+    if ($path === '') { $path = '/'; }
+}
 if (str_starts_with($path, '/media/')) {
     $name = basename(rawurldecode(substr($path, strlen('/media/'))));
     if ($name === '' || $path !== '/media/' . rawurlencode($name) || preg_match('/^[a-z0-9][a-z0-9-]*\.(?:jpg|png|gif|webp)$/', $name) !== 1) { http_response_code(404); exit; }
@@ -48,7 +64,7 @@ if (str_starts_with($path, '/assets/')) {
     // before PHP). Site assets are hashed build outputs and fall through to
     // the static tree below.
     if (in_array($relative, ['admin.css', 'admin.js'], true)) {
-        $candidate = $root . '/public/assets/' . $relative;
+        $candidate = $root . ($flattened ? '/assets/' : '/public/assets/') . $relative;
         if (!is_file($candidate)) { http_response_code(404); exit; }
         $types = ['css' => 'text/css', 'js' => 'text/javascript'];
         header('Content-Type: ' . ($types[strtolower(pathinfo($candidate, PATHINFO_EXTENSION))] ?? 'application/octet-stream'));
@@ -57,7 +73,7 @@ if (str_starts_with($path, '/assets/')) {
         exit;
     }
     if (preg_match('#^fonts/([a-z0-9][a-z0-9.-]*\.woff2)$#', $relative, $matches) === 1 && $path === '/assets/fonts/' . rawurlencode($matches[1])) {
-        $candidate = $root . '/public/assets/fonts/' . $matches[1];
+        $candidate = $root . ($flattened ? '/assets/fonts/' : '/public/assets/fonts/') . $matches[1];
         if (!is_file($candidate)) { http_response_code(404); exit; }
         header('Content-Type: font/woff2');
         header('X-Content-Type-Options: nosniff');
@@ -68,16 +84,40 @@ if (str_starts_with($path, '/assets/')) {
 }
 if (!str_starts_with($path, '/admin')) {
     // The release pointer is swapped atomically; drop cached path resolutions
-    // so php -S development picks up the new tree immediately. Apache serves
-    // these files before PHP in production, so this only affects development.
+    // so php -S development picks up the new tree immediately.
     clearstatcache(true);
-    $siteRoot = realpath((string) (getenv('HOLYMD_PUBLIC_TREE') ?: $root . '/public/.holymd-current'));
+    $pointerPath = (string) (Env::get('HOLYMD_PUBLIC_TREE') ?: $root . ($flattened ? '/.holymd-current' : '/public/.holymd-current'));
+    $siteRoot = realpath($pointerPath);
+    if ($siteRoot === false || !is_dir($siteRoot)) {
+        // Pointer file (shared hosts without symlink support): resolve the
+        // relative release path it names, confined to the pointer's parent.
+        $siteRoot = false;
+        if (is_file($pointerPath)) {
+            $target = trim((string) file_get_contents($pointerPath));
+            if ($target !== '' && preg_match('#^[a-zA-Z0-9._/-]+$#', $target) === 1) {
+                $resolved = realpath(dirname($pointerPath) . '/' . $target);
+                if ($resolved !== false && is_dir($resolved) && str_starts_with($resolved, dirname($pointerPath) . DIRECTORY_SEPARATOR)) {
+                    $siteRoot = $resolved;
+                }
+            }
+        }
+    }
     $relative = trim($path, '/');
     $sitePath = $relative === ''
         ? 'index.html'
         : $relative . (str_ends_with($path, '/') ? '/index.html' : '');
     $candidate = $siteRoot === false ? false : realpath($siteRoot . '/' . $sitePath);
-    if ($siteRoot === false || $candidate === false || !str_starts_with($candidate, $siteRoot . DIRECTORY_SEPARATOR) || !is_file($candidate)) { http_response_code(404); exit; }
+    if ($siteRoot === false || $candidate === false || !str_starts_with($candidate, $siteRoot . DIRECTORY_SEPARATOR) || !is_file($candidate)) {
+        // Historical slug redirects (301) before a truthful 404.
+        $redirectsPath = $siteRoot === false ? false : $siteRoot . '/.holymd-redirects.json';
+        $redirects = $redirectsPath !== false && is_file($redirectsPath) ? json_decode((string) file_get_contents($redirectsPath), true) : null;
+        $redirectTarget = is_array($redirects) && is_string($redirects[rtrim($relative, '/') . '/'] ?? null) ? $redirects[rtrim($relative, '/') . '/'] : null;
+        if (is_string($redirectTarget)) {
+            header('Location: ' . $basePath . $redirectTarget, true, 301);
+            exit;
+        }
+        http_response_code(404); exit;
+    }
     $types = ['html' => 'text/html; charset=utf-8', 'xml' => 'application/xml', 'json' => 'application/feed+json', 'txt' => 'text/plain; charset=utf-8', 'css' => 'text/css', 'js' => 'text/javascript'];
     $extension = strtolower(pathinfo($candidate, PATHINFO_EXTENSION));
     header('Content-Type: ' . ($types[$extension] ?? 'application/octet-stream'));
@@ -94,6 +134,10 @@ try {
             throw new RuntimeException('The administrator session could not be started.');
         }
     }
+    // Shared hosts without exec/proc_open cannot run the cron worker; with
+    // HOLYMD_SYNC_PUBLISH=1 publishes and GEO reviews run in-request instead.
+    $syncPublish = Env::get('HOLYMD_SYNC_PUBLISH') === '1';
+    $queue = $syncPublish ? null : new MySqlJobQueue($container->get(\PDO::class));
     $controller = new ArticleController(
     new ArticleRepository($root . '/content/articles'),
     new VersionService($root . '/content/versions'),
@@ -101,18 +145,18 @@ try {
     new Csrf($_SESSION),
     new PublishService(
         new ArticleRepository($root . '/content/articles'), new StaticBuilder(), new AtomicPublicTree(),
-        (string) (getenv('HOLYMD_PUBLIC_TREE') ?: $root . '/public/.holymd-current'), (string) (getenv('HOLYMD_SITE_NAME') ?: 'HolyMD'), (string) (getenv('HOLYMD_SITE_URL') ?: 'https://example.invalid'),
-        (string) (getenv('HOLYMD_AUTHOR_NAME') ?: 'Author'), (string) (getenv('HOLYMD_ABOUT') ?: ''),
-        getenv('HOLYMD_LLMS_TXT') === '1', $root . '/content/audit',
-        null, $root . '/content/holymd-publish.lock', (string) (getenv('HOLYMD_SITE_LANGUAGE') ?: 'zh-CN'),
+        (string) (Env::get('HOLYMD_PUBLIC_TREE') ?: $root . ($flattened ? '/.holymd-current' : '/public/.holymd-current')), (string) (Env::get('HOLYMD_SITE_NAME') ?: 'HolyMD'), (string) (Env::get('HOLYMD_SITE_URL') ?: 'https://example.invalid'),
+        (string) (Env::get('HOLYMD_AUTHOR_NAME') ?: 'Author'), (string) (Env::get('HOLYMD_ABOUT') ?: ''),
+        Env::get('HOLYMD_LLMS_TXT') === '1', $root . '/content/audit',
+        null, $root . '/content/holymd-publish.lock', (string) (Env::get('HOLYMD_SITE_LANGUAGE') ?: 'zh-CN'),
     ),
-    new MySqlJobQueue($container->get(\PDO::class)),
+    $queue,
     $root . '/content/media',
-    ['site_name' => (string) (getenv('HOLYMD_SITE_NAME') ?: 'HolyMD'), 'site_url' => (string) (getenv('HOLYMD_SITE_URL') ?: 'https://example.invalid'), 'author_name' => (string) (getenv('HOLYMD_AUTHOR_NAME') ?: 'Author'), 'about' => (string) (getenv('HOLYMD_ABOUT') ?: ''), 'site_language' => (string) (getenv('HOLYMD_SITE_LANGUAGE') ?: 'zh-CN')],
+    ['site_name' => (string) (Env::get('HOLYMD_SITE_NAME') ?: 'HolyMD'), 'site_url' => (string) (Env::get('HOLYMD_SITE_URL') ?: 'https://example.invalid'), 'author_name' => (string) (Env::get('HOLYMD_AUTHOR_NAME') ?: 'Author'), 'about' => (string) (Env::get('HOLYMD_ABOUT') ?: ''), 'site_language' => (string) (Env::get('HOLYMD_SITE_LANGUAGE') ?: 'zh-CN')],
     new MarkdownRenderer(),
     );
     $geoStore = new MySqlGeoProposalStore($container->get(\PDO::class));
-    $geo = new GeoController(new ArticleRepository($root . '/content/articles'), new GeoReviewService($container->get(\HolyMD\Geo\AiClient::class)), $geoStore, new AdminGuard($_SESSION), new Csrf($_SESSION), new MySqlJobQueue($container->get(\PDO::class)), new VersionService($root . '/content/versions'));
+    $geo = new GeoController(new ArticleRepository($root . '/content/articles'), new GeoReviewService($container->get(\HolyMD\Geo\AiClient::class)), $geoStore, new AdminGuard($_SESSION), new Csrf($_SESSION), $queue, new VersionService($root . '/content/versions'));
     $jobs = new JobsController(new JobStatusRepository($container->get(\PDO::class)), new AdminGuard($_SESSION), new Csrf($_SESSION));
     $response = (new Router($controller, $geo, new AuthController($container->get(\PDO::class), $_SESSION, new Csrf($_SESSION)), $jobs))->dispatch(new ServerRequest(
         $_SERVER['REQUEST_METHOD'] ?? 'GET',

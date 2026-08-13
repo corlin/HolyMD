@@ -70,7 +70,16 @@ final readonly class Preflight
         }
 
         $pointer = (string) ($environment['HOLYMD_PUBLIC_TREE'] ?? ($projectRoot . '/public/.holymd-current'));
-        if (!is_link($pointer) || !is_dir($pointer)) {
+        $resolved = realpath($pointer);
+        if ($resolved === false || !is_dir($resolved)) {
+            if (is_file($pointer)) {
+                $target = trim((string) file_get_contents($pointer));
+                $resolved = $target === '' ? false : realpath(dirname($pointer) . '/' . $target);
+            } else {
+                $resolved = false;
+            }
+        }
+        if ($resolved === false || !is_dir($resolved)) {
             $failures[] = 'The static release pointer is not prepared; run bin/holymd-prepare-release.php.';
         }
 

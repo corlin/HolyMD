@@ -9,6 +9,10 @@ use RuntimeException;
 
 final readonly class EncryptedApiCredential
 {
+    private const KEY_BYTES = 32;
+    private const IV_BYTES = 12;
+    private const TAG_BYTES = 16;
+
     private function __construct(private string $value)
     {
     }
@@ -19,11 +23,17 @@ final readonly class EncryptedApiCredential
         if ($plain === '' || strlen($plain) > 8192) {
             throw new InvalidArgumentException('GEO API credential must contain between 1 and 8192 bytes.');
         }
-        $key = random_bytes(SODIUM_CRYPTO_SECRETBOX_KEYBYTES);
-        $nonce = random_bytes(SODIUM_CRYPTO_SECRETBOX_NONCEBYTES);
+        // AES-256-GCM via OpenSSL so shared hosts without ext-sodium work.
+        // Layout: iv (12) || tag (16) || ciphertext.
+        $key = random_bytes(self::KEY_BYTES);
+        $iv = random_bytes(self::IV_BYTES);
+        $ciphertext = openssl_encrypt($plain, 'aes-256-gcm', $key, OPENSSL_RAW_DATA, $iv, $tag);
+        if ($ciphertext === false) {
+            throw new RuntimeException('GEO API credential could not be encrypted.');
+        }
 
         return [
-            'credential' => base64_encode($nonce . sodium_crypto_secretbox($plain, $nonce, $key)),
+            'credential' => base64_encode($iv . $tag . $ciphertext),
             'key' => base64_encode($key),
         ];
     }
@@ -32,26 +42,25 @@ final readonly class EncryptedApiCredential
         string $credentialVariable = 'HOLYMD_GEO_API_CREDENTIAL',
         string $keyVariable = 'HOLYMD_GEO_API_KEY',
     ): self {
-        $encrypted = getenv($credentialVariable);
-        $key = getenv($keyVariable);
+        $encrypted = \HolyMD\Config\Env::get($credentialVariable);
+        $key = \HolyMD\Config\Env::get($keyVariable);
         if (!is_string($encrypted) || !is_string($key) || $encrypted === '' || $key === '') {
             throw new RuntimeException('GEO API credentials must be configured.');
         }
-        $ciphertext = base64_decode($encrypted, true);
+        $payload = base64_decode($encrypted, true);
         $decodedKey = base64_decode($key, true);
         if (
-            $ciphertext === false
-            || strlen($ciphertext) < SODIUM_CRYPTO_SECRETBOX_NONCEBYTES + SODIUM_CRYPTO_SECRETBOX_MACBYTES
+            $payload === false
+            || strlen($payload) < self::IV_BYTES + self::TAG_BYTES
             || $decodedKey === false
-            || strlen($decodedKey) !== SODIUM_CRYPTO_SECRETBOX_KEYBYTES
+            || strlen($decodedKey) !== self::KEY_BYTES
         ) {
             throw new RuntimeException('GEO API credential encryption is invalid.');
         }
-        $plain = sodium_crypto_secretbox_open(
-            substr($ciphertext, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES),
-            substr($ciphertext, 0, SODIUM_CRYPTO_SECRETBOX_NONCEBYTES),
-            $decodedKey,
-        );
+        $iv = substr($payload, 0, self::IV_BYTES);
+        $tag = substr($payload, self::IV_BYTES, self::TAG_BYTES);
+        $ciphertext = substr($payload, self::IV_BYTES + self::TAG_BYTES);
+        $plain = openssl_decrypt($ciphertext, 'aes-256-gcm', $decodedKey, OPENSSL_RAW_DATA, $iv, $tag);
         if ($plain === false) {
             throw new RuntimeException('GEO API credential could not be decrypted.');
         }

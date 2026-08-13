@@ -22,7 +22,7 @@ try {
     $names = ['HOLYMD_DSN', 'HOLYMD_SITE_NAME', 'HOLYMD_SITE_URL', 'HOLYMD_AUTHOR_NAME', 'HOLYMD_ABOUT', 'HOLYMD_SITE_LANGUAGE', 'HOLYMD_PUBLIC_TREE', 'HOLYMD_GEO_API_CREDENTIAL', 'HOLYMD_GEO_API_KEY'];
     $environment = [];
     foreach ($names as $name) {
-        $value = getenv($name);
+        $value = \HolyMD\Config\Env::get($name);
         if (is_string($value)) $environment[$name] = $value;
     }
     $report = (new Preflight(null, $databaseReady))->check($root, $environment);

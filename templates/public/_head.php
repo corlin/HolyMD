@@ -26,8 +26,8 @@ declare(strict_types=1);
   <meta property="og:type" content="<?= htmlspecialchars($ogType, ENT_QUOTES, 'UTF-8') ?>"><meta property="og:title" content="<?= htmlspecialchars($ogTitle, ENT_QUOTES, 'UTF-8') ?>"><meta property="og:description" content="<?= htmlspecialchars($ogDescription, ENT_QUOTES, 'UTF-8') ?>"><meta property="og:url" content="<?= htmlspecialchars($ogUrl, ENT_QUOTES, 'UTF-8') ?>"><meta property="og:site_name" content="<?= htmlspecialchars($siteName, ENT_QUOTES, 'UTF-8') ?>">
   <meta name="twitter:card" content="summary"><meta name="twitter:title" content="<?= htmlspecialchars($ogTitle, ENT_QUOTES, 'UTF-8') ?>"><meta name="twitter:description" content="<?= htmlspecialchars($ogDescription, ENT_QUOTES, 'UTF-8') ?>">
 <?php if ($showAlternates): ?>
-  <link rel="alternate" type="application/rss+xml" title="<?= htmlspecialchars($siteName, ENT_QUOTES, 'UTF-8') ?> RSS" href="/rss.xml">
-  <link rel="alternate" type="application/feed+json" title="<?= htmlspecialchars($siteName, ENT_QUOTES, 'UTF-8') ?> JSON Feed" href="/feed.json">
+  <link rel="alternate" type="application/rss+xml" title="<?= htmlspecialchars($siteName, ENT_QUOTES, 'UTF-8') ?> RSS" href="<?= htmlspecialchars($basePath, ENT_QUOTES, 'UTF-8') ?>/rss.xml">
+  <link rel="alternate" type="application/feed+json" title="<?= htmlspecialchars($siteName, ENT_QUOTES, 'UTF-8') ?> JSON Feed" href="<?= htmlspecialchars($basePath, ENT_QUOTES, 'UTF-8') ?>/feed.json">
 <?php endif; ?>
   <link rel="canonical" href="<?= htmlspecialchars($canonical, ENT_QUOTES, 'UTF-8') ?>">
   <link rel="stylesheet" href="<?= htmlspecialchars($assetCss, ENT_QUOTES, 'UTF-8') ?>">
