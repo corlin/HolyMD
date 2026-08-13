@@ -39,10 +39,25 @@ final class AtomicPublicTree
     /** Prepare a stable pointer without moving or hiding the legacy public/site tree. */
     public function prepare(string $pointer, string $legacyTree): void
     {
-        if (file_exists($pointer) || is_link($pointer)) return;
+        if (is_link($pointer)) {
+            $parent = dirname($pointer);
+            $resolved = realpath($pointer);
+            $parentPrefix = rtrim((string) realpath($parent), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+            if ($resolved === false || !is_dir($resolved) || !str_starts_with($resolved, $parentPrefix)) {
+                throw new RuntimeException('Legacy static release symlink must resolve inside its public directory.');
+            }
+            $this->installPointerFile($pointer, substr($resolved, strlen($parentPrefix)));
+            return;
+        }
+        if (file_exists($pointer)) return;
         if (!is_dir($legacyTree)) throw new RuntimeException('Legacy static tree does not exist.');
+        $this->installPointerFile($pointer, basename($legacyTree));
+    }
+
+    private function installPointerFile(string $pointer, string $target): void
+    {
         $probe = dirname($pointer) . '/.holymd-pointer-probe-' . bin2hex(random_bytes(4));
-        if (file_put_contents($probe, basename($legacyTree) . "\n", LOCK_EX) === false) throw new RuntimeException('Unable to write the static release pointer.');
+        if (file_put_contents($probe, $target . "\n", LOCK_EX) === false) throw new RuntimeException('Unable to write the static release pointer.');
         if (!rename($probe, $pointer)) { unlink($probe); throw new RuntimeException('Unable to install the static release pointer.'); }
     }
 

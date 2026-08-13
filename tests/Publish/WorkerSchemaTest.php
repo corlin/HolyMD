@@ -28,6 +28,9 @@ final class WorkerSchemaTest extends TestCase
         self::assertStringContainsString("exec(\$command . ' 2>&1'", $worker);
         self::assertStringContainsString("\$exitCode === 75", $worker);
         self::assertStringContainsString("str_starts_with(\$exception->getMessage(), 'RETRYABLE:')", $worker);
+        self::assertStringContainsString('$retryableFlag = $retryable ? 1 : 0;', $worker);
+        self::assertStringNotContainsString('$state->execute([$retryable,', $worker);
+        self::assertStringNotContainsString('$failed->execute([$retryable,', $worker);
         self::assertStringContainsString("jobs.status = 'running' AND jobs.attempts >= 3", $worker);
         self::assertStringContainsString("jobs.status = 'running' AND jobs.attempts < 3", $worker);
         self::assertStringContainsString("jobs.status = 'queued' AND jobs.attempts < 3", $worker);

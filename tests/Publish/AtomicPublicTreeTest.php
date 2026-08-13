@@ -52,6 +52,20 @@ final class AtomicPublicTreeTest extends TestCase
         $tree->swap($this->root . '/temporary', $this->root . '/directory-pointer');
     }
 
+    public function test_prepare_migrates_a_legacy_symlink_to_an_atomic_pointer_file(): void
+    {
+        mkdir($this->root . '/releases');
+        mkdir($this->root . '/releases/legacy');
+        file_put_contents($this->root . '/releases/legacy/index.html', 'old');
+        symlink($this->root . '/releases/legacy', $this->root . '/current');
+
+        (new AtomicPublicTree())->prepare($this->root . '/current', $this->root . '/releases/legacy');
+
+        self::assertFalse(is_link($this->root . '/current'));
+        self::assertSame("releases/legacy\n", file_get_contents($this->root . '/current'));
+        self::assertSame('old', file_get_contents($this->resolve($this->root . '/current') . '/index.html'));
+    }
+
     public function test_swap_rejects_a_missing_temporary_tree_without_touching_live_tree(): void
     {
         mkdir($this->root . '/live');
