@@ -2,6 +2,7 @@
 declare(strict_types=1);
 namespace HolyMD\Geo;
 
+use HolyMD\Content\ArticleDocument;
 use InvalidArgumentException;
 use PDO;
 use RuntimeException;
@@ -59,6 +60,34 @@ final readonly class MySqlGeoProposalStore implements GeoProposalStore
         }
     }
     public function markRejected(GeoProposalId $id): void { $this->mark($id, 'rejected'); }
+    /** Sync deployments (no queue) persist a completed review and its proposals inline, mirroring the worker's rows, so accept/edit/reject keep working on later requests. @return list<GeoProposal> */
+    public function persistSyncReview(ArticleDocument $document, string $versionValue, GeoReview $review): array
+    {
+        $metadata = hash('sha256', json_encode($document->frontMatter->all(), JSON_THROW_ON_ERROR));
+        $checksum = hash('sha256', $document->serialize());
+        $this->pdo->beginTransaction();
+        try {
+            $this->pdo->prepare("INSERT INTO articles (source_path, slug, state, metadata_checksum) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id), slug=VALUES(slug), state=VALUES(state), metadata_checksum=VALUES(metadata_checksum)")->execute([$document->sourcePath, $document->slug, (string) $document->frontMatter->get('status', 'draft'), $metadata]);
+            $articleId = (int) $this->pdo->lastInsertId();
+            $this->pdo->prepare('INSERT INTO article_versions (article_id, snapshot_path, content_checksum, body_checksum) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)')->execute([$articleId, $versionValue . '.md', $checksum, hash('sha256', $document->bodyMarkdown)]);
+            $versionId = (int) $this->pdo->lastInsertId();
+            $requestKey = hash('sha256', $articleId . ':' . $versionId . ':' . $checksum);
+            $this->pdo->prepare("INSERT INTO geo_reviews (article_id, article_version_id, status, provider, model, input_checksum, request_key, completed_at) VALUES (?, ?, 'completed', 'configured', 'configured', ?, ?, UTC_TIMESTAMP(6)) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)")->execute([$articleId, $versionId, $checksum, $requestKey]);
+            $reviewId = (int) $this->pdo->lastInsertId();
+            $persisted = [];
+            $insert = $this->pdo->prepare("INSERT INTO geo_proposals (geo_review_id, proposal_type, proposed_metadata, proposal_key, status) VALUES (?, ?, ?, ?, 'pending') ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)");
+            foreach ($review->proposals as $proposal) {
+                $json = json_encode($proposal->value, JSON_THROW_ON_ERROR);
+                $insert->execute([$reviewId, $proposal->type, $json, hash('sha256', $reviewId . ':' . $proposal->type . ':' . $json)]);
+                $persisted[] = $this->get(new GeoProposalId((string) $this->pdo->lastInsertId()));
+            }
+            $this->pdo->commit();
+        } catch (\Throwable $exception) {
+            if ($this->pdo->inTransaction()) $this->pdo->rollBack();
+            throw $exception;
+        }
+        return $persisted;
+    }
     public function saveReview(GeoReview $review): void { throw new RuntimeException('Queue GEO reviews are persisted by the worker transaction.'); }
     public function enqueueRetry(string $articleSlug, string $bodyHash, string $reason): void { throw new RuntimeException('Queue retries are managed by the MySQL worker.'); }
     private function mark(GeoProposalId $id, string $status): void { $statement = $this->pdo->prepare("UPDATE geo_proposals SET status = ?, decided_at = UTC_TIMESTAMP(6) WHERE id = ? AND status = 'pending'"); $statement->execute([$status, $id->value]); if ($statement->rowCount() !== 1) throw new InvalidArgumentException('Only a pending GEO proposal can be decided.'); }

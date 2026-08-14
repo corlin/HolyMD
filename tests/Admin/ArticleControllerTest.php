@@ -132,6 +132,11 @@ final class ArticleControllerTest extends TestCase
         self::assertStringContainsString('name="summary"', $response->body);
         self::assertStringContainsString('name="structured_data"', $response->body);
         self::assertStringContainsString('data-metadata-input', $response->body);
+        self::assertStringContainsString('name="alt_text"', $response->body);
+        self::assertStringContainsString('name="hierarchy"', $response->body);
+        self::assertStringContainsString('name="internal_links"', $response->body);
+        self::assertStringContainsString('data-geo-field="summary"', $response->body);
+        self::assertStringContainsString('data-geo-catchall', $response->body);
     }
 
     public function test_draft_save_round_trips_metadata_fields(): void
@@ -188,6 +193,70 @@ final class ArticleControllerTest extends TestCase
         $article = (new ArticleRepository($this->root . '/articles'))->read('first-note');
         self::assertArrayNotHasKey('summary', $article->frontMatter->all());
         self::assertArrayNotHasKey('topics', $article->frontMatter->all());
+    }
+
+    public function test_draft_save_round_trips_free_form_and_json_typed_metadata_fields(): void
+    {
+        file_put_contents($this->root . '/articles/first-note.md', "---\ntitle: First note\nslug: first-note\ndate: 2026-08-12\nalt_text:\n  - Old alt\nhierarchy:\n  h1: Overview\ninternal_links:\n  - Old link\nfaq:\n  - question: Old Q\n    answer: Old A\n---\nOriginal body\n");
+        $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);
+        $checksum = hash('sha256', (string) file_get_contents($this->root . '/articles/first-note.md'));
+
+        $response = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/draft', [], [
+            'title' => 'First note', 'date' => '2026-08-12', 'body' => 'Original body',
+            'alt_text' => "First alt\nSecond alt",
+            'hierarchy' => '{"h1":"Overview","h2":"Details"}',
+            'internal_links' => "Guide\nNotes",
+            'faq' => "[\n  {\n    \"question\": \"New Q\",\n    \"answer\": \"New A\"\n  }\n]",
+            'expected_checksum' => $checksum, 'csrf_token' => 'expected-token',
+        ]));
+
+        self::assertSame(200, $response->status);
+        $article = (new ArticleRepository($this->root . '/articles'))->read('first-note');
+        self::assertSame(['First alt', 'Second alt'], $article->frontMatter->get('alt_text'));
+        self::assertSame(['h1' => 'Overview', 'h2' => 'Details'], $article->frontMatter->get('hierarchy'));
+        self::assertSame(['Guide', 'Notes'], $article->frontMatter->get('internal_links'));
+        self::assertSame([['question' => 'New Q', 'answer' => 'New A']], $article->frontMatter->get('faq'));
+    }
+
+    public function test_edit_page_renders_faq_arrays_as_json_not_Array(): void
+    {
+        file_put_contents($this->root . '/articles/first-note.md', "---\ntitle: First note\nslug: first-note\ndate: 2026-08-12\nfaq:\n  - question: Q\n    answer: A\n---\nOriginal body\n");
+        $response = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token'])->dispatch(new ServerRequest('GET', '/admin/articles/first-note/edit'));
+
+        self::assertSame(200, $response->status);
+        self::assertStringContainsString('&quot;question&quot;', $response->body);
+        self::assertStringNotContainsString('>Array<', $response->body);
+    }
+
+    public function test_draft_save_rejects_malformed_faq_json_when_faq_is_array_typed(): void
+    {
+        file_put_contents($this->root . '/articles/first-note.md', "---\ntitle: First note\nslug: first-note\ndate: 2026-08-12\nfaq:\n  - question: Q\n    answer: A\n---\nOriginal body\n");
+        $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);
+        $checksum = hash('sha256', (string) file_get_contents($this->root . '/articles/first-note.md'));
+        $base = ['title' => 'First note', 'date' => '2026-08-12', 'body' => 'Original body', 'expected_checksum' => $checksum, 'csrf_token' => 'expected-token'];
+
+        $broken = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/draft', [], $base + ['faq' => '{broken']));
+        self::assertSame(422, $broken->status);
+        self::assertStringContainsString('valid JSON', $broken->body);
+
+        $notArray = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/draft', [], $base + ['faq' => '"just a string"']));
+        self::assertSame(422, $notArray->status);
+        self::assertStringContainsString('JSON array or object', $notArray->body);
+    }
+
+    public function test_draft_save_rejects_forbidden_keys_in_free_form_json(): void
+    {
+        file_put_contents($this->root . '/articles/first-note.md', "---\ntitle: First note\nslug: first-note\ndate: 2026-08-12\nhierarchy:\n  h1: Overview\n---\nOriginal body\n");
+        $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);
+        $checksum = hash('sha256', (string) file_get_contents($this->root . '/articles/first-note.md'));
+        $base = ['title' => 'First note', 'date' => '2026-08-12', 'body' => 'Original body', 'expected_checksum' => $checksum, 'csrf_token' => 'expected-token'];
+
+        $forbidden = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/draft', [], $base + ['hierarchy' => '{"body":"smuggled prose"}']));
+        self::assertSame(422, $forbidden->status);
+        self::assertStringContainsString('invalid hierarchy metadata', $forbidden->body);
+
+        $safeString = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/draft', [], $base + ['alt_text' => 'body text as a plain description']));
+        self::assertSame(200, $safeString->status);
     }
 
     public function test_draft_save_rejects_a_redirect_collision_with_a_published_route(): void

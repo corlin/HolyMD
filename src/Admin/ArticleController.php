@@ -371,7 +371,7 @@ final readonly class ArticleController
                 $frontMatter = $items === [] ? $frontMatter->without($listKey) : $frontMatter->with($listKey, $items);
             }
         }
-        foreach (['entities', 'faq'] as $freeKey) {
+        foreach (['entities', 'faq', 'hierarchy', 'alt_text', 'internal_links'] as $freeKey) {
             $value = $text($request->stringInput($freeKey));
             if ($value === null) {
                 continue;
@@ -380,9 +380,22 @@ final readonly class ArticleController
                 $frontMatter = $frontMatter->without($freeKey);
                 continue;
             }
-            $frontMatter = is_array($frontMatter->get($freeKey))
-                ? $frontMatter->with($freeKey, $lines($value) ?? [$value])
-                : $frontMatter->with($freeKey, $value);
+            $existing = $frontMatter->get($freeKey);
+            $isJsonShaped = is_array($existing)
+                && !(array_is_list($existing) && array_reduce($existing, static fn (bool $ok, mixed $item): bool => $ok && is_string($item), true));
+            if ($isJsonShaped) {
+                try {
+                    $decoded = json_decode($value, true, 512, JSON_THROW_ON_ERROR);
+                } catch (\JsonException $exception) {
+                    throw new InvalidArgumentException(ucfirst($freeKey) . ' must be valid JSON.', previous: $exception);
+                }
+                if (!is_array($decoded)) {
+                    throw new InvalidArgumentException(ucfirst($freeKey) . ' must be a JSON array or object.');
+                }
+                $frontMatter = $frontMatter->with($freeKey, $decoded);
+            } else {
+                $frontMatter = $frontMatter->with($freeKey, is_array($existing) ? ($lines($value) ?? [$value]) : $value);
+            }
         }
         $structured = $request->stringInput('structured_data');
         if ($structured !== null) {

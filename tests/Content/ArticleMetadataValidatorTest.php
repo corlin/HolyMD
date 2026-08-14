@@ -69,4 +69,14 @@ final class ArticleMetadataValidatorTest extends TestCase
         self::assertTrue(ArticleMetadataValidator::containsForbiddenKey(['nested' => [['rewrite' => 'x']]]));
         self::assertFalse(ArticleMetadataValidator::containsForbiddenKey(['@type' => 'Thing', 'nested' => ['name' => 'ok']]));
     }
+
+    public function test_free_form_metadata_arrays_reject_forbidden_keys_and_accept_safe_values(): void
+    {
+        foreach (['entities', 'faq', 'hierarchy', 'alt_text', 'internal_links'] as $key) {
+            self::assertContains(sprintf('Article "article" has invalid %s metadata.', $key), ArticleMetadataValidator::errors($this->document([$key => ['nested' => ['body' => 'x']]])), $key);
+            self::assertSame([], ArticleMetadataValidator::errors($this->document([$key => ['ok' => 'value']])), $key);
+            self::assertSame([], ArticleMetadataValidator::errors($this->document([$key => ['plain', 'lines']])), $key);
+            self::assertSame([], ArticleMetadataValidator::errors($this->document([$key => 'plain text'])), $key);
+        }
+    }
 }

@@ -37,6 +37,12 @@ final readonly class ArticleMetadataValidator
         if ($structured !== null && (!is_array($structured) || array_is_list($structured) || $structured === [] || self::containsForbiddenKey($structured))) {
             $errors[] = sprintf('Article "%s" has invalid structured data.', $slug);
         }
+        foreach (['entities', 'faq', 'hierarchy', 'alt_text', 'internal_links'] as $freeKey) {
+            $value = $document->frontMatter->get($freeKey);
+            if ($value !== null && !is_string($value) && (!is_array($value) || self::containsForbiddenKey($value))) {
+                $errors[] = sprintf('Article "%s" has invalid %s metadata.', $slug, $freeKey);
+            }
+        }
         foreach ((array) $document->frontMatter->get('topics', []) as $topic) {
             if (!is_string($topic) || trim($topic) === '') {
                 $errors[] = sprintf('Article "%s" has an invalid topic.', $slug);

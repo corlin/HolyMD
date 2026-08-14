@@ -11,7 +11,6 @@ use HolyMD\Geo\AiClient;
 use HolyMD\Geo\AiResponse;
 use HolyMD\Geo\GeoReviewService;
 use HolyMD\Geo\InMemoryGeoProposalStore;
-use HolyMD\Geo\ProposalAcceptance;
 use HolyMD\Publish\ArticleId;
 use HolyMD\Publish\AtomicPublicTree;
 use HolyMD\Publish\PublishService;
@@ -65,10 +64,9 @@ final class PublishFlowTest extends TestCase
         self::assertSame($bodyHashBefore, $review->bodyHash);
         self::assertCount(2, $review->proposals);
 
-        // --- Accept the summary proposal ---
+        // --- Apply the summary proposal through the editor save path (fill + autosave) ---
         $summaryProposal = $review->proposals[0];
-        $acceptance = new ProposalAcceptance($repository, $store);
-        $accepted = $acceptance->accept($summaryProposal->id);
+        $accepted = $original->withFrontMatter($original->frontMatter->with('summary', (string) $summaryProposal->value));
 
         self::assertSame('An overview of key PHP 8.4 features.', $accepted->frontMatter->get('summary'));
         self::assertSame($original->bodyMarkdown, $accepted->bodyMarkdown, 'Body must be byte-for-byte identical after acceptance.');

@@ -4,23 +4,25 @@ declare(strict_types=1);
 
 namespace HolyMD\Tests\EndToEnd;
 
+use HolyMD\Admin\ArticleController;
+use HolyMD\Admin\VersionService;
+use HolyMD\Auth\AdminGuard;
 use HolyMD\Content\ArticleDocument;
 use HolyMD\Content\ArticleRepository;
 use HolyMD\Content\FrontMatter;
 use HolyMD\Geo\AiClient;
 use HolyMD\Geo\AiResponse;
 use HolyMD\Geo\GeoPrompt;
-use HolyMD\Geo\GeoProposal;
-use HolyMD\Geo\GeoProposalId;
 use HolyMD\Geo\GeoReviewService;
 use HolyMD\Geo\InMemoryGeoProposalStore;
-use HolyMD\Geo\ProposalAcceptance;
+use HolyMD\Http\Csrf;
+use HolyMD\Http\Router;
+use HolyMD\Http\ServerRequest;
 use HolyMD\Publish\ArticleId;
 use HolyMD\Publish\AtomicPublicTree;
 use HolyMD\Publish\PublishService;
 use HolyMD\Render\StaticBuilder;
 use InvalidArgumentException;
-use LogicException;
 use PHPUnit\Framework\TestCase;
 
 final class GeoBoundaryTest extends TestCase
@@ -39,10 +41,7 @@ final class GeoBoundaryTest extends TestCase
 
     protected function tearDown(): void
     {
-        foreach (glob($this->root . '/*') ?: [] as $file) {
-            unlink($file);
-        }
-        rmdir($this->root);
+        $this->removeDirectory($this->root);
     }
 
     // ---- Prompt-level boundary ----
@@ -90,55 +89,42 @@ final class GeoBoundaryTest extends TestCase
         self::assertSame(count($forbidden), $rejected, 'Every forbidden key must be rejected.');
     }
 
-    // ---- Acceptance-level boundary ----
+    // ---- Save-boundary checks (accept no longer writes files; the draft save pipeline does) ----
 
-    public function test_acceptance_rejects_stale_body_hash(): void
-    {
-        $repository = new ArticleRepository($this->root);
-        $store = new InMemoryGeoProposalStore();
-        $wrongHash = hash('sha256', "different body\n");
-        $store->save(new GeoProposal(
-            new GeoProposalId('stale-hash'),
-            'geo-boundary',
-            $wrongHash,
-            'summary',
-            'Safe summary',
-        ));
-
-        $this->expectException(LogicException::class);
-        (new ProposalAcceptance($repository, $store))->accept(new GeoProposalId('stale-hash'));
-    }
-
-    public function test_accepted_proposal_modifies_only_front_matter_keys(): void
+    public function test_save_pipeline_modifies_only_front_matter_keys(): void
     {
         $repository = new ArticleRepository($this->root);
         $original = $repository->read('geo-boundary');
         $bodyHashBefore = hash('sha256', $original->bodyMarkdown);
         $frontMatterBefore = $original->frontMatter->all();
 
-        $store = new InMemoryGeoProposalStore();
-        $store->save(new GeoProposal(
-            new GeoProposalId('fm-only'),
-            'geo-boundary',
-            hash('sha256', $original->bodyMarkdown),
-            'metadata',
-            ['summary' => 'Factual summary.', 'topics' => ['Security']],
-        ));
+        $session = ['admin_user_id' => 1, 'csrf_token' => 'token'];
+        $controller = new ArticleController($repository, new VersionService($this->root . '/versions'), new AdminGuard($session), new Csrf($session));
+        $response = (new Router($controller))->dispatch(new ServerRequest('POST', '/admin/articles/geo-boundary/draft', [], [
+            'csrf_token' => 'token',
+            'expected_checksum' => hash('sha256', (string) file_get_contents($this->root . '/geo-boundary.md')),
+            'title' => (string) $frontMatterBefore['title'],
+            'date' => (string) $frontMatterBefore['date'],
+            'body' => $original->bodyMarkdown,
+            'summary' => 'Factual summary.',
+            'topics' => "Security\n",
+        ]));
 
-        $accepted = (new ProposalAcceptance($repository, $store))->accept(new GeoProposalId('fm-only'));
+        self::assertSame(200, $response->status);
+        $saved = $repository->read('geo-boundary');
 
         // Body byte-for-byte unchanged
-        self::assertSame($original->bodyMarkdown, $accepted->bodyMarkdown);
-        self::assertSame($bodyHashBefore, hash('sha256', $accepted->bodyMarkdown));
+        self::assertSame($original->bodyMarkdown, $saved->bodyMarkdown);
+        self::assertSame($bodyHashBefore, hash('sha256', $saved->bodyMarkdown));
 
         // Only expected keys changed
-        self::assertSame('Factual summary.', $accepted->frontMatter->get('summary'));
-        self::assertSame(['Security'], $accepted->frontMatter->get('topics'));
+        self::assertSame('Factual summary.', $saved->frontMatter->get('summary'));
+        self::assertSame(['Security'], $saved->frontMatter->get('topics'));
 
         // Original keys preserved
-        self::assertSame($frontMatterBefore['title'], $accepted->frontMatter->get('title'));
-        self::assertSame($frontMatterBefore['slug'], $accepted->frontMatter->get('slug'));
-        self::assertSame($frontMatterBefore['date'], $accepted->frontMatter->get('date'));
+        self::assertSame($frontMatterBefore['title'], $saved->frontMatter->get('title'));
+        self::assertSame($frontMatterBefore['slug'], $saved->frontMatter->get('slug'));
+        self::assertSame($frontMatterBefore['date'], $saved->frontMatter->get('date'));
     }
 
     // ---- Full cycle integration ----
@@ -173,9 +159,9 @@ final class GeoBoundaryTest extends TestCase
             $review = (new GeoReviewService(new BoundaryAiClient($aiJson), $store))->review($original);
             self::assertSame($bodyHashOriginal, $review->bodyHash, 'Review must record the original body hash.');
 
-            // Step 2: Accept proposal
-            $accepted = (new ProposalAcceptance($repository, $store))->accept($review->proposals[0]->id);
-            self::assertSame($bodyHashOriginal, hash('sha256', $accepted->bodyMarkdown), 'Body hash must be unchanged after acceptance.');
+            // Step 2: Apply the proposal through the editor save path (fill + autosave)
+            $accepted = $original->withFrontMatter($original->frontMatter->with('summary', 'A deep dive article.'));
+            self::assertSame($bodyHashOriginal, hash('sha256', $accepted->bodyMarkdown), 'Body hash must be unchanged after filling the proposal.');
 
             // Step 3: Publish
             $ready = $accepted->withFrontMatter($accepted->frontMatter->with('status', 'published'));
