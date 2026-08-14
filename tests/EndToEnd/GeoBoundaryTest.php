@@ -53,6 +53,9 @@ final class GeoBoundaryTest extends TestCase
         self::assertStringContainsString('DO NOT draft, rewrite, paraphrase', $prompt);
         self::assertStringContainsString('Do not continue or return replacement body Markdown', $prompt);
         self::assertStringContainsString('Never use type "body"', $prompt);
+        self::assertStringContainsString('Never invent source URLs', $prompt);
+        self::assertStringContainsString('question and answer', $prompt);
+        self::assertStringContainsString('existing site-relative or HTTPS URLs', $prompt);
     }
 
     // ---- Review-level boundary ----

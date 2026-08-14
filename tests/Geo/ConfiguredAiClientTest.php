@@ -25,6 +25,8 @@ final class ConfiguredAiClientTest extends TestCase
         $payload = json_decode($transport->body, true, flags: JSON_THROW_ON_ERROR);
         self::assertSame('geo-model', $payload['model']);
         self::assertSame('system', $payload['messages'][0]['role']);
+        self::assertStringContainsString('"additionalProperties":false', $payload['messages'][0]['content']);
+        self::assertStringContainsString('"value_json"', $payload['messages'][0]['content']);
         self::assertSame('user', $payload['messages'][1]['role']);
         self::assertSame('# Saved body', $payload['messages'][1]['content']);
         self::assertSame('json_object', $payload['response_format']['type']);

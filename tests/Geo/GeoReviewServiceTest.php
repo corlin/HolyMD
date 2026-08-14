@@ -14,7 +14,7 @@ use PHPUnit\Framework\TestCase;
 
 final class GeoReviewServiceTest extends TestCase
 {
-    public function test_review_sends_the_saved_body_to_an_analysis_only_prompt_and_returns_typed_proposals(): void
+    public function test_review_sends_the_saved_article_context_to_an_analysis_only_prompt_and_returns_typed_proposals(): void
     {
         $client = new RecordingAiClient('{"proposals":[{"type":"summary","value":"A concise factual summary."},{"type":"metadata","value":{"topics":["PHP"]}}],"findings":["Add a descriptive alt text."]}');
         $document = new ArticleDocument('first-note', 'First note', "# Exact saved body\n", new FrontMatter(['title' => 'First note', 'slug' => 'first-note', 'date' => '2026-08-12']), '/articles/first-note.md');
@@ -23,7 +23,9 @@ final class GeoReviewServiceTest extends TestCase
 
         self::assertStringContainsString('DO NOT draft, rewrite, paraphrase, or return article prose', $client->systemPrompt);
         self::assertStringContainsString('JSON only', $client->systemPrompt);
-        self::assertSame($document->bodyMarkdown, $client->articleMarkdown);
+        self::assertStringContainsString("title: 'First note'", $client->articleMarkdown);
+        self::assertStringContainsString('date: \'2026-08-12\'', $client->articleMarkdown);
+        self::assertStringContainsString('# Exact saved body', $client->articleMarkdown);
         self::assertSame(hash('sha256', $document->bodyMarkdown), $review->bodyHash);
         self::assertSame('summary', $review->proposals[0]->type);
         self::assertSame('A concise factual summary.', $review->proposals[0]->value);

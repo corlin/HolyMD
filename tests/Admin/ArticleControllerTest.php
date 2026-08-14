@@ -64,7 +64,7 @@ final class ArticleControllerTest extends TestCase
         self::assertStringContainsString('value="expected-token"', $response->body);
     }
 
-    public function test_new_article_creates_safe_markdown_and_first_version_then_redirects_to_edit(): void
+    public function test_new_article_creates_safe_markdown_without_a_published_version_then_redirects_to_edit(): void
     {
         $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);
 
@@ -78,7 +78,7 @@ final class ArticleControllerTest extends TestCase
         self::assertSame('A Fresh Note!', $document->title);
         self::assertSame("# Hello\n", $document->bodyMarkdown);
         self::assertSame('fresh-note-2026', $document->frontMatter->get('slug'));
-        self::assertCount(1, (new VersionService($this->root . '/versions'))->list('fresh-note-2026'));
+        self::assertCount(0, (new VersionService($this->root . '/versions'))->list('fresh-note-2026'));
     }
 
     public function test_new_article_uses_title_when_slug_is_blank_and_rejects_bad_csrf_or_duplicates(): void
@@ -103,7 +103,7 @@ final class ArticleControllerTest extends TestCase
         self::assertSame(419, $response->status);
     }
 
-    public function test_draft_save_writes_markdown_creates_a_version_and_round_trips_the_body(): void
+    public function test_draft_save_writes_markdown_without_creating_a_version_and_round_trips_the_body(): void
     {
         $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);
         $checksum = hash('sha256', (string) file_get_contents($this->root . '/articles/first-note.md'));
@@ -118,10 +118,10 @@ final class ArticleControllerTest extends TestCase
 
         self::assertSame(200, $response->status);
         $payload = json_decode($response->body, true, flags: JSON_THROW_ON_ERROR);
-        self::assertArrayHasKey('versionId', $payload);
+        self::assertArrayNotHasKey('versionId', $payload);
         self::assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $payload['checksum']);
         self::assertSame("# Exact body\n\nTrailing spaces  \n", (new ArticleRepository($this->root . '/articles'))->read('first-note')->bodyMarkdown);
-        self::assertSame(1, count(glob($this->root . '/versions/*.md') ?: []));
+        self::assertSame(0, count(glob($this->root . '/versions/*.md') ?: []));
     }
 
     public function test_editor_exposes_metadata_fields_for_editing(): void
@@ -205,7 +205,7 @@ final class ArticleControllerTest extends TestCase
             'title' => 'First note', 'date' => '2026-08-12', 'body' => 'Original body',
             'alt_text' => "First alt\nSecond alt",
             'hierarchy' => '{"h1":"Overview","h2":"Details"}',
-            'internal_links' => "Guide\nNotes",
+            'internal_links' => "/articles/guide/\nhttps://example.test/notes/",
             'faq' => "[\n  {\n    \"question\": \"New Q\",\n    \"answer\": \"New A\"\n  }\n]",
             'expected_checksum' => $checksum, 'csrf_token' => 'expected-token',
         ]));
@@ -214,7 +214,7 @@ final class ArticleControllerTest extends TestCase
         $article = (new ArticleRepository($this->root . '/articles'))->read('first-note');
         self::assertSame(['First alt', 'Second alt'], $article->frontMatter->get('alt_text'));
         self::assertSame(['h1' => 'Overview', 'h2' => 'Details'], $article->frontMatter->get('hierarchy'));
-        self::assertSame(['Guide', 'Notes'], $article->frontMatter->get('internal_links'));
+        self::assertSame(['/articles/guide/', 'https://example.test/notes/'], $article->frontMatter->get('internal_links'));
         self::assertSame([['question' => 'New Q', 'answer' => 'New A']], $article->frontMatter->get('faq'));
     }
 
@@ -226,6 +226,23 @@ final class ArticleControllerTest extends TestCase
         self::assertSame(200, $response->status);
         self::assertStringContainsString('&quot;question&quot;', $response->body);
         self::assertStringNotContainsString('>Array<', $response->body);
+    }
+
+    public function test_first_structured_faq_save_preserves_question_answer_objects(): void
+    {
+        $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);
+        $checksum = hash('sha256', (string) file_get_contents($this->root . '/articles/first-note.md'));
+        $response = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/draft', [], [
+            'title' => 'First note', 'date' => '2026-08-12', 'body' => 'Original body',
+            'faq' => '[{"question":"What is GEO?","answer":"Metadata optimization."}]',
+            'expected_checksum' => $checksum, 'csrf_token' => 'expected-token',
+        ]));
+
+        self::assertSame(200, $response->status);
+        self::assertSame(
+            [['question' => 'What is GEO?', 'answer' => 'Metadata optimization.']],
+            (new ArticleRepository($this->root . '/articles'))->read('first-note')->frontMatter->get('faq'),
+        );
     }
 
     public function test_draft_save_rejects_malformed_faq_json_when_faq_is_array_typed(): void
@@ -320,7 +337,9 @@ final class ArticleControllerTest extends TestCase
     {
         $versions = new VersionService($this->root . '/versions');
         $document = (new ArticleRepository($this->root . '/articles'))->read('first-note');
-        $version = $versions->snapshot($document);
+        $version = $versions->capturePublicationInput($document);
+        $versions->stagePublished($version);
+        $versions->confirmPublished('first-note', $version);
         file_put_contents($this->root . '/articles/first-note.md', "---\ntitle: First note\nslug: first-note\ndate: 2026-08-12\n---\nChanged body\n");
         $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);
 
@@ -330,12 +349,13 @@ final class ArticleControllerTest extends TestCase
         self::assertSame("Original body\n", (new ArticleRepository($this->root . '/articles'))->read('first-note')->bodyMarkdown);
     }
 
-    public function test_identical_saved_article_reuses_the_same_stable_version(): void
+    public function test_identical_publication_input_reuses_the_same_candidate_without_creating_a_version(): void
     {
         $versions = new VersionService($this->root . '/versions');
         $document = (new ArticleRepository($this->root . '/articles'))->read('first-note');
-        self::assertSame($versions->snapshot($document)->value, $versions->snapshot($document)->value);
-        self::assertCount(1, glob($this->root . '/versions/*.md') ?: []);
+        self::assertSame($versions->capturePublicationInput($document)->value, $versions->capturePublicationInput($document)->value);
+        self::assertCount(1, glob($this->root . '/versions/publish-inputs/*.md') ?: []);
+        self::assertSame([], $versions->list('first-note'));
     }
 
     public function test_publish_is_an_authorized_csrf_protected_real_publication_action(): void
@@ -348,6 +368,33 @@ final class ArticleControllerTest extends TestCase
         self::assertStringContainsString('Article published', $response->body);
         self::assertStringContainsString('href="/articles/first-note/"', $response->body);
         self::assertFileExists($this->publishedRoot() . '/articles/first-note/index.html');
+        $published = (new ArticleRepository($this->root . '/articles'))->read('first-note');
+        self::assertMatchesRegularExpression('/^[a-f0-9]{32}$/', (string) $published->frontMatter->get('published_version'));
+        self::assertCount(1, (new VersionService($this->root . '/versions'))->list('first-note'));
+    }
+
+    public function test_only_a_successful_publish_advances_content_version_history(): void
+    {
+        $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);
+        self::assertSame(200, $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/publish', [], ['csrf_token' => 'expected-token']))->status);
+
+        $repository = new ArticleRepository($this->root . '/articles');
+        $versions = new VersionService($this->root . '/versions');
+        $firstPublishedVersion = $repository->read('first-note')->frontMatter->get('published_version');
+        self::assertCount(1, $versions->list('first-note'));
+
+        $checksum = hash('sha256', $repository->read('first-note')->serialize());
+        $saved = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/draft', [], [
+            'title' => 'First note', 'date' => '2026-08-12', 'body' => "Saved after publication\n",
+            'expected_checksum' => $checksum, 'csrf_token' => 'expected-token',
+        ]));
+        self::assertSame(200, $saved->status);
+        self::assertCount(1, $versions->list('first-note'));
+        self::assertSame($firstPublishedVersion, $repository->read('first-note')->frontMatter->get('published_version'));
+
+        self::assertSame(200, $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/publish', [], ['csrf_token' => 'expected-token']))->status);
+        self::assertCount(2, $versions->list('first-note'));
+        self::assertNotSame($firstPublishedVersion, $repository->read('first-note')->frontMatter->get('published_version'));
     }
 
     public function test_published_editor_can_update_public_with_the_latest_submitted_markdown(): void
@@ -510,7 +557,10 @@ final class ArticleControllerTest extends TestCase
     {
         file_put_contents($this->root . '/articles/second-note.md', "---\ntitle: Second note\nslug: second-note\ndate: 2026-08-12\n---\nSecond body\n");
         $versions = new VersionService($this->root . '/versions');
-        $secondVersion = $versions->snapshot((new ArticleRepository($this->root . '/articles'))->read('second-note'));
+        $second = (new ArticleRepository($this->root . '/articles'))->read('second-note');
+        $secondVersion = $versions->capturePublicationInput($second);
+        $versions->stagePublished($secondVersion);
+        $versions->confirmPublished('second-note', $secondVersion);
         $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);
 
         self::assertSame([], $versions->list('first-note'));
@@ -545,8 +595,9 @@ final class ArticleControllerTest extends TestCase
     private function router(array $session): Router
     {
         $repository = new ArticleRepository($this->root . '/articles');
-        $publisher = new PublishService($repository, new StaticBuilder(), new AtomicPublicTree(), $this->root . '/public/.holymd-current', 'Test publication', 'https://example.test', 'Ada Test', 'About Ada.');
-        $controller = new ArticleController($repository, new VersionService($this->root . '/versions'), new AdminGuard($session), new Csrf($session), $publisher, null, $this->root . '/media', ['site_name' => 'Test publication', 'site_url' => 'https://example.test', 'author_name' => 'Ada Test', 'about' => 'About Ada.', 'site_language' => 'zh-CN']);
+        $versions = new VersionService($this->root . '/versions');
+        $publisher = new PublishService($repository, new StaticBuilder(), new AtomicPublicTree(), $this->root . '/public/.holymd-current', 'Test publication', 'https://example.test', 'Ada Test', 'About Ada.', false, null, null, null, 'zh-CN', $versions);
+        $controller = new ArticleController($repository, $versions, new AdminGuard($session), new Csrf($session), $publisher, null, $this->root . '/media', ['site_name' => 'Test publication', 'site_url' => 'https://example.test', 'author_name' => 'Ada Test', 'about' => 'About Ada.', 'site_language' => 'zh-CN']);
         return Router::admin($controller);
     }
 

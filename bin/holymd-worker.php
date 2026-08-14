@@ -24,7 +24,7 @@ try {
     $pdo->exec("UPDATE builds INNER JOIN jobs ON jobs.build_id = builds.id SET builds.status = 'queued', builds.started_at = NULL WHERE jobs.status = 'running' AND jobs.attempts < 3 AND {$leaseExpired}");
     $pdo->exec("UPDATE geo_reviews INNER JOIN jobs ON jobs.geo_review_id = geo_reviews.id SET geo_reviews.status = 'queued' WHERE jobs.status = 'running' AND jobs.attempts < 3 AND {$leaseExpired}");
     $pdo->exec("UPDATE jobs SET status = 'queued', locked_at = NULL, lock_token = NULL, available_at = UTC_TIMESTAMP(6) WHERE status = 'running' AND attempts < 3 AND {$leaseExpired}");
-    $job = $pdo->query("SELECT jobs.id, jobs.job_type, jobs.article_id, jobs.geo_review_id, jobs.build_id, jobs.action, jobs.attempts, articles.slug FROM jobs LEFT JOIN articles ON articles.id = jobs.article_id WHERE jobs.status = 'queued' AND jobs.attempts < 3 AND jobs.available_at <= UTC_TIMESTAMP(6) ORDER BY jobs.id LIMIT 1 FOR UPDATE SKIP LOCKED")->fetch();
+    $job = $pdo->query("SELECT jobs.id, jobs.job_type, jobs.article_id, jobs.article_version_id, jobs.geo_review_id, jobs.build_id, jobs.action, jobs.attempts, articles.slug, article_versions.snapshot_path FROM jobs LEFT JOIN articles ON articles.id = jobs.article_id LEFT JOIN article_versions ON article_versions.id = jobs.article_version_id WHERE jobs.status = 'queued' AND jobs.attempts < 3 AND jobs.available_at <= UTC_TIMESTAMP(6) ORDER BY jobs.id LIMIT 1 FOR UPDATE SKIP LOCKED")->fetch();
     if ($job === false) { $pdo->commit(); fwrite(STDOUT, "No queued jobs.\n"); exit(0); }
     $claim = $pdo->prepare("UPDATE jobs SET status = 'running', attempts = attempts + 1, locked_at = UTC_TIMESTAMP(6), lock_token = ? WHERE id = ? AND status = 'queued' AND attempts < 3");
     $claim->execute([$token, $job['id']]);
@@ -42,6 +42,10 @@ try {
     $entrypoint = $job['job_type'] === 'geo_review' ? $root . '/bin/holymd-geo-review.php' : $root . '/bin/holymd-build.php';
     $command = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg($entrypoint) . ' --article ' . escapeshellarg($job['slug']);
     if ($job['job_type'] === 'build' && $job['action'] === 'withdraw') $command .= ' --withdraw';
+    if ($job['job_type'] === 'build' && $job['action'] === 'publish') {
+        if (!is_string($job['snapshot_path'] ?? null)) throw new RuntimeException('Publish job has no immutable publication input.');
+        $command .= ' --version ' . escapeshellarg((string) basename($job['snapshot_path'], '.md'));
+    }
     if ($job['job_type'] === 'geo_review' && $job['geo_review_id'] !== null) $command .= ' --review-id ' . escapeshellarg((string) $job['geo_review_id']);
     exec($command . ' 2>&1', $output, $exitCode);
     if ($exitCode !== 0) throw new RuntimeException(($exitCode === 75 ? 'RETRYABLE: ' : 'PERMANENT: ') . implode("\n", $output));

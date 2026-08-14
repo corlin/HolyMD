@@ -103,6 +103,7 @@ CREATE TABLE IF NOT EXISTS `jobs` (
     `job_type` ENUM('geo_review', 'build') NOT NULL,
     `status` ENUM('queued', 'running', 'succeeded', 'failed') NOT NULL DEFAULT 'queued',
     `article_id` BIGINT UNSIGNED NULL,
+    `article_version_id` BIGINT UNSIGNED NULL,
     `geo_review_id` BIGINT UNSIGNED NULL,
     `build_id` BIGINT UNSIGNED NULL,
     `action` ENUM('publish', 'withdraw') NULL,
@@ -116,7 +117,9 @@ CREATE TABLE IF NOT EXISTS `jobs` (
     PRIMARY KEY (`id`),
     KEY `jobs_claim_index` (`status`, `available_at`),
     KEY `jobs_article_index` (`article_id`),
+    KEY `jobs_article_version_index` (`article_version_id`),
     CONSTRAINT `jobs_article_fk` FOREIGN KEY (`article_id`) REFERENCES `articles` (`id`) ON DELETE SET NULL,
+    CONSTRAINT `jobs_article_version_fk` FOREIGN KEY (`article_version_id`) REFERENCES `article_versions` (`id`) ON DELETE SET NULL,
     CONSTRAINT `jobs_geo_review_fk` FOREIGN KEY (`geo_review_id`) REFERENCES `geo_reviews` (`id`) ON DELETE SET NULL,
     CONSTRAINT `jobs_build_fk` FOREIGN KEY (`build_id`) REFERENCES `builds` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

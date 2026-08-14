@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace HolyMD\Admin;
 
 use HolyMD\Content\ArticleDocument;
+use HolyMD\Content\ArticleRepository;
 use HolyMD\Content\FrontMatter;
 use InvalidArgumentException;
 use RuntimeException;
@@ -15,25 +16,63 @@ final readonly class VersionService
     {
     }
 
-    public function snapshot(ArticleDocument $document): VersionId
+    private function recordPublishedSnapshot(ArticleDocument $document): VersionId
     {
-        if (!is_dir($this->versionsRoot) && !mkdir($this->versionsRoot, 0775, true) && !is_dir($this->versionsRoot)) {
-            throw new RuntimeException('Unable to create the article version directory.');
-        }
-        $serialized = $document->serialize();
-        $id = new VersionId(substr(hash('sha256', $serialized), 0, 32));
-        if (!is_file($this->path($id)) && file_put_contents($this->path($id), $serialized, LOCK_EX) === false) {
-            throw new RuntimeException('Unable to write article version snapshot.');
-        }
+        $id = $this->writeSnapshot($document, $this->versionsRoot);
         $this->recordIndex($document->slug, $id->value);
         return $id;
     }
 
+    public function captureReviewInput(ArticleDocument $document): VersionId
+    {
+        return $this->writeSnapshot($document, $this->reviewInputsRoot());
+    }
+
+    public function capturePublicationInput(ArticleDocument $document): VersionId
+    {
+        return $this->writeSnapshot($document, $this->publicationInputsRoot());
+    }
+
     public function restore(VersionId $id, ?string $expectedSlug = null): ArticleDocument
     {
-        $markdown = file_get_contents($this->path($id));
+        return $this->restoreFromPath($id, $this->path($id), $expectedSlug);
+    }
+
+    public function restoreReviewInput(VersionId $id, ?string $expectedSlug = null): ArticleDocument
+    {
+        return $this->restoreFromPath($id, $this->reviewInputPath($id), $expectedSlug);
+    }
+
+    public function restorePublicationInput(VersionId $id, ?string $expectedSlug = null): ArticleDocument
+    {
+        return $this->restoreFromPath($id, $this->publicationInputPath($id), $expectedSlug);
+    }
+
+    public function stagePublished(VersionId $id): void
+    {
+        if (is_file($this->path($id))) return;
+        $source = $this->publicationInputPath($id);
+        if (!is_file($source)) throw new InvalidArgumentException('Publication input snapshot was not found.');
+        if (!is_dir($this->versionsRoot) && !mkdir($this->versionsRoot, 0775, true) && !is_dir($this->versionsRoot)) {
+            throw new RuntimeException('Unable to create the article version directory.');
+        }
+        if (!copy($source, $this->path($id))) throw new RuntimeException('Unable to stage the published article version.');
+    }
+
+    public function confirmPublished(string $articleSlug, VersionId $id): void
+    {
+        $this->restore($id, $articleSlug);
+        $this->recordIndex($articleSlug, $id->value);
+    }
+
+    private function restoreFromPath(VersionId $id, string $path, ?string $expectedSlug): ArticleDocument
+    {
+        if (!is_file($path)) {
+            throw new InvalidArgumentException('Article snapshot was not found.');
+        }
+        $markdown = file_get_contents($path);
         if ($markdown === false) {
-            throw new InvalidArgumentException('Article version was not found.');
+            throw new InvalidArgumentException('Article snapshot was not found.');
         }
         [$frontMatter, $body] = FrontMatter::parse($markdown);
         $slug = $frontMatter->get('slug');
@@ -41,35 +80,53 @@ final readonly class VersionService
         if (!is_string($slug) || !is_string($title)) {
             throw new InvalidArgumentException('Article version has invalid front matter.');
         }
-        $document = new ArticleDocument($slug, $title, $body, $frontMatter, $this->path($id));
+        $document = new ArticleDocument($slug, $title, $body, $frontMatter, $path);
         if ($expectedSlug !== null && $document->slug !== $expectedSlug) {
             throw new InvalidArgumentException('Article version does not belong to this article.');
         }
         return $document;
     }
 
+    private function writeSnapshot(ArticleDocument $document, string $directory): VersionId
+    {
+        if (!is_dir($directory) && !mkdir($directory, 0775, true) && !is_dir($directory)) {
+            throw new RuntimeException('Unable to create the article snapshot directory.');
+        }
+        $serialized = $document->serialize();
+        $id = new VersionId(substr(hash('sha256', $serialized), 0, 32));
+        $path = $directory . '/' . $id->value . '.md';
+        if (!is_file($path) && file_put_contents($path, $serialized, LOCK_EX) === false) {
+            throw new RuntimeException('Unable to write article snapshot.');
+        }
+        return $id;
+    }
+
+    public function pinPublished(ArticleRepository $articles): int
+    {
+        $pinned = 0;
+        foreach ($articles->all() as $document) {
+            if ($document->frontMatter->get('status') !== 'published') continue;
+            $pointer = $document->frontMatter->get('published_version');
+            if (is_string($pointer) && preg_match('/^[a-f0-9]{32}$/', $pointer) === 1) {
+                try {
+                    $this->restore(new VersionId($pointer), $document->slug);
+                    continue;
+                } catch (InvalidArgumentException) {
+                    // Re-pin a missing or invalid legacy pointer below.
+                }
+            }
+            $version = $this->recordPublishedSnapshot($document);
+            $articles->write($document->withFrontMatter($document->frontMatter->with('published_version', $version->value)));
+            $pinned++;
+        }
+        return $pinned;
+    }
+
     /** @return list<VersionId> */
     public function list(string $articleSlug): array
     {
         $indexed = $this->indexedIds($articleSlug);
-        if ($indexed !== null) {
-            return $indexed;
-        }
-        // Fallback for snapshots taken before the index existed: full scan.
-        $files = glob($this->versionsRoot . '/*.md') ?: [];
-        rsort($files, SORT_STRING);
-        return array_values(array_filter(array_map(
-            function (string $path) use ($articleSlug): ?VersionId {
-                $id = new VersionId((string) basename($path, '.md'));
-                try {
-                    $this->restore($id, $articleSlug);
-                    return $id;
-                } catch (InvalidArgumentException) {
-                    return null;
-                }
-            },
-            $files,
-        )));
+        return $indexed ?? [];
     }
 
     /** @return ?list<VersionId> */
@@ -128,5 +185,25 @@ final readonly class VersionService
     private function path(VersionId $id): string
     {
         return $this->versionsRoot . '/' . $id->value . '.md';
+    }
+
+    private function reviewInputsRoot(): string
+    {
+        return $this->versionsRoot . '/review-inputs';
+    }
+
+    private function reviewInputPath(VersionId $id): string
+    {
+        return $this->reviewInputsRoot() . '/' . $id->value . '.md';
+    }
+
+    private function publicationInputsRoot(): string
+    {
+        return $this->versionsRoot . '/publish-inputs';
+    }
+
+    private function publicationInputPath(VersionId $id): string
+    {
+        return $this->publicationInputsRoot() . '/' . $id->value . '.md';
     }
 }

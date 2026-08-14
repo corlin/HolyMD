@@ -24,6 +24,7 @@ final class QueueProducerTest extends TestCase
         self::assertStringContainsString("status = 'pending'", $store);
         self::assertStringContainsString("hash('sha256', \$article->serialize())", $queue);
         self::assertStringContainsString('ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)', $queue);
+        self::assertStringContainsString('review-inputs/', $queue);
     }
 
     public function test_schema_has_idempotency_keys_and_publish_action_migration(): void
@@ -33,5 +34,28 @@ final class QueueProducerTest extends TestCase
         self::assertStringContainsString('geo_reviews_request_unique', $schema);
         self::assertStringContainsString('geo_proposals_key_unique', $schema);
         self::assertStringContainsString("ENUM('publish', 'withdraw')", $migration);
+    }
+
+    public function test_build_jobs_are_bound_to_an_immutable_article_version(): void
+    {
+        $schema = (string) file_get_contents(__DIR__ . '/../../database/schema.sql');
+        $queue = (string) file_get_contents(__DIR__ . '/../../src/Queue/MySqlJobQueue.php');
+        $worker = (string) file_get_contents(__DIR__ . '/../../bin/holymd-worker.php');
+        $build = (string) file_get_contents(__DIR__ . '/../../bin/holymd-build.php');
+
+        self::assertStringContainsString('`article_version_id` BIGINT UNSIGNED NULL', $schema);
+        self::assertStringContainsString('jobs_article_version_fk', $schema);
+        self::assertStringContainsString('article_version_id, build_id', $queue);
+        self::assertStringContainsString('publish-inputs/', $queue);
+        self::assertStringContainsString("--version", $worker);
+        self::assertStringContainsString("--version", $build);
+    }
+
+    public function test_geo_decisions_record_the_administrator_and_an_audit_event(): void
+    {
+        $store = (string) file_get_contents(__DIR__ . '/../../src/Geo/MySqlGeoProposalStore.php');
+        self::assertStringContainsString('decision_by_admin_user_id', $store);
+        self::assertStringContainsString('INSERT INTO audit_events', $store);
+        self::assertStringContainsString("'geo_proposal_decided'", $store);
     }
 }

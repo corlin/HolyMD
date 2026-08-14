@@ -148,7 +148,7 @@ try {
         (string) (Env::get('HOLYMD_PUBLIC_TREE') ?: $root . ($flattened ? '/.holymd-current' : '/public/.holymd-current')), (string) (Env::get('HOLYMD_SITE_NAME') ?: 'HolyMD'), (string) (Env::get('HOLYMD_SITE_URL') ?: 'https://example.invalid'),
         (string) (Env::get('HOLYMD_AUTHOR_NAME') ?: 'Author'), (string) (Env::get('HOLYMD_ABOUT') ?: ''),
         Env::get('HOLYMD_LLMS_TXT') === '1', $root . '/content/audit',
-        null, $root . '/content/holymd-publish.lock', (string) (Env::get('HOLYMD_SITE_LANGUAGE') ?: 'zh-CN'),
+        null, $root . '/content/holymd-publish.lock', (string) (Env::get('HOLYMD_SITE_LANGUAGE') ?: 'zh-CN'), new VersionService($root . '/content/versions'),
     ),
     $queue,
     $root . '/content/media',

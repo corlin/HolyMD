@@ -61,8 +61,7 @@ final readonly class ArticleController
             if (!is_string($expectedChecksum) || !$this->articles->writeIfUnchanged($document, $expectedChecksum)) {
                 return Response::json(['error' => 'The article changed in another editor session. Reload before saving again.'], 409);
             }
-            $version = $this->versions->snapshot($document);
-            return Response::json(['saved' => true, 'versionId' => $version->value, 'checksum' => hash('sha256', $document->serialize())]);
+            return Response::json(['saved' => true, 'checksum' => hash('sha256', $document->serialize())]);
         } catch (InvalidArgumentException $exception) {
             return Response::json(['error' => $exception->getMessage()], 422);
         }
@@ -118,7 +117,6 @@ final readonly class ArticleController
             $document = new ArticleDocument($slug, $title, $body, $frontMatter, $slug . '.md');
             $this->assertValidMetadata($document);
             $this->articles->write($document);
-            $this->versions->snapshot($document);
             return Response::redirect('/admin/articles/' . rawurlencode($slug) . '/edit');
         } catch (InvalidArgumentException $exception) {
             return Response::json(['error' => $exception->getMessage()], 422);
@@ -158,7 +156,6 @@ final readonly class ArticleController
             $version = new VersionId($matches[2]);
             $document = $this->versions->restore($version, $matches[1]);
             $this->articles->write($document);
-            $this->versions->snapshot($document);
             return Response::redirect('/admin/articles/' . $document->slug . '/edit');
         } catch (InvalidArgumentException $exception) {
             return Response::json(['error' => $exception->getMessage()], 422);
@@ -179,20 +176,22 @@ final readonly class ArticleController
         }
         try {
             $article = $this->articles->read($matches[1]);
+            $selectedVersion = null;
             if ($matches[2] === 'publish' && $request->input('body') !== null) {
                 $updated = $this->submittedArticle($request, $article);
                 $expectedChecksum = $request->input('expected_checksum');
                 if (!is_string($expectedChecksum) || !$this->articles->writeIfUnchanged($updated, $expectedChecksum)) {
                     return $this->publicationError('The article changed in another editor session. Reload before publishing.', 409, $matches[1]);
                 }
-                $this->versions->snapshot($updated);
+                $selectedVersion = $this->versions->capturePublicationInput($updated);
                 $article = $updated;
             }
+            if ($matches[2] === 'publish' && $selectedVersion === null) $selectedVersion = $this->versions->capturePublicationInput($article);
             if ($this->queue !== null) {
-                $jobId = $this->queue->enqueueBuild($article, $matches[2]);
+                $jobId = $this->queue->enqueueBuild($article, $matches[2], $selectedVersion?->value === null ? null : 'publish-inputs/' . $selectedVersion->value . '.md');
                 return $this->publicationResponse($matches[1], $matches[2], true, $jobId);
             }
-            $result = $matches[2] === 'publish' ? $this->publisher->publish(new ArticleId($matches[1])) : $this->publisher->withdraw(new ArticleId($matches[1]));
+            $result = $matches[2] === 'publish' ? $this->publisher->publish(new ArticleId($matches[1]), $selectedVersion) : $this->publisher->withdraw(new ArticleId($matches[1]));
             return $this->publicationResponse($matches[1], $matches[2]);
         } catch (InvalidArgumentException $exception) {
             return $this->publicationError($exception->getMessage(), 422, $matches[1]);
@@ -381,6 +380,16 @@ final readonly class ArticleController
                 continue;
             }
             $existing = $frontMatter->get($freeKey);
+            if ($freeKey === 'faq' && ($value[0] ?? '') === '[') {
+                try {
+                    $decoded = json_decode($value, true, 512, JSON_THROW_ON_ERROR);
+                } catch (\JsonException $exception) {
+                    throw new InvalidArgumentException('Faq must be valid JSON.', previous: $exception);
+                }
+                if (!is_array($decoded)) throw new InvalidArgumentException('Faq must be a JSON array.');
+                $frontMatter = $frontMatter->with($freeKey, $decoded);
+                continue;
+            }
             $isJsonShaped = is_array($existing)
                 && !(array_is_list($existing) && array_reduce($existing, static fn (bool $ok, mixed $item): bool => $ok && is_string($item), true));
             if ($isJsonShaped) {

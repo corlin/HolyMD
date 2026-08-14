@@ -5,6 +5,8 @@ declare(strict_types=1);
 
 use HolyMD\Content\ArticleDocument;
 use HolyMD\Content\ArticleRepository;
+use HolyMD\Admin\VersionId;
+use HolyMD\Admin\VersionService;
 use HolyMD\Publish\AtomicPublicTree;
 use HolyMD\Publish\PublishService;
 use HolyMD\Render\StaticBuilder;
@@ -18,6 +20,8 @@ $dryRun = in_array('--dry-run', $argv, true);
 $articleIndex = array_search('--article', $argv, true);
 $slug = $articleIndex === false ? null : ($argv[$articleIndex + 1] ?? null);
 $withdraw = in_array('--withdraw', $argv, true);
+$versionIndex = array_search('--version', $argv, true);
+$versionValue = $versionIndex === false ? null : ($argv[$versionIndex + 1] ?? null);
 $siteName = (string) (\HolyMD\Config\Env::get('HOLYMD_SITE_NAME') ?: 'HolyMD');
 $siteUrl = (string) (\HolyMD\Config\Env::get('HOLYMD_SITE_URL') ?: 'https://example.invalid');
 $authorName = (string) (\HolyMD\Config\Env::get('HOLYMD_AUTHOR_NAME') ?: 'Author');
@@ -46,6 +50,8 @@ if ($dryRun) {
     exit(0);
 }
 
-$service = new PublishService($articles, new StaticBuilder(), new AtomicPublicTree(), (string) (\HolyMD\Config\Env::get('HOLYMD_PUBLIC_TREE') ?: $root . '/public/.holymd-current'), $siteName, $siteUrl, $authorName, $about, \HolyMD\Config\Env::get('HOLYMD_LLMS_TXT') === '1', $root . '/content/audit', null, $root . '/content/holymd-publish.lock', $siteLanguage);
-$result = $withdraw ? $service->withdraw(new \HolyMD\Publish\ArticleId($slug)) : $service->publish(new \HolyMD\Publish\ArticleId($slug));
+$versions = new VersionService($root . '/content/versions');
+$service = new PublishService($articles, new StaticBuilder(), new AtomicPublicTree(), (string) (\HolyMD\Config\Env::get('HOLYMD_PUBLIC_TREE') ?: $root . '/public/.holymd-current'), $siteName, $siteUrl, $authorName, $about, \HolyMD\Config\Env::get('HOLYMD_LLMS_TXT') === '1', $root . '/content/audit', null, $root . '/content/holymd-publish.lock', $siteLanguage, $versions);
+if (!$withdraw && (!is_string($versionValue) || preg_match('/^[a-f0-9]{32}$/', $versionValue) !== 1)) { fwrite(STDERR, "A publish build requires --version <snapshot-id>.\n"); exit(64); }
+$result = $withdraw ? $service->withdraw(new \HolyMD\Publish\ArticleId($slug)) : $service->publish(new \HolyMD\Publish\ArticleId($slug), new VersionId($versionValue));
 fwrite(STDOUT, $result->validation->text() . "\nPublished {$result->manifest->articleCount} article(s).\n");

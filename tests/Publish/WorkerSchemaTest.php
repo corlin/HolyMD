@@ -43,7 +43,7 @@ final class WorkerSchemaTest extends TestCase
         $entrypoint = (string) file_get_contents(__DIR__ . '/../../bin/holymd-geo-review.php');
         self::assertStringContainsString('GeoReviewService', $entrypoint);
         self::assertStringContainsString('INSERT INTO geo_proposals', $entrypoint);
-        self::assertStringContainsString('GEO review is not bound to the current saved article version checksum', $entrypoint);
+        self::assertStringContainsString('GEO review input does not match its saved article checksum', $entrypoint);
         self::assertStringContainsString('ON DUPLICATE KEY UPDATE', $entrypoint);
         self::assertStringNotContainsString('GEO review queued for', $entrypoint);
     }

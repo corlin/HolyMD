@@ -59,8 +59,8 @@ $activeNav = 'articles';
   <aside class="right-rail">
     <details class="version-history-block">
       <summary class="eyebrow-summary">Version history (<?= count($versions) ?>)</summary>
-      <h2>Restorable drafts</h2>
-      <p class="muted">Each save stores a Markdown snapshot.</p>
+      <h2>Published versions</h2>
+      <p class="muted">A restorable Markdown version is created only after a successful publish.</p>
       <ul class="versions">
         <?php foreach ($versions as $version): ?>
           <li><form method="post" action="<?= $path('/admin/articles/' . rawurlencode($article->slug) . '/restore/' . $version->value) ?>"><input type="hidden" name="csrf_token" value="<?= $escape($csrfToken) ?>"><button type="submit"><span class="icon" aria-hidden="true">history</span>Restore <?= $escape(substr($version->value, 0, 8)) ?></button></form></li>

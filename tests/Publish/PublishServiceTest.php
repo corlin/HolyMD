@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace HolyMD\Tests\Publish;
 
+use HolyMD\Admin\VersionService;
 use HolyMD\Content\ArticleRepository;
 use HolyMD\Publish\ArticleId;
 use HolyMD\Publish\AtomicPublicTree;
@@ -37,7 +38,7 @@ final class PublishServiceTest extends TestCase
 
     public function test_renderer_failure_keeps_live_tree_and_manifest_unchanged(): void
     {
-        $service = $this->service(new StaticBuilder(new TemplateRenderer($this->root . '/missing-templates')));
+        $service = $this->versionedService(new StaticBuilder(new TemplateRenderer($this->root . '/missing-templates')));
 
         try {
             $service->publish(new ArticleId('first-note'));
@@ -50,6 +51,7 @@ final class PublishServiceTest extends TestCase
         self::assertSame('{"build":"previous"}', file_get_contents($this->root . '/public/site/.holymd-manifest.json'));
         self::assertSame('<?php // admin runtime', file_get_contents($this->root . '/public/index.php'));
         self::assertSame('draft', (new ArticleRepository($this->root . '/articles'))->read('first-note')->frontMatter->get('status'));
+        self::assertSame([], (new VersionService($this->root . '/versions'))->list('first-note'));
     }
 
     public function test_publish_generates_slug_redirects_and_excludes_withdrawn_articles_from_discovery(): void
@@ -69,6 +71,47 @@ final class PublishServiceTest extends TestCase
         self::assertStringNotContainsString('withdrawn', (string) file_get_contents($this->released() . '/sitemap.xml'));
         self::assertSame('admin asset', file_get_contents($this->root . '/public/assets.css'));
         self::assertSame('published', (new ArticleRepository($this->root . '/articles'))->read('first-note')->frontMatter->get('status'));
+    }
+
+    public function test_publishing_another_article_keeps_the_previous_public_snapshot(): void
+    {
+        $service = $this->versionedService();
+        $service->publish(new ArticleId('first-note'));
+
+        $repository = new ArticleRepository($this->root . '/articles');
+        $published = $repository->read('first-note');
+        $repository->write(new \HolyMD\Content\ArticleDocument(
+            $published->slug,
+            $published->title,
+            "Unpublished working copy\n",
+            $published->frontMatter,
+            $published->sourcePath,
+        ));
+        file_put_contents($this->root . '/articles/second-note.md', "---\ntitle: Second note\nslug: second-note\ndate: 2026-08-13\nstatus: draft\n---\nSecond body\n");
+
+        $service->publish(new ArticleId('second-note'));
+
+        $firstPublic = (string) file_get_contents($this->released() . '/articles/first-note/index.html');
+        self::assertStringContainsString('Body', $firstPublic);
+        self::assertStringNotContainsString('Unpublished working copy', $firstPublic);
+    }
+
+    public function test_queued_publish_uses_the_selected_snapshot_without_discarding_newer_work(): void
+    {
+        $versions = new VersionService($this->root . '/versions');
+        $repository = new ArticleRepository($this->root . '/articles');
+        $selected = $versions->capturePublicationInput($repository->read('first-note'));
+        $working = $repository->read('first-note');
+        $repository->write(new \HolyMD\Content\ArticleDocument($working->slug, $working->title, "Newer working body\n", $working->frontMatter, $working->sourcePath));
+
+        $this->versionedService()->publish(new ArticleId('first-note'), $selected);
+
+        $public = (string) file_get_contents($this->released() . '/articles/first-note/index.html');
+        self::assertStringContainsString('Body', $public);
+        self::assertStringNotContainsString('Newer working body', $public);
+        $saved = $repository->read('first-note');
+        self::assertSame("Newer working body\n", $saved->bodyMarkdown);
+        self::assertSame($selected->value, $saved->frontMatter->get('published_version'));
     }
 
     private function released(): string
@@ -98,6 +141,26 @@ final class PublishServiceTest extends TestCase
             'About Ada.',
             true,
             $this->root . '/audit',
+        );
+    }
+
+    private function versionedService(?StaticBuilder $builder = null): PublishService
+    {
+        return new PublishService(
+            new ArticleRepository($this->root . '/articles'),
+            $builder ?? new StaticBuilder(),
+            new AtomicPublicTree(),
+            $this->root . '/public/.holymd-current',
+            'HolyMD Notes',
+            'https://example.test',
+            'Ada Author',
+            'About Ada.',
+            true,
+            $this->root . '/audit',
+            null,
+            null,
+            'zh-CN',
+            new VersionService($this->root . '/versions'),
         );
     }
 

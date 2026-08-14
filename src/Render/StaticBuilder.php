@@ -95,7 +95,7 @@ final class StaticBuilder
             $lines = ['# ' . $input->siteName, '', $input->about, ''];
             foreach ($articles as $article) {
                 $summary = (string) $article->frontMatter->get('summary', '');
-                $line = '- [' . $article->title . '](' . $this->url($input, '/articles/' . $article->slug . '/') . ')';
+                $line = '- [' . $this->llmsTitle($article->title) . '](' . $this->url($input, '/articles/' . $article->slug . '/') . ')';
                 if ($summary !== '') {
                     $line .= ': ' . str_replace(["\r", "\n"], ' ', $summary);
                 }
@@ -107,7 +107,7 @@ final class StaticBuilder
             $fullLines = ['# ' . $input->siteName . ' (Full Archive)', '', $input->about, ''];
             foreach ($articles as $article) {
                 $fullLines[] = '---';
-                $fullLines[] = '# ' . $article->title;
+                $fullLines[] = '# ' . $this->llmsTitle($article->title);
                 $fullLines[] = 'Published: ' . (string) $article->frontMatter->get('date');
                 $fullLines[] = 'URL: ' . $this->url($input, '/articles/' . $article->slug . '/');
                 $summary = (string) $article->frontMatter->get('summary', '');
@@ -124,10 +124,6 @@ final class StaticBuilder
                 $faq = $article->frontMatter->get('faq');
                 $faqText = $this->metadataText($faq, ' | ');
                 if ($faqText !== null) $fullLines[] = 'FAQ: ' . $faqText;
-                $metadataSuggestion = $article->frontMatter->get('metadata_suggestion');
-                if (is_string($metadataSuggestion) && $metadataSuggestion !== '') {
-                    $fullLines[] = 'Metadata: ' . str_replace(["\r", "\n"], ' ', $metadataSuggestion);
-                }
                 $fullLines[] = '';
                 $fullLines[] = trim($article->bodyMarkdown);
                 $fullLines[] = '';
@@ -147,13 +143,17 @@ final class StaticBuilder
         $modified = (string) $article->frontMatter->get('updated', $date);
         $summary = (string) $article->frontMatter->get('summary', '');
         $sources = array_values(array_filter((array) $article->frontMatter->get('sources', []), 'is_string'));
+        $internalLinks = array_values(array_filter((array) $article->frontMatter->get('internal_links', []), 'is_string'));
+        $entities = $this->stringList($article->frontMatter->get('entities'));
+        $faq = $this->faqEntries($article->frontMatter->get('faq'));
         $structured = $article->frontMatter->get('structured_data');
         $graph = [
-                ['@type' => 'Article', 'headline' => $article->title, 'datePublished' => $date, 'dateModified' => $modified, 'author' => ['@type' => 'Person', 'name' => $input->authorName], 'mainEntityOfPage' => $url, 'description' => $summary, 'citation' => $sources],
+                ['@type' => 'Article', 'headline' => $article->title, 'datePublished' => $date, 'dateModified' => $modified, 'author' => ['@type' => 'Person', 'name' => $input->authorName], 'mainEntityOfPage' => $url, 'description' => $summary, 'citation' => $sources, 'about' => array_map(static fn (string $name): array => ['@type' => 'Thing', 'name' => $name], $entities)],
                 ['@type' => 'Person', 'name' => $input->authorName],
                 ['@type' => 'WebSite', 'name' => $input->siteName, 'url' => rtrim($input->siteUrl, '/') . '/'],
                 ['@type' => 'BreadcrumbList', 'itemListElement' => [['@type' => 'ListItem', 'position' => 1, 'name' => 'Home', 'item' => $this->url($input, '/')], ['@type' => 'ListItem', 'position' => 2, 'name' => $article->title, 'item' => $url]]],
-            ];
+        ];
+        if ($faq !== []) $graph[] = ['@type' => 'FAQPage', 'mainEntity' => array_map(static fn (array $entry): array => ['@type' => 'Question', 'name' => $entry['question'], 'acceptedAnswer' => ['@type' => 'Answer', 'text' => $entry['answer']]], $faq)];
         if (is_array($structured)) $graph[] = $structured;
         $articleTopics = array_values(array_filter((array) $article->frontMatter->get('topics', []), 'is_string'));
         $related = array_values(array_filter($articles, static function (ArticleDocument $candidate) use ($article, $articleTopics): bool {
@@ -161,7 +161,7 @@ final class StaticBuilder
             return array_intersect($articleTopics, (array) $candidate->frontMatter->get('topics', [])) !== [];
         }));
 
-        $contentHtml = $this->markdownRenderer->render($article->bodyMarkdown);
+        $contentHtml = $this->applyImageAltText($this->markdownRenderer->render($article->bodyMarkdown), $this->stringList($article->frontMatter->get('alt_text')));
         $feedContentHtml = $contentHtml;
         $searchText = mb_substr(html_entity_decode(strip_tags($contentHtml), ENT_QUOTES | ENT_HTML5, 'UTF-8'), 0, 12288);
         $toc = [];
@@ -195,7 +195,7 @@ final class StaticBuilder
 
         return [
             'siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'siteLanguage' => $input->siteLanguage, 'article' => $article,
-            'url' => $url, 'date' => $date, 'modified' => $modified, 'summary' => $summary, 'sources' => $sources, 'topics' => $articleTopics, 'topicSlugs' => $topicSlugs, 'related' => array_slice($related, 0, 3),
+            'url' => $url, 'date' => $date, 'modified' => $modified, 'summary' => $summary, 'sources' => $sources, 'internalLinks' => $internalLinks, 'faq' => $faq, 'topics' => $articleTopics, 'topicSlugs' => $topicSlugs, 'related' => array_slice($related, 0, 3),
             'contentHtml' => $contentHtmlWithIds, 'feedContentHtml' => $feedContentHtml, 'searchText' => $searchText, 'toc' => $toc, 'readingMinutes' => $readingMinutes, 'generateLlmsTxt' => $input->generateLlmsTxt, 'assetCss' => $assetCss, 'assetSearch' => $assetSearch, 'basePath' => $input->basePath,
             'jsonLd' => json_encode(['@context' => 'https://schema.org', '@graph' => $graph], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR),
         ];
@@ -299,6 +299,47 @@ final class StaticBuilder
             return implode($separator, array_map(static fn (mixed $item): string => (string) $item, $value));
         }
         return json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+    }
+
+    /** @return list<string> */
+    private function stringList(mixed $value): array
+    {
+        if (is_string($value)) return array_values(array_filter(array_map('trim', preg_split('/[,\r\n]+/u', $value) ?: []), static fn (string $item): bool => $item !== ''));
+        if (!is_array($value)) return [];
+        return array_values(array_filter($value, static fn (mixed $item): bool => is_string($item) && trim($item) !== ''));
+    }
+
+    /** @return list<array{question:string,answer:string}> */
+    private function faqEntries(mixed $value): array
+    {
+        if (!is_array($value) || !array_is_list($value)) return [];
+        $entries = [];
+        foreach ($value as $entry) {
+            if (!is_array($entry) || !is_string($entry['question'] ?? null) || !is_string($entry['answer'] ?? null) || trim($entry['question']) === '' || trim($entry['answer']) === '') continue;
+            $entries[] = ['question' => trim($entry['question']), 'answer' => trim($entry['answer'])];
+        }
+        return $entries;
+    }
+
+    /** @param list<string> $altText */
+    private function applyImageAltText(string $html, array $altText): string
+    {
+        $index = 0;
+        return preg_replace_callback('/<img\b[^>]*>/i', static function (array $match) use (&$index, $altText): string {
+            $tag = $match[0];
+            $replacement = $altText[$index++] ?? null;
+            if (!is_string($replacement) || $replacement === '') return $tag;
+            $escaped = htmlspecialchars($replacement, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+            if (preg_match('/\balt=([' . "'\"" . '])\1/i', $tag) === 1) return (string) preg_replace('/\balt=([' . "'\"" . '])\1/i', 'alt="' . $escaped . '"', $tag, 1);
+            if (preg_match('/\balt=/i', $tag) === 1) return $tag;
+            return preg_replace('/\s*\/>$/', ' alt="' . $escaped . '" />', $tag) ?? $tag;
+        }, $html) ?? $html;
+    }
+
+    private function llmsTitle(string $title): string
+    {
+        $title = trim((string) preg_replace('/\s+/u', ' ', $title));
+        return str_replace(['\\', '[', ']', '(', ')'], ['\\\\', '\\[', '\\]', '\\(', '\\)'], $title);
     }
 
     private function readingMinutes(string $html): int

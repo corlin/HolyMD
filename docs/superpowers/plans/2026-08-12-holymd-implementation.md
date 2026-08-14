@@ -71,7 +71,7 @@
 - [ ] Run focused tests and `php -l` over `src/` and `templates/`; expect PASS.
 - [ ] Commit with `git add src/Content src/Render templates tests && git commit -m "feat: render markdown as static public site"`.
 
-### Task 3: Add admin article editing and versioned drafts
+### Task 3: Add admin article editing and publish-only versions
 
 **Files:**
 - Create: `src/Http/Router.php`
@@ -87,11 +87,11 @@
 - Create: `tests/Admin/ArticleControllerTest.php`
 
 **Interfaces:**
-- `ArticleController::saveDraft(ServerRequest $request): Response` writes Markdown and creates a version snapshot.
+- `ArticleController::saveDraft(ServerRequest $request): Response` writes Markdown without creating a content version; successful publication records the restorable version.
 - `VersionService::snapshot(ArticleDocument $document): VersionId` and `restore(VersionId $id): ArticleDocument` provide rollback.
 - CSRF and administrator authorization are mandatory for save, restore, publish, withdraw, and settings actions.
 
-- [ ] Write request tests for unauthenticated rejection, CSRF rejection, draft save, version creation, and body round-trip.
+- [ ] Write request tests for unauthenticated rejection, CSRF rejection, draft save without version creation, publish-only version advancement, and body round-trip.
 - [ ] Run the focused tests; expect failures for controllers, guard, and templates.
 - [ ] Implement server-rendered three-column writing studio with Markdown textarea, rendered preview, autosave endpoint, version list, and explicit Publish button; do not add AI prose actions.
 - [ ] Run focused tests plus PHP syntax checks; expect PASS.

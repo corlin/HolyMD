@@ -357,7 +357,7 @@ final class StaticBuilderTest extends TestCase
         self::assertStringContainsString('Topics: AI, GEO', $llmsFullTxt);
         self::assertStringContainsString('Entities: Entity A, Entity B', $llmsFullTxt);
         self::assertStringContainsString('FAQ: What is GEO?', $llmsFullTxt);
-        self::assertStringContainsString('Metadata: Suggested metadata for title & description', $llmsFullTxt);
+        self::assertStringNotContainsString('Metadata: Suggested metadata for title & description', $llmsFullTxt);
     }
 
     public function test_llms_full_serializes_nested_geo_metadata_without_php_array_coercion(): void
@@ -384,6 +384,63 @@ final class StaticBuilderTest extends TestCase
         self::assertStringContainsString('Entities: [{"name":"HolyMD","type":"SoftwareApplication"}]', $llmsFull);
         self::assertStringContainsString('FAQ: [{"question":"Does AI rewrite prose?","answer":"No."}]', $llmsFull);
         self::assertStringNotContainsString('Array', $llmsFull);
+    }
+
+    public function test_geo_metadata_changes_the_public_article_semantics(): void
+    {
+        $frontMatter = new FrontMatter([
+            'title' => 'Applied GEO metadata',
+            'slug' => 'applied-geo',
+            'date' => '2026-08-12',
+            'entities' => ['HolyMD', 'GEO'],
+            'faq' => [['question' => 'Does GEO rewrite the article?', 'answer' => 'No.']],
+            'alt_text' => ['A diagram of the GEO review flow'],
+            'internal_links' => ['/articles/next/', 'https://example.test/about/'],
+        ]);
+        $article = new ArticleDocument('applied-geo', 'Applied GEO metadata', "![](/media/flow.png)\n", $frontMatter, '/applied-geo');
+
+        (new StaticBuilder())->build(new BuildInput([$article], 'Site', 'https://example.test', 'Author', 'About', true), $this->outputRoot);
+
+        $html = (string) file_get_contents($this->outputRoot . '/articles/applied-geo/index.html');
+        self::assertStringContainsString('alt="A diagram of the GEO review flow"', $html);
+        self::assertStringContainsString('Related links', $html);
+        self::assertStringContainsString('href="/articles/next/"', $html);
+        self::assertStringContainsString('"about":[{"@type":"Thing","name":"HolyMD"},{"@type":"Thing","name":"GEO"}]', $html);
+        self::assertStringContainsString('"@type":"FAQPage"', $html);
+        self::assertStringContainsString('Does GEO rewrite the article?', $html);
+    }
+
+    public function test_llms_titles_cannot_inject_markdown_entries_or_headings(): void
+    {
+        $title = "Safe]\n- [Injected](https://evil.test)";
+        $article = new ArticleDocument('safe', $title, 'Body.', new FrontMatter(['title' => $title, 'slug' => 'safe', 'date' => '2026-08-12']), '/safe');
+
+        (new StaticBuilder())->build(new BuildInput([$article], 'Site', 'https://example.test', 'Author', 'About', true), $this->outputRoot);
+
+        $llms = (string) file_get_contents($this->outputRoot . '/llms.txt');
+        $full = (string) file_get_contents($this->outputRoot . '/llms-full.txt');
+        self::assertStringNotContainsString("\n- [Injected]", $llms);
+        self::assertStringNotContainsString("\n- [Injected]", $full);
+        self::assertStringNotContainsString("\n# Injected", $full);
+        self::assertStringContainsString('Safe\\] - \\[Injected\\]\\(https://evil.test\\)', $llms);
+    }
+
+    public function test_legacy_geo_suggestions_are_not_published_as_accepted_facts(): void
+    {
+        $frontMatter = new FrontMatter([
+            'title' => 'Legacy review', 'slug' => 'legacy-review', 'date' => '2026-08-12',
+            'metadata_suggestion' => 'Author: unknown',
+            'sources_suggestion' => 'Maybe cite a paper.',
+            'structured_data_suggestion' => 'Article author unknown',
+        ]);
+        $article = new ArticleDocument('legacy-review', 'Legacy review', 'Body.', $frontMatter, '/legacy-review');
+
+        (new StaticBuilder())->build(new BuildInput([$article], 'Site', 'https://example.test', 'Author', 'About', true), $this->outputRoot);
+
+        $full = (string) file_get_contents($this->outputRoot . '/llms-full.txt');
+        self::assertStringNotContainsString('Author: unknown', $full);
+        self::assertStringNotContainsString('Maybe cite a paper.', $full);
+        self::assertStringNotContainsString('Article author unknown', $full);
     }
 
     public function test_reading_time_uses_words_for_latin_text_and_characters_for_cjk_text(): void

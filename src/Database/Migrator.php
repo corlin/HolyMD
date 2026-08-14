@@ -11,6 +11,7 @@ final readonly class Migrator
 {
     private const HARDENING = '20260812_queue_release_hardening';
     private const ACCOUNT_LOCKOUT = '20260813_admin_account_lockout';
+    private const PUBLISH_SNAPSHOT_BINDING = '20260814_publish_snapshot_binding';
 
     public function __construct(private PDO $pdo, private string $projectRoot)
     {
@@ -54,6 +55,7 @@ final readonly class Migrator
         return [
             [self::HARDENING, 'hardenLegacySchema'],
             [self::ACCOUNT_LOCKOUT, 'addAccountLockoutColumns'],
+            [self::PUBLISH_SNAPSHOT_BINDING, 'addPublishSnapshotBinding'],
         ];
     }
 
@@ -100,6 +102,19 @@ final readonly class Migrator
         }
     }
 
+    private function addPublishSnapshotBinding(): void
+    {
+        if (!$this->columnExists('jobs', 'article_version_id')) {
+            $this->pdo->exec('ALTER TABLE `jobs` ADD COLUMN `article_version_id` BIGINT UNSIGNED NULL AFTER `article_id`');
+        }
+        if (!$this->indexExists('jobs', 'jobs_article_version_index')) {
+            $this->pdo->exec('ALTER TABLE `jobs` ADD KEY `jobs_article_version_index` (`article_version_id`)');
+        }
+        if (!$this->constraintExists('jobs', 'jobs_article_version_fk')) {
+            $this->pdo->exec('ALTER TABLE `jobs` ADD CONSTRAINT `jobs_article_version_fk` FOREIGN KEY (`article_version_id`) REFERENCES `article_versions` (`id`) ON DELETE SET NULL');
+        }
+    }
+
     private function tableExists(string $table): bool
     {
         $statement = $this->pdo->prepare('SELECT 1 FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?');
@@ -118,6 +133,13 @@ final readonly class Migrator
     {
         $statement = $this->pdo->prepare('SELECT 1 FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?');
         $statement->execute([$table, $index]);
+        return $statement->fetchColumn() !== false;
+    }
+
+    private function constraintExists(string $table, string $constraint): bool
+    {
+        $statement = $this->pdo->prepare('SELECT 1 FROM information_schema.table_constraints WHERE table_schema = DATABASE() AND table_name = ? AND constraint_name = ?');
+        $statement->execute([$table, $constraint]);
         return $statement->fetchColumn() !== false;
     }
 

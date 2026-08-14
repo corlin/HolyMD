@@ -21,7 +21,7 @@ $binding = $pdo->prepare('SELECT geo_reviews.input_checksum, article_versions.sn
 $binding->execute([(int) $reviewId, $slug]);
 $row = $binding->fetch(\PDO::FETCH_ASSOC);
 if (!is_array($row) || !is_string($row['input_checksum'] ?? null) || !is_string($row['snapshot_path'] ?? null)) {
-    fwrite(STDERR, "GEO review is not bound to a valid article version.\n");
+    fwrite(STDERR, "GEO review is not bound to a valid immutable review input.\n");
     exit(64);
 }
 $expectedChecksum = (string) $row['input_checksum'];
@@ -29,12 +29,14 @@ $snapshotPath = (string) $row['snapshot_path'];
 $versionId = new \HolyMD\Admin\VersionId((string) basename($snapshotPath, '.md'));
 $versionService = new \HolyMD\Admin\VersionService($root . '/content/versions');
 try {
-    $document = $versionService->restore($versionId, $slug);
+    $document = str_starts_with($snapshotPath, 'review-inputs/')
+        ? $versionService->restoreReviewInput($versionId, $slug)
+        : $versionService->restore($versionId, $slug);
 } catch (\Throwable) {
     $document = (new ArticleRepository($root . '/content/articles'))->read($slug);
 }
 if (!hash_equals($expectedChecksum, hash('sha256', $document->serialize()))) {
-    throw new RuntimeException('GEO review is not bound to the current saved article version checksum.');
+    throw new RuntimeException('GEO review input does not match its saved article checksum.');
 }
 try { $review = (new GeoReviewService($container->get(AiClient::class)))->review($document); }
 catch (\HolyMD\Geo\GeoAiException $error) { fwrite(STDERR, ($error->retryable ? 'RETRYABLE: ' : 'PERMANENT: ') . $error->getMessage() . "\n"); exit($error->retryable ? 75 : 78); }

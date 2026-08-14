@@ -125,7 +125,7 @@
       event.returnValue = '';
     });
     renderPreview();
-    geoApi = {save, flushSave};
+    geoApi = {save, flushSave, checksum: () => currentChecksum};
   }
 
   document.addEventListener('click', async event => {
@@ -162,6 +162,7 @@
   const FIELD_BY_TYPE = {summary: 'summary', entities: 'entities', faq_candidates: 'faq', sources: 'sources', internal_links: 'internal_links', alt_text: 'alt_text', hierarchy: 'hierarchy', structured_data: 'structured_data'};
 
   const isUntargeted = proposal => {
+    if (proposal.type === 'hierarchy') return true;
     if (proposal.type === 'sources') return typeof proposal.value === 'string' && !isWebUrl(proposal.value);
     if (proposal.type === 'structured_data') {
       if (typeof proposal.value === 'string') { try { return !isObject(JSON.parse(proposal.value)); } catch { return true; } }
@@ -355,7 +356,7 @@
       }
       try {
         if (filled.length > 0) await geoApi.flushSave();
-        await request(`${base}/admin/geo/proposals/${id}/accept`);
+        await request(`${base}/admin/geo/proposals/${id}/accept`, {expected_checksum: geoApi.checksum()});
       } catch (error) {
         status.textContent = 'Proposal was not accepted: ' + (error.message || 'Save failed');
         return;

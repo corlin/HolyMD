@@ -78,7 +78,7 @@ php bin/holymd-prepare-release.php
 php bin/holymd-check.php
 ```
 
-`holymd-prepare-release.php` 不移动或隐藏旧站。后续发布会先生成完整不可变版本，再原子替换 `public/.holymd-current` **指针文件**（内容为 release 目录相对路径，由 `public/index.php` 解析）。指针机制不依赖符号链接，`symlink()` 被禁用的共享主机同样可用。
+`holymd-prepare-release.php` 不移动或隐藏旧站。它会先为尚未迁移的已发布文章建立 `published_version` 不可变快照；后续新建、自动保存、恢复和 GEO 审核都不推进内容版本。发布任务先绑定不可见的待发布输入，只有构建并切换成功后才登记新版本并移动公开版本指针。静态站生成完成后再原子替换 `public/.holymd-current` **指针文件**（内容为 release 目录相对路径，由 `public/index.php` 解析）。指针机制不依赖符号链接，`symlink()` 被禁用的共享主机同样可用。
 
 ## 5. Apache 与路由验收
 

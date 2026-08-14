@@ -41,7 +41,7 @@ final readonly class MySqlGeoProposalStore implements GeoProposalStore
         return ['reviewId' => (int) $row['id'], 'status' => (string) $row['status'], 'failure' => $row['failure_message'] === null ? null : (string) $row['failure_message'], 'proposals' => $proposals];
     }
 
-    public function markAccepted(GeoProposalId $id, string $nextInputChecksum): void
+    public function markAccepted(GeoProposalId $id, string $nextInputChecksum, ?int $administratorId = null): void
     {
         if (preg_match('/^[a-f0-9]{64}$/', $nextInputChecksum) !== 1) throw new InvalidArgumentException('GEO proposal checksum is invalid.');
         $this->pdo->beginTransaction();
@@ -50,18 +50,30 @@ final readonly class MySqlGeoProposalStore implements GeoProposalStore
             $review->execute([$id->value]);
             $reviewId = $review->fetchColumn();
             if ($reviewId === false) throw new InvalidArgumentException('Only a pending GEO proposal can be decided.');
-            $this->mark($id, 'accepted');
+            $this->mark($id, 'accepted', $administratorId);
             $update = $this->pdo->prepare('UPDATE geo_reviews SET input_checksum = ? WHERE id = ?');
             $update->execute([$nextInputChecksum, $reviewId]);
+            $this->auditDecision($id, 'accepted', $administratorId);
             $this->pdo->commit();
         } catch (\Throwable $exception) {
             if ($this->pdo->inTransaction()) $this->pdo->rollBack();
             throw $exception;
         }
     }
-    public function markRejected(GeoProposalId $id): void { $this->mark($id, 'rejected'); }
+    public function markRejected(GeoProposalId $id, ?int $administratorId = null): void
+    {
+        $this->pdo->beginTransaction();
+        try {
+            $this->mark($id, 'rejected', $administratorId);
+            $this->auditDecision($id, 'rejected', $administratorId);
+            $this->pdo->commit();
+        } catch (\Throwable $exception) {
+            if ($this->pdo->inTransaction()) $this->pdo->rollBack();
+            throw $exception;
+        }
+    }
     /** Sync deployments (no queue) persist a completed review and its proposals inline, mirroring the worker's rows, so accept/edit/reject keep working on later requests. @return list<GeoProposal> */
-    public function persistSyncReview(ArticleDocument $document, string $versionValue, GeoReview $review): array
+    public function persistSyncReview(ArticleDocument $document, string $snapshotPath, GeoReview $review): array
     {
         $metadata = hash('sha256', json_encode($document->frontMatter->all(), JSON_THROW_ON_ERROR));
         $checksum = hash('sha256', $document->serialize());
@@ -69,7 +81,8 @@ final readonly class MySqlGeoProposalStore implements GeoProposalStore
         try {
             $this->pdo->prepare("INSERT INTO articles (source_path, slug, state, metadata_checksum) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id), slug=VALUES(slug), state=VALUES(state), metadata_checksum=VALUES(metadata_checksum)")->execute([$document->sourcePath, $document->slug, (string) $document->frontMatter->get('status', 'draft'), $metadata]);
             $articleId = (int) $this->pdo->lastInsertId();
-            $this->pdo->prepare('INSERT INTO article_versions (article_id, snapshot_path, content_checksum, body_checksum) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)')->execute([$articleId, $versionValue . '.md', $checksum, hash('sha256', $document->bodyMarkdown)]);
+            if (preg_match('#^review-inputs/[a-f0-9]{32}\.md$#', $snapshotPath) !== 1) throw new InvalidArgumentException('A GEO review requires an immutable review input snapshot.');
+            $this->pdo->prepare('INSERT INTO article_versions (article_id, snapshot_path, content_checksum, body_checksum) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)')->execute([$articleId, $snapshotPath, $checksum, hash('sha256', $document->bodyMarkdown)]);
             $versionId = (int) $this->pdo->lastInsertId();
             $requestKey = hash('sha256', $articleId . ':' . $versionId . ':' . $checksum);
             $this->pdo->prepare("INSERT INTO geo_reviews (article_id, article_version_id, status, provider, model, input_checksum, request_key, completed_at) VALUES (?, ?, 'completed', 'configured', 'configured', ?, ?, UTC_TIMESTAMP(6)) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)")->execute([$articleId, $versionId, $checksum, $requestKey]);
@@ -90,5 +103,10 @@ final readonly class MySqlGeoProposalStore implements GeoProposalStore
     }
     public function saveReview(GeoReview $review): void { throw new RuntimeException('Queue GEO reviews are persisted by the worker transaction.'); }
     public function enqueueRetry(string $articleSlug, string $bodyHash, string $reason): void { throw new RuntimeException('Queue retries are managed by the MySQL worker.'); }
-    private function mark(GeoProposalId $id, string $status): void { $statement = $this->pdo->prepare("UPDATE geo_proposals SET status = ?, decided_at = UTC_TIMESTAMP(6) WHERE id = ? AND status = 'pending'"); $statement->execute([$status, $id->value]); if ($statement->rowCount() !== 1) throw new InvalidArgumentException('Only a pending GEO proposal can be decided.'); }
+    private function mark(GeoProposalId $id, string $status, ?int $administratorId = null): void { $statement = $this->pdo->prepare("UPDATE geo_proposals SET status = ?, decision_by_admin_user_id = ?, decided_at = UTC_TIMESTAMP(6) WHERE id = ? AND status = 'pending'"); $statement->execute([$status, $administratorId, $id->value]); if ($statement->rowCount() !== 1) throw new InvalidArgumentException('Only a pending GEO proposal can be decided.'); }
+    private function auditDecision(GeoProposalId $id, string $status, ?int $administratorId): void
+    {
+        $statement = $this->pdo->prepare("INSERT INTO audit_events (admin_user_id, event_type, subject_type, subject_id, event_data) VALUES (?, 'geo_proposal_decided', 'geo_proposal', ?, ?)");
+        $statement->execute([$administratorId, (int) $id->value, json_encode(['status' => $status], JSON_THROW_ON_ERROR)]);
+    }
 }

@@ -10,13 +10,20 @@ final readonly class MySqlJobQueue
 {
     public function __construct(private PDO $pdo) {}
 
-    public function enqueueBuild(ArticleDocument $article, string $action): int
+    public function enqueueBuild(ArticleDocument $article, string $action, ?string $snapshotPath = null): int
     {
-        return $this->transaction(function () use ($article, $action): int {
+        return $this->transaction(function () use ($article, $action, $snapshotPath): int {
             $articleId = $this->articleId($article);
+            $versionId = null;
+            if ($action === 'publish') {
+                if (!is_string($snapshotPath) || preg_match('#^publish-inputs/[a-f0-9]{32}\.md$#', $snapshotPath) !== 1) throw new \InvalidArgumentException('A publish job requires an immutable publication input snapshot.');
+                $checksum = hash('sha256', $article->serialize());
+                $this->pdo->prepare('INSERT INTO article_versions (article_id, snapshot_path, content_checksum, body_checksum) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)')->execute([$articleId, $snapshotPath, $checksum, hash('sha256', $article->bodyMarkdown)]);
+                $versionId = (int) $this->pdo->lastInsertId();
+            }
             $this->pdo->prepare("INSERT INTO builds (status) VALUES ('queued')")->execute();
             $buildId = (int) $this->pdo->lastInsertId();
-            $this->pdo->prepare("INSERT INTO jobs (job_type, status, article_id, build_id, action, available_at) VALUES ('build', 'queued', ?, ?, ?, UTC_TIMESTAMP(6))")->execute([$articleId, $buildId, $action]);
+            $this->pdo->prepare("INSERT INTO jobs (job_type, status, article_id, article_version_id, build_id, action, available_at) VALUES ('build', 'queued', ?, ?, ?, ?, UTC_TIMESTAMP(6))")->execute([$articleId, $versionId, $buildId, $action]);
             return (int) $this->pdo->lastInsertId();
         });
     }
@@ -24,6 +31,7 @@ final readonly class MySqlJobQueue
     public function enqueueGeoReview(ArticleDocument $article, string $snapshotPath): int
     {
         return $this->transaction(function () use ($article, $snapshotPath): int {
+            if (preg_match('#^review-inputs/[a-f0-9]{32}\.md$#', $snapshotPath) !== 1) throw new \InvalidArgumentException('A GEO review requires an immutable review input snapshot.');
             $articleId = $this->articleId($article);
             $checksum = hash('sha256', $article->serialize());
             $this->pdo->prepare('INSERT INTO article_versions (article_id, snapshot_path, content_checksum, body_checksum) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)')->execute([$articleId, $snapshotPath, $checksum, hash('sha256', $article->bodyMarkdown)]);

@@ -25,7 +25,8 @@ final class GeoControllerTest extends TestCase
         $store = new InMemoryGeoProposalStore(); $router = $this->router(['admin_user_id' => 1, 'csrf_token' => 'token'], $store);
         $review = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/geo/review', [], ['csrf_token' => 'token']));
         self::assertSame(200, $review->status); $payload = json_decode($review->body, true, flags: JSON_THROW_ON_ERROR); $id = $payload['proposals'][0]['id'];
-        $accepted = $router->dispatch(new ServerRequest('POST', '/admin/geo/proposals/' . $id . '/accept', [], ['csrf_token' => 'token']));
+        $checksum = hash('sha256', (new ArticleRepository($this->root))->read('first-note')->serialize());
+        $accepted = $router->dispatch(new ServerRequest('POST', '/admin/geo/proposals/' . $id . '/accept', [], ['csrf_token' => 'token', 'expected_checksum' => $checksum]));
         self::assertSame(200, $accepted->status); $acceptedPayload = json_decode($accepted->body, true, flags: JSON_THROW_ON_ERROR); self::assertTrue($acceptedPayload['accepted']); self::assertArrayNotHasKey('frontMatter', $acceptedPayload);
         $article = (new ArticleRepository($this->root))->read('first-note');
         self::assertNull($article->frontMatter->get('summary'), 'Accept must not write the article file; the editor save pipeline does.');
@@ -33,7 +34,7 @@ final class GeoControllerTest extends TestCase
         self::assertSame('accepted', $store->get(new \HolyMD\Geo\GeoProposalId($id))->status);
         $rejected = $router->dispatch(new ServerRequest('POST', '/admin/geo/proposals/' . $id . '/reject', [], ['csrf_token' => 'token']));
         self::assertSame(200, $rejected->status); self::assertTrue(json_decode($rejected->body, true, flags: JSON_THROW_ON_ERROR)['rejected']);
-        self::assertSame(422, $router->dispatch(new ServerRequest('POST', '/admin/geo/proposals/' . $id . '/accept', [], ['csrf_token' => 'token']))->status, 'A decided proposal cannot be accepted again.');
+        self::assertSame(422, $router->dispatch(new ServerRequest('POST', '/admin/geo/proposals/' . $id . '/accept', [], ['csrf_token' => 'token', 'expected_checksum' => $checksum]))->status, 'A decided proposal cannot be accepted again.');
         self::assertSame(401, $this->router([], new InMemoryGeoProposalStore())->dispatch(new ServerRequest('POST', '/admin/articles/first-note/geo/review'))->status);
         self::assertSame(401, $this->router([], new InMemoryGeoProposalStore())->dispatch(new ServerRequest('GET', '/admin/articles/first-note/geo/review'))->status);
         self::assertSame(401, $this->router([], new InMemoryGeoProposalStore())->dispatch(new ServerRequest('POST', '/admin/geo/proposals/' . $id . '/accept'))->status);
@@ -55,6 +56,7 @@ final class GeoControllerTest extends TestCase
         self::assertStringContainsString('data-geo-field', $javascript);
         self::assertStringContainsString('flushSave', $javascript);
         self::assertStringContainsString('data-geo-catchall', $javascript);
+        self::assertStringContainsString("proposal.type === 'hierarchy'", $javascript);
         self::assertStringNotContainsString('prompt(', $javascript);
     }
     public function test_edit_decodes_structured_metadata_and_rejects_malformed_json_before_accept(): void {
@@ -63,11 +65,17 @@ final class GeoControllerTest extends TestCase
         $store->save(new \HolyMD\Geo\GeoProposal(new \HolyMD\Geo\GeoProposalId('metadata-edit'),'first-note',$hash,'metadata',['summary'=>'Old']));
         $bad=$router->dispatch(new ServerRequest('POST','/admin/geo/proposals/metadata-edit/edit',[],['csrf_token'=>'token','value'=>'{bad'])); self::assertSame(422,$bad->status);
         $edited=$router->dispatch(new ServerRequest('POST','/admin/geo/proposals/metadata-edit/edit',[],['csrf_token'=>'token','value'=>'{"summary":"Edited"}'])); self::assertSame(200,$edited->status); self::assertSame(['summary'=>'Edited'],$store->get(new \HolyMD\Geo\GeoProposalId('metadata-edit'))->value);
-        $accepted=$router->dispatch(new ServerRequest('POST','/admin/geo/proposals/metadata-edit/accept',[],['csrf_token'=>'token'])); self::assertTrue(json_decode($accepted->body,true,flags:JSON_THROW_ON_ERROR)['accepted']); self::assertSame('accepted',$store->get(new \HolyMD\Geo\GeoProposalId('metadata-edit'))->status);
+        $checksum=hash('sha256',(new ArticleRepository($this->root))->read('first-note')->serialize());
+        $accepted=$router->dispatch(new ServerRequest('POST','/admin/geo/proposals/metadata-edit/accept',[],['csrf_token'=>'token','expected_checksum'=>$checksum])); self::assertTrue(json_decode($accepted->body,true,flags:JSON_THROW_ON_ERROR)['accepted']); self::assertSame('accepted',$store->get(new \HolyMD\Geo\GeoProposalId('metadata-edit'))->status);
 
         $current=(new ArticleRepository($this->root))->read('first-note'); $store->save(new \HolyMD\Geo\GeoProposal(new \HolyMD\Geo\GeoProposalId('entities-edit'),'first-note',hash('sha256',$current->bodyMarkdown),'entities',['Old']));
         self::assertSame(200,$router->dispatch(new ServerRequest('POST','/admin/geo/proposals/entities-edit/edit',[],['csrf_token'=>'token','value'=>'["Ada","PHP"]']))->status);
         self::assertSame(['Ada','PHP'],$store->get(new \HolyMD\Geo\GeoProposalId('entities-edit'))->value);
+
+        $store->save(new \HolyMD\Geo\GeoProposal(new \HolyMD\Geo\GeoProposalId('faq-edit'),'first-note',$hash,'faq_candidates',[['question'=>'Old Q','answer'=>'Old A']]));
+        $faq=$router->dispatch(new ServerRequest('POST','/admin/geo/proposals/faq-edit/edit',[],['csrf_token'=>'token','value'=>'[{"question":"New Q","answer":"New A"}]']));
+        self::assertSame(200,$faq->status);
+        self::assertSame([['question'=>'New Q','answer'=>'New A']],$store->get(new \HolyMD\Geo\GeoProposalId('faq-edit'))->value);
     }
     public function test_edit_preserves_plain_string_values_for_every_string_shaped_proposal(): void {
         $store = new InMemoryGeoProposalStore(); $router = $this->router(['admin_user_id'=>1,'csrf_token'=>'token'],$store);
@@ -79,6 +87,22 @@ final class GeoControllerTest extends TestCase
             self::assertSame(200, $response->status, $type);
             self::assertSame('Edited text', $store->get($id)->value, $type);
         }
+    }
+    public function test_accept_rejects_a_proposal_when_the_article_body_changed_after_review(): void {
+        $store = new InMemoryGeoProposalStore(); $router = $this->router(['admin_user_id'=>1,'csrf_token'=>'token'],$store);
+        $review = $router->dispatch(new ServerRequest('POST','/admin/articles/first-note/geo/review',[],['csrf_token'=>'token']));
+        $id = json_decode($review->body,true,flags:JSON_THROW_ON_ERROR)['proposals'][0]['id'];
+        file_put_contents($this->root . '/first-note.md', "---\ntitle: First note\nslug: first-note\ndate: 2026-08-12\n---\nChanged after review\n");
+        $current = (new ArticleRepository($this->root))->read('first-note');
+
+        $accepted = $router->dispatch(new ServerRequest('POST','/admin/geo/proposals/' . $id . '/accept',[],[
+            'csrf_token'=>'token',
+            'expected_checksum'=>hash('sha256',$current->serialize()),
+        ]));
+
+        self::assertSame(422,$accepted->status);
+        self::assertStringContainsString('body changed',strtolower($accepted->body));
+        self::assertSame('pending',$store->get(new \HolyMD\Geo\GeoProposalId($id))->status);
     }
     private function router(array $session, GeoProposalStore $store): Router {
         $articles = new ArticleRepository($this->root); $controller = new ArticleController($articles, new VersionService($this->root . '/versions'), new AdminGuard($session), new Csrf($session));

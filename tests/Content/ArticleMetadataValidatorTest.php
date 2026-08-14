@@ -72,11 +72,25 @@ final class ArticleMetadataValidatorTest extends TestCase
 
     public function test_free_form_metadata_arrays_reject_forbidden_keys_and_accept_safe_values(): void
     {
-        foreach (['entities', 'faq', 'hierarchy', 'alt_text', 'internal_links'] as $key) {
+        foreach (['entities', 'hierarchy', 'alt_text'] as $key) {
             self::assertContains(sprintf('Article "article" has invalid %s metadata.', $key), ArticleMetadataValidator::errors($this->document([$key => ['nested' => ['body' => 'x']]])), $key);
             self::assertSame([], ArticleMetadataValidator::errors($this->document([$key => ['ok' => 'value']])), $key);
             self::assertSame([], ArticleMetadataValidator::errors($this->document([$key => ['plain', 'lines']])), $key);
             self::assertSame([], ArticleMetadataValidator::errors($this->document([$key => 'plain text'])), $key);
         }
+    }
+
+    public function test_internal_links_accept_only_safe_site_paths_or_web_urls(): void
+    {
+        self::assertSame([], ArticleMetadataValidator::errors($this->document(['internal_links' => ['/articles/next/', 'https://example.test/about/']])));
+        self::assertContains('Article "article" has an invalid internal link.', ArticleMetadataValidator::errors($this->document(['internal_links' => ['javascript:alert(1)']])));
+        self::assertContains('Article "article" has an invalid internal link.', ArticleMetadataValidator::errors($this->document(['internal_links' => ['//evil.test/path']])));
+    }
+
+    public function test_structured_faq_requires_question_answer_pairs(): void
+    {
+        self::assertSame([], ArticleMetadataValidator::errors($this->document(['faq' => [['question' => 'Q', 'answer' => 'A']]])));
+        self::assertContains('Article "article" has invalid faq metadata.', ArticleMetadataValidator::errors($this->document(['faq' => [['question' => 'Q']]])));
+        self::assertContains('Article "article" has invalid faq metadata.', ArticleMetadataValidator::errors($this->document(['faq' => ['question' => 'Q', 'answer' => 'A']])));
     }
 }

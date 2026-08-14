@@ -55,8 +55,8 @@ Media lives in a managed filesystem directory. A published site can continue to 
 ## 5. Authoring and GEO Review Flow
 
 1. The administrator creates or imports a Markdown draft and writes the article independently.
-2. The editor autosaves safely and records restorable version snapshots. A rendered preview is always available.
-3. The administrator requests a GEO review for the current saved version.
+2. The editor autosaves safely without advancing content version history. A rendered preview is always available.
+3. The administrator requests a GEO review bound to an immutable review input that is not exposed as a content version.
 4. The AI returns proposals only for:
    - article summary and TL;DR;
    - title/description and URL-slug suggestions;
@@ -65,7 +65,7 @@ Media lives in a managed filesystem directory. A published site can continue to 
    - missing clarity, source, author, hierarchy, image-alt, and internal-link signals.
 5. When the article needs stronger evidence or explanation, the AI identifies the missing question or evidence. It never writes a replacement paragraph.
 6. Every proposal is individually accepted, rejected, or manually changed. Acceptance changes only Markdown front matter and related metadata; it never edits body content.
-7. Publishing runs validation and an incremental static build. Only a successful build becomes public.
+7. Publishing runs validation and an incremental static build. Only a successful build becomes public and records a restorable content version; queued or failed publication inputs remain outside version history.
 
 ## 6. Static Generation and Public Output
 
