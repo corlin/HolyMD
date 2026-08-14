@@ -246,29 +246,87 @@ final readonly class ArticleController
         try {
             if ($this->mediaRoot === null) throw new InvalidArgumentException('Media storage is not configured.');
             $upload = $request->files['image'] ?? null;
-            if (!is_array($upload) || ($upload['error'] ?? null) !== UPLOAD_ERR_OK || !is_string($upload['tmp_name'] ?? null) || !is_string($upload['name'] ?? null) || !is_file($upload['tmp_name'])) throw new InvalidArgumentException('A valid image upload is required.');
-            $actualSize = filesize($upload['tmp_name']);
-            if ($actualSize === false || $actualSize <= 0 || $actualSize > 5 * 1024 * 1024) throw new InvalidArgumentException('Images must be larger than 0 bytes and 5 MB or smaller.');
-            $image = @getimagesize($upload['tmp_name']);
-            $imageType = @exif_imagetype($upload['tmp_name']);
-            if ($image === false || $imageType === false || ($image[0] ?? 0) <= 0 || ($image[1] ?? 0) <= 0) throw new InvalidArgumentException('The upload must be a decodable image with valid dimensions.');
-            if (!function_exists('imagecreatefromstring')) throw new InvalidArgumentException('Image uploads require the PHP GD extension for safe decoding.');
-            $encodedImage = file_get_contents($upload['tmp_name']);
-            $decodedImage = is_string($encodedImage) ? @imagecreatefromstring($encodedImage) : false;
-            if ($decodedImage === false) throw new InvalidArgumentException('The upload must contain complete, decodable image pixels.');
-        unset($decodedImage);
+            if (!is_array($upload)) throw new InvalidArgumentException('A valid image upload is required.');
+
+            $filesToProcess = [];
+            if (is_array($upload['name'] ?? null)) {
+                $count = count($upload['name']);
+                for ($i = 0; $i < $count; $i++) {
+                    if (($upload['error'][$i] ?? null) === UPLOAD_ERR_NO_FILE) continue;
+                    $filesToProcess[] = [
+                        'name' => $upload['name'][$i] ?? '',
+                        'tmp_name' => $upload['tmp_name'][$i] ?? '',
+                        'error' => $upload['error'][$i] ?? UPLOAD_ERR_NO_FILE,
+                    ];
+                }
+            } else {
+                if (($upload['error'] ?? null) !== UPLOAD_ERR_NO_FILE) {
+                    $filesToProcess[] = $upload;
+                }
+            }
+            if ($filesToProcess === []) throw new InvalidArgumentException('A valid image upload is required.');
+
             $allowedTypes = [IMAGETYPE_JPEG => ['image/jpeg', 'jpg'], IMAGETYPE_PNG => ['image/png', 'png'], IMAGETYPE_GIF => ['image/gif', 'gif'], IMAGETYPE_WEBP => ['image/webp', 'webp']];
-            $detectedMime = (new \finfo(FILEINFO_MIME_TYPE))->file($upload['tmp_name']);
-            if (!isset($allowedTypes[$imageType]) || ($image['mime'] ?? null) !== $allowedTypes[$imageType][0] || $detectedMime !== $allowedTypes[$imageType][0]) throw new InvalidArgumentException('Only consistently encoded JPEG, PNG, GIF, and WebP images are allowed.');
-            [, $extension] = $allowedTypes[$imageType];
-            $stem = pathinfo(basename($upload['name']), PATHINFO_FILENAME);
-            $stem = trim((string) preg_replace('/[^a-z0-9]+/', '-', strtolower($stem)), '-') ?: 'image';
-            $name = $stem . '-' . bin2hex(random_bytes(4)) . '.' . $extension;
+            if (!function_exists('imagecreatefromstring')) throw new InvalidArgumentException('Image uploads require the PHP GD extension for safe decoding.');
+
             if (!is_dir($this->mediaRoot) && !mkdir($this->mediaRoot, 0775, true) && !is_dir($this->mediaRoot)) throw new \RuntimeException('Unable to create media storage.');
-            $destination = $this->mediaRoot . '/' . $name;
-            if (!move_uploaded_file($upload['tmp_name'], $destination) && !rename($upload['tmp_name'], $destination)) throw new \RuntimeException('Unable to store the image.');
+
+            foreach ($filesToProcess as $file) {
+                if (($file['error'] ?? null) !== UPLOAD_ERR_OK || !is_string($file['tmp_name'] ?? null) || !is_string($file['name'] ?? null) || !is_file($file['tmp_name'])) {
+                    throw new InvalidArgumentException('A valid image upload is required.');
+                }
+                $actualSize = filesize($file['tmp_name']);
+                if ($actualSize === false || $actualSize <= 0 || $actualSize > 5 * 1024 * 1024) {
+                    throw new InvalidArgumentException('Images must be larger than 0 bytes and 5 MB or smaller.');
+                }
+                $image = @getimagesize($file['tmp_name']);
+                $imageType = @exif_imagetype($file['tmp_name']);
+                if ($image === false || $imageType === false || ($image[0] ?? 0) <= 0 || ($image[1] ?? 0) <= 0) {
+                    throw new InvalidArgumentException('The upload must be a decodable image with valid dimensions.');
+                }
+                $encodedImage = file_get_contents($file['tmp_name']);
+                $decodedImage = is_string($encodedImage) ? @imagecreatefromstring($encodedImage) : false;
+                if ($decodedImage === false) {
+                    throw new InvalidArgumentException('The upload must contain complete, decodable image pixels.');
+                }
+                unset($decodedImage);
+                $detectedMime = (new \finfo(FILEINFO_MIME_TYPE))->file($file['tmp_name']);
+                if (!isset($allowedTypes[$imageType]) || ($image['mime'] ?? null) !== $allowedTypes[$imageType][0] || $detectedMime !== $allowedTypes[$imageType][0]) {
+                    throw new InvalidArgumentException('Only consistently encoded JPEG, PNG, GIF, and WebP images are allowed.');
+                }
+                [, $extension] = $allowedTypes[$imageType];
+                $stem = pathinfo(basename($file['name']), PATHINFO_FILENAME);
+                $stem = trim((string) preg_replace('/[^a-z0-9]+/', '-', strtolower($stem)), '-') ?: 'image';
+                $name = $stem . '-' . bin2hex(random_bytes(4)) . '.' . $extension;
+                $destination = $this->mediaRoot . '/' . $name;
+                if (!move_uploaded_file($file['tmp_name'], $destination) && !rename($file['tmp_name'], $destination)) {
+                    throw new \RuntimeException('Unable to store the image.');
+                }
+            }
             return Response::redirect('/admin/media');
         } catch (InvalidArgumentException $exception) { return Response::json(['error' => $exception->getMessage()], 422); }
+    }
+
+    public function deleteMedia(ServerRequest $request): Response
+    {
+        if (($response = $this->authorizeMutation($request)) !== null) return $response;
+        try {
+            if ($this->mediaRoot === null) throw new InvalidArgumentException('Media storage is not configured.');
+            $filename = $request->input('filename');
+            if (!is_string($filename) || preg_match('/^[a-z0-9][a-z0-9-]*\.(?:jpg|png|gif|webp)$/', $filename) !== 1) {
+                throw new InvalidArgumentException('Invalid image filename.');
+            }
+            $target = $this->mediaRoot . '/' . $filename;
+            if (!is_file($target)) {
+                throw new InvalidArgumentException('Image not found.');
+            }
+            if (!unlink($target)) {
+                throw new \RuntimeException('Unable to delete image.');
+            }
+            return Response::redirect('/admin/media');
+        } catch (InvalidArgumentException $exception) {
+            return Response::json(['error' => $exception->getMessage()], 422);
+        }
     }
 
     public function settings(ServerRequest $request): Response

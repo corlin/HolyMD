@@ -10,6 +10,7 @@ use HolyMD\Admin\VersionService;
 use HolyMD\Content\ArticleDocument;
 use HolyMD\Content\ArticleMetadataValidator;
 use HolyMD\Content\ArticleRepository;
+use HolyMD\Content\PageRepository;
 use HolyMD\Render\BuildInput;
 use HolyMD\Render\BuildManifest;
 use HolyMD\Render\StaticBuilder;
@@ -35,7 +36,42 @@ final readonly class PublishService
         private ?string $lockPath = null,
         private string $siteLanguage = 'zh-CN',
         private ?VersionService $versions = null,
+        private ?PageRepository $pages = null,
     ) {
+    }
+
+    public function rebuild(): PublishResult
+    {
+        $lock = $this->lock();
+        $temporaryRoot = dirname($this->liveRoot) . '/.' . basename($this->liveRoot) . '-build-' . bin2hex(random_bytes(6));
+        try {
+            $documents = [];
+            foreach ($this->articles->all() as $document) {
+                if ($document->frontMatter->get('status') !== 'published') continue;
+                $publishedDocument = $document;
+                if ($this->versions !== null) {
+                    $pointer = $document->frontMatter->get('published_version');
+                    if (is_string($pointer) && preg_match('/^[a-f0-9]{32}$/', $pointer) === 1) {
+                        $publishedDocument = $this->versions->restore(new VersionId($pointer), $document->slug);
+                    }
+                }
+                $documents[] = $publishedDocument->withFrontMatter($publishedDocument->frontMatter->with('status', 'published'));
+            }
+            $published = array_values(array_filter($documents, static fn (ArticleDocument $document): bool => $document->frontMatter->get('status') === 'published'));
+            $validation = $this->validate($published);
+            if (!$validation->isValid()) throw new InvalidArgumentException($validation->text());
+            if (!mkdir($temporaryRoot, 0775, true) && !is_dir($temporaryRoot)) throw new RuntimeException('Unable to create temporary build directory.');
+            $pagesList = $this->pages !== null ? $this->pages->all() : [];
+            $manifest = $this->builder->build(new BuildInput($published, $this->siteName, $this->siteUrl, $this->authorName, $this->about, $this->generateLlmsTxt, $this->siteLanguage, null, $this->basePath(), $pagesList), $temporaryRoot);
+            $manifest = $this->writeRedirects($temporaryRoot, $published, $manifest);
+            $this->writeManifest($temporaryRoot, $manifest);
+            $this->publicTree->swap($temporaryRoot, $this->liveRoot);
+            return new PublishResult($manifest, $validation);
+        } finally {
+            if (is_dir($temporaryRoot)) $this->remove($temporaryRoot);
+            flock($lock, LOCK_UN);
+            fclose($lock);
+        }
     }
 
     public function publish(ArticleId $id, ?VersionId $selectedVersion = null): PublishResult
@@ -95,7 +131,8 @@ final readonly class PublishService
             $validation = $this->validate($published);
             if (!$validation->isValid()) throw new InvalidArgumentException($validation->text());
             if (!mkdir($temporaryRoot, 0775, true) && !is_dir($temporaryRoot)) throw new RuntimeException('Unable to create temporary build directory.');
-            $manifest = $this->builder->build(new BuildInput($published, $this->siteName, $this->siteUrl, $this->authorName, $this->about, $this->generateLlmsTxt, $this->siteLanguage, null, $this->basePath()), $temporaryRoot);
+            $pagesList = $this->pages !== null ? $this->pages->all() : [];
+            $manifest = $this->builder->build(new BuildInput($published, $this->siteName, $this->siteUrl, $this->authorName, $this->about, $this->generateLlmsTxt, $this->siteLanguage, null, $this->basePath(), $pagesList), $temporaryRoot);
             $manifest = $this->writeRedirects($temporaryRoot, $published, $manifest);
             $this->writeManifest($temporaryRoot, $manifest);
             if ($this->versions !== null) foreach ($versionsToConfirm as $version) $this->versions->stagePublished($version);

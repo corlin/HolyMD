@@ -7,8 +7,10 @@ $attr = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES
 <nav class="left-rail" aria-label="Administration">
   <a class="brand" href="<?= $attr($basePath . '/admin/articles') ?>">HolyMD</a>
   <a<?= $active('articles') ?> href="<?= $attr($basePath . '/admin/articles') ?>"><span class="icon" aria-hidden="true">article</span>Articles</a>
+  <a<?= $active('pages') ?> href="<?= $attr($basePath . '/admin/pages') ?>"><span class="icon" aria-hidden="true">description</span>Pages</a>
   <a<?= $active('jobs') ?> href="<?= $attr($basePath . '/admin/jobs') ?>"><span class="icon" aria-hidden="true">checklist</span>Jobs</a>
   <a<?= $active('media') ?> href="<?= $attr($basePath . '/admin/media') ?>"><span class="icon" aria-hidden="true">image</span>Library</a>
+  <a<?= $active('profile') ?> href="<?= $attr($basePath . '/admin/profile') ?>"><span class="icon" aria-hidden="true">person</span>Profile</a>
   <a<?= $active('settings') ?> href="<?= $attr($basePath . '/admin/settings') ?>"><span class="icon" aria-hidden="true">settings</span>Settings</a>
   <footer>
     <form method="post" action="<?= $attr($basePath . '/admin/logout') ?>">

@@ -63,8 +63,23 @@ final class AuthController
         }
 
         $this->pdo->prepare('UPDATE admin_users SET failed_attempts = 0, locked_until = NULL WHERE id = ?')->execute([(int) $admin['id']]);
+        $rememberMe = in_array($request->input('remember_me'), ['1', 'on', 'true', true], true);
+        if ($rememberMe) {
+            $this->session['remember_me'] = true;
+        } else {
+            unset($this->session['remember_me']);
+        }
         if (session_status() === PHP_SESSION_ACTIVE) {
             session_regenerate_id(true);
+            if ($rememberMe) {
+                setcookie(session_name(), (string) session_id(), [
+                    'expires' => time() + 2592000,
+                    'path' => '/',
+                    'httponly' => true,
+                    'secure' => (($_SERVER['HTTPS'] ?? '') === 'on'),
+                    'samesite' => 'Lax',
+                ]);
+            }
         }
         $this->session['admin_user_id'] = (int) $admin['id'];
         $this->session['csrf_token'] = bin2hex(random_bytes(32));
@@ -76,9 +91,16 @@ final class AuthController
         if (!$this->csrf->valid($request)) {
             return Response::json(['error' => 'CSRF token is invalid.'], 419);
         }
-        unset($this->session['admin_user_id'], $this->session['csrf_token']);
+        unset($this->session['admin_user_id'], $this->session['csrf_token'], $this->session['remember_me']);
         if (session_status() === PHP_SESSION_ACTIVE) {
             session_regenerate_id(true);
+            setcookie(session_name(), '', [
+                'expires' => time() - 3600,
+                'path' => '/',
+                'httponly' => true,
+                'secure' => (($_SERVER['HTTPS'] ?? '') === 'on'),
+                'samesite' => 'Lax',
+            ]);
         }
         return Response::redirect('/admin/login');
     }

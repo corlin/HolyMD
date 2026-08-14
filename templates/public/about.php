@@ -8,6 +8,7 @@ $ogDescription = $description;
 $ogUrl = rtrim($siteUrl, '/') . '/about/';
 $canonical = $ogUrl;
 $jsonLd = null;
+$ogImage = null;
 $showAlternates = false;
 require __DIR__ . '/_head.php';
 $skipTarget = '#main-content';

@@ -43,9 +43,13 @@ final class StaticBuilderTest extends TestCase
         self::assertFileExists($this->outputRoot . '/articles/first-post/index.html');
         self::assertFileExists($this->outputRoot . '/feed.json');
         self::assertFileExists($this->outputRoot . '/rss.xml');
+        self::assertFileExists($this->outputRoot . '/atom.xml');
+        self::assertFileExists($this->outputRoot . '/404.html');
         self::assertFileExists($this->outputRoot . '/sitemap.xml');
         self::assertFileExists($this->outputRoot . '/llms.txt');
         self::assertFileExists($this->outputRoot . '/llms-full.txt');
+        self::assertStringContainsString('Page not found', (string) file_get_contents($this->outputRoot . '/404.html'));
+        self::assertStringContainsString('xmlns="http://www.w3.org/2005/Atom"', (string) file_get_contents($this->outputRoot . '/atom.xml'));
         $article = (string) file_get_contents($this->outputRoot . '/articles/first-post/index.html');
         self::assertStringContainsString('<article>', $article);
         self::assertStringContainsString('"@type":"Article"', $article);
@@ -451,5 +455,76 @@ final class StaticBuilderTest extends TestCase
 
         self::assertStringContainsString('2 min read', (string) file_get_contents($this->outputRoot . '/articles/english-time/index.html'));
         self::assertStringContainsString('1 min read', (string) file_get_contents($this->outputRoot . '/articles/chinese-time/index.html'));
+    }
+
+    public function test_extracts_og_image_from_front_matter_or_body(): void
+    {
+        $coverArticle = new ArticleDocument('cover-post', 'Cover Post', 'Body without images.', new FrontMatter(['title' => 'Cover Post', 'slug' => 'cover-post', 'date' => '2026-08-12', 'cover_image' => '/media/hero.jpg']), '/cover-post');
+        $bodyImageArticle = new ArticleDocument('body-post', 'Body Post', 'Some text and ![photo](/media/photo.png).', new FrontMatter(['title' => 'Body Post', 'slug' => 'body-post', 'date' => '2026-08-11']), '/body-post');
+        $noImageArticle = new ArticleDocument('no-image', 'No Image', 'Just pure text.', new FrontMatter(['title' => 'No Image', 'slug' => 'no-image', 'date' => '2026-08-10']), '/no-image');
+
+        (new StaticBuilder())->build(new BuildInput([$coverArticle, $bodyImageArticle, $noImageArticle], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
+
+        $coverHtml = (string) file_get_contents($this->outputRoot . '/articles/cover-post/index.html');
+        self::assertStringContainsString('<meta property="og:image" content="https://example.test/media/hero.jpg">', $coverHtml);
+        self::assertStringContainsString('<meta name="twitter:card" content="summary_large_image">', $coverHtml);
+        self::assertStringContainsString('"image":"https://example.test/media/hero.jpg"', $coverHtml);
+
+        $bodyHtml = (string) file_get_contents($this->outputRoot . '/articles/body-post/index.html');
+        self::assertStringContainsString('<meta property="og:image" content="https://example.test/media/photo.png">', $bodyHtml);
+        self::assertStringContainsString('<meta name="twitter:card" content="summary_large_image">', $bodyHtml);
+        self::assertStringContainsString('"image":"https://example.test/media/photo.png"', $bodyHtml);
+
+        $noImgHtml = (string) file_get_contents($this->outputRoot . '/articles/no-image/index.html');
+        self::assertStringNotContainsString('og:image', $noImgHtml);
+        self::assertStringContainsString('<meta name="twitter:card" content="summary">', $noImgHtml);
+    }
+
+    public function test_homepage_limits_archive_to_10_and_shows_load_more_when_needed(): void
+    {
+        $articles = [];
+        for ($i = 1; $i <= 15; $i++) {
+            $articles[] = new ArticleDocument("post-{$i}", "Post {$i}", "Body {$i}", new FrontMatter(['title' => "Post {$i}", 'slug' => "post-{$i}", 'date' => sprintf('2026-08-%02d', 30 - $i)]), "/post-{$i}");
+        }
+
+        (new StaticBuilder())->build(new BuildInput($articles, 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
+
+        $home = (string) file_get_contents($this->outputRoot . '/index.html');
+        // 1 featured + 10 in archive list = 11 post headings
+        self::assertStringContainsString('id="load-more-button"', $home);
+        self::assertStringContainsString('Post 1', $home); // featured
+        self::assertStringContainsString('Post 11', $home); // 10th in archive
+        self::assertStringNotContainsString('Post 12', $home); // 11th in archive (not SSR'd)
+    }
+
+    public function test_renders_custom_pages_and_nav_order_links(): void
+    {
+        $article = new ArticleDocument('hello', 'Hello World', 'First post', new FrontMatter(['title' => 'Hello World', 'slug' => 'hello', 'date' => '2026-08-14']), '/hello');
+        $page1 = new ArticleDocument('privacy', 'Privacy Policy', '# Privacy Rules', new FrontMatter(['title' => 'Privacy Policy', 'slug' => 'privacy', 'date' => '2026-08-14', 'nav_order' => 2, 'status' => 'published']), '/privacy');
+        $page2 = new ArticleDocument('terms', 'Terms', '# Terms Rules', new FrontMatter(['title' => 'Terms', 'slug' => 'terms', 'date' => '2026-08-14', 'nav_order' => 1, 'status' => 'published']), '/terms');
+        $draftPage = new ArticleDocument('secret', 'Secret', '# Secret', new FrontMatter(['title' => 'Secret', 'slug' => 'secret', 'date' => '2026-08-14', 'status' => 'draft']), '/secret');
+
+        (new StaticBuilder())->build(new BuildInput([$article], 'Site', 'https://example.test', 'Author', 'About', false, 'zh-CN', null, '', [$page1, $page2, $draftPage]), $this->outputRoot);
+
+        self::assertFileExists($this->outputRoot . '/privacy/index.html');
+        self::assertFileExists($this->outputRoot . '/terms/index.html');
+        self::assertFileDoesNotExist($this->outputRoot . '/secret/index.html');
+
+        $privacyHtml = (string) file_get_contents($this->outputRoot . '/privacy/index.html');
+        self::assertStringContainsString('Privacy Rules', $privacyHtml);
+
+        // Check sitemap includes published pages
+        $sitemap = (string) file_get_contents($this->outputRoot . '/sitemap.xml');
+        self::assertStringContainsString('https://example.test/privacy/', $sitemap);
+        self::assertStringContainsString('https://example.test/terms/', $sitemap);
+        self::assertStringNotContainsString('https://example.test/secret/', $sitemap);
+
+        // Check header nav order: terms (nav_order=1) should precede privacy (nav_order=2)
+        $homeHtml = (string) file_get_contents($this->outputRoot . '/index.html');
+        $termsPos = strpos($homeHtml, 'href="/terms/"');
+        $privacyPos = strpos($homeHtml, 'href="/privacy/"');
+        self::assertNotFalse($termsPos);
+        self::assertNotFalse($privacyPos);
+        self::assertLessThan($privacyPos, $termsPos);
     }
 }

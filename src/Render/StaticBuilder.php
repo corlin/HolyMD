@@ -45,6 +45,12 @@ final class StaticBuilder
         $assetCss = $input->basePath . '/assets/site.' . $cssHash . '.css';
         $assetSearch = $input->basePath . '/assets/search.' . $scriptHash . '.js';
         $files = [];
+
+        $publishedPages = array_values(array_filter($input->pages, static fn (ArticleDocument $p): bool => $p->frontMatter->get('status', 'published') === 'published'));
+        $navCandidatePages = array_values(array_filter($publishedPages, static fn (ArticleDocument $p): bool => $p->frontMatter->get('nav_order') !== null && is_numeric($p->frontMatter->get('nav_order'))));
+        usort($navCandidatePages, static fn (ArticleDocument $a, ArticleDocument $b): int => ((float) $a->frontMatter->get('nav_order')) <=> ((float) $b->frontMatter->get('nav_order')));
+        $navPages = array_map(static fn (ArticleDocument $p): array => ['title' => $p->title, 'slug' => $p->slug], $navCandidatePages);
+
         $topics = [];
         foreach ($articles as $article) {
             foreach ((array) $article->frontMatter->get('topics', []) as $topic) {
@@ -62,7 +68,7 @@ final class StaticBuilder
             $topicSlugs[$topicLabel] = $slug;
             $route = '/topics/' . $slug . '/';
             $this->write($temporaryRoot . $route . 'index.html', $this->renderer->render('topic', [
-                'siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'siteLanguage' => $input->siteLanguage, 'topic' => $topicLabel, 'articles' => $topicArticles, 'route' => $route, 'generateLlmsTxt' => $input->generateLlmsTxt, 'assetCss' => $assetCss, 'assetSearch' => $assetSearch, 'basePath' => $input->basePath,
+                'siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'siteLanguage' => $input->siteLanguage, 'topic' => $topicLabel, 'articles' => $topicArticles, 'route' => $route, 'generateLlmsTxt' => $input->generateLlmsTxt, 'assetCss' => $assetCss, 'assetSearch' => $assetSearch, 'basePath' => $input->basePath, 'navPages' => $navPages,
             ]));
             $files[] = $route . 'index.html';
         }
@@ -70,27 +76,40 @@ final class StaticBuilder
         foreach ($articles as $article) {
             $route = '/articles/' . $article->slug . '/';
             $path = $temporaryRoot . $route . 'index.html';
-            $data = $this->articleData($article, $articles, $input, $route, $topicSlugs, $assetCss, $assetSearch);
+            $data = $this->articleData($article, $articles, $input, $route, $topicSlugs, $assetCss, $assetSearch, $navPages);
             $this->write($path, $this->renderer->render('article', $data));
             $files[] = $route . 'index.html';
             $rendered[] = $data;
         }
+        foreach ($publishedPages as $page) {
+            $route = '/' . $page->slug . '/';
+            $path = $temporaryRoot . $route . 'index.html';
+            $contentHtml = $this->applyImageAltText($this->markdownRenderer->render($page->bodyMarkdown), $this->stringList($page->frontMatter->get('alt_text')));
+            $this->write($path, $this->renderer->render('page', [
+                'siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'siteLanguage' => $input->siteLanguage,
+                'page' => $page, 'contentHtml' => $contentHtml, 'generateLlmsTxt' => $input->generateLlmsTxt,
+                'assetCss' => $assetCss, 'assetSearch' => $assetSearch, 'basePath' => $input->basePath, 'navPages' => $navPages,
+            ]));
+            $files[] = substr($route, 1) . 'index.html';
+        }
         $this->write($temporaryRoot . '/index.html', $this->renderer->render('index', [
-            'siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'about' => $input->about, 'siteLanguage' => $input->siteLanguage, 'articles' => $articles, 'topics' => $topics, 'topicSlugs' => $topicSlugs, 'generateLlmsTxt' => $input->generateLlmsTxt, 'assetCss' => $assetCss, 'assetSearch' => $assetSearch, 'basePath' => $input->basePath,
+            'siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'about' => $input->about, 'siteLanguage' => $input->siteLanguage, 'articles' => $articles, 'topics' => $topics, 'topicSlugs' => $topicSlugs, 'generateLlmsTxt' => $input->generateLlmsTxt, 'assetCss' => $assetCss, 'assetSearch' => $assetSearch, 'basePath' => $input->basePath, 'navPages' => $navPages,
         ]));
-        $this->write($temporaryRoot . '/about/index.html', $this->renderer->render('about', ['siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'about' => $input->about, 'siteLanguage' => $input->siteLanguage, 'generateLlmsTxt' => $input->generateLlmsTxt, 'assetCss' => $assetCss, 'assetSearch' => $assetSearch, 'basePath' => $input->basePath]));
+        $this->write($temporaryRoot . '/about/index.html', $this->renderer->render('about', ['siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'about' => $input->about, 'siteLanguage' => $input->siteLanguage, 'generateLlmsTxt' => $input->generateLlmsTxt, 'assetCss' => $assetCss, 'assetSearch' => $assetSearch, 'basePath' => $input->basePath, 'navPages' => $navPages]));
+        $this->write($temporaryRoot . '/404.html', $this->renderer->render('404', ['siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'siteLanguage' => $input->siteLanguage, 'generateLlmsTxt' => $input->generateLlmsTxt, 'assetCss' => $assetCss, 'assetSearch' => $assetSearch, 'basePath' => $input->basePath, 'navPages' => $navPages]));
         $this->write($temporaryRoot . $assetCss, $styles);
         $this->write($temporaryRoot . $assetSearch, $script);
         $this->write($temporaryRoot . '/rss.xml', $this->rss($articles, $input, $builtAt));
+        $this->write($temporaryRoot . '/atom.xml', $this->atom($articles, $input, $builtAt));
         $this->write($temporaryRoot . '/feed.json', $this->jsonFeed($rendered, $input));
-        $this->write($temporaryRoot . '/sitemap.xml', $this->sitemap($articles, $input, array_keys($topicRoutes), $builtAt));
+        $this->write($temporaryRoot . '/sitemap.xml', $this->sitemap($articles, $publishedPages, $input, array_keys($topicRoutes), $builtAt));
         $this->write($temporaryRoot . '/search-index.json', $this->searchIndex($rendered, $builtAt));
         $robotsTxt = "User-agent: *\nAllow: /\nSitemap: " . $this->url($input, '/sitemap.xml') . "\n";
         if ($input->generateLlmsTxt) {
             $robotsTxt .= "LLMs-Txt: " . $this->url($input, '/llms.txt') . "\nLLMs-Full-Txt: " . $this->url($input, '/llms-full.txt') . "\n";
         }
         $this->write($temporaryRoot . '/robots.txt', $robotsTxt);
-        $files = [...$files, 'index.html', 'about/index.html', substr($assetCss, 1), substr($assetSearch, 1), 'rss.xml', 'feed.json', 'sitemap.xml', 'search-index.json', 'robots.txt'];
+        $files = [...$files, 'index.html', 'about/index.html', '404.html', substr($assetCss, 1), substr($assetSearch, 1), 'rss.xml', 'atom.xml', 'feed.json', 'sitemap.xml', 'search-index.json', 'robots.txt'];
         if ($input->generateLlmsTxt) {
             $lines = ['# ' . $input->siteName, '', $input->about, ''];
             foreach ($articles as $article) {
@@ -135,8 +154,11 @@ final class StaticBuilder
     }
 
     /** @return array<string, mixed> */
-    /** @param list<ArticleDocument> $articles */
-    private function articleData(ArticleDocument $article, array $articles, BuildInput $input, string $route, array $topicSlugs, string $assetCss, string $assetSearch): array
+    /**
+     * @param list<ArticleDocument> $articles
+     * @param list<array{title: string, slug: string}> $navPages
+     */
+    private function articleData(ArticleDocument $article, array $articles, BuildInput $input, string $route, array $topicSlugs, string $assetCss, string $assetSearch, array $navPages = []): array
     {
         $url = $this->url($input, $route);
         $date = (string) $article->frontMatter->get('date');
@@ -147,8 +169,14 @@ final class StaticBuilder
         $entities = $this->stringList($article->frontMatter->get('entities'));
         $faq = $this->faqEntries($article->frontMatter->get('faq'));
         $structured = $article->frontMatter->get('structured_data');
+        $contentHtml = $this->applyImageAltText($this->markdownRenderer->render($article->bodyMarkdown), $this->stringList($article->frontMatter->get('alt_text')));
+        $ogImage = $this->resolveOgImage($article, $contentHtml, $input);
+        $articleSchema = ['@type' => 'Article', 'headline' => $article->title, 'datePublished' => $date, 'dateModified' => $modified, 'author' => ['@type' => 'Person', 'name' => $input->authorName], 'mainEntityOfPage' => $url, 'description' => $summary, 'citation' => $sources, 'about' => array_map(static fn (string $name): array => ['@type' => 'Thing', 'name' => $name], $entities)];
+        if ($ogImage !== null) {
+            $articleSchema['image'] = $ogImage;
+        }
         $graph = [
-                ['@type' => 'Article', 'headline' => $article->title, 'datePublished' => $date, 'dateModified' => $modified, 'author' => ['@type' => 'Person', 'name' => $input->authorName], 'mainEntityOfPage' => $url, 'description' => $summary, 'citation' => $sources, 'about' => array_map(static fn (string $name): array => ['@type' => 'Thing', 'name' => $name], $entities)],
+                $articleSchema,
                 ['@type' => 'Person', 'name' => $input->authorName],
                 ['@type' => 'WebSite', 'name' => $input->siteName, 'url' => rtrim($input->siteUrl, '/') . '/'],
                 ['@type' => 'BreadcrumbList', 'itemListElement' => [['@type' => 'ListItem', 'position' => 1, 'name' => 'Home', 'item' => $this->url($input, '/')], ['@type' => 'ListItem', 'position' => 2, 'name' => $article->title, 'item' => $url]]],
@@ -160,15 +188,13 @@ final class StaticBuilder
             if ($candidate->slug === $article->slug || $articleTopics === []) return false;
             return array_intersect($articleTopics, (array) $candidate->frontMatter->get('topics', [])) !== [];
         }));
-
-        $contentHtml = $this->applyImageAltText($this->markdownRenderer->render($article->bodyMarkdown), $this->stringList($article->frontMatter->get('alt_text')));
         $feedContentHtml = $contentHtml;
         $searchText = mb_substr(html_entity_decode(strip_tags($contentHtml), ENT_QUOTES | ENT_HTML5, 'UTF-8'), 0, 12288);
         $toc = [];
         $usedHeadingIds = [];
         $headingIdSequences = [];
         $contentHtmlWithIds = preg_replace_callback(
-            '/<h([23])(\b[^>]*)>(.*?)<\/h\1>/s',
+            '/<h([234])(\b[^>]*)>(.*?)<\/h\1>/s',
             static function (array $matches) use (&$toc, &$usedHeadingIds, &$headingIdSequences): string {
                 $level = (int) $matches[1];
                 $attrs = $matches[2];
@@ -196,7 +222,7 @@ final class StaticBuilder
         return [
             'siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'siteLanguage' => $input->siteLanguage, 'article' => $article,
             'url' => $url, 'date' => $date, 'modified' => $modified, 'summary' => $summary, 'sources' => $sources, 'internalLinks' => $internalLinks, 'faq' => $faq, 'topics' => $articleTopics, 'topicSlugs' => $topicSlugs, 'related' => array_slice($related, 0, 3),
-            'contentHtml' => $contentHtmlWithIds, 'feedContentHtml' => $feedContentHtml, 'searchText' => $searchText, 'toc' => $toc, 'readingMinutes' => $readingMinutes, 'generateLlmsTxt' => $input->generateLlmsTxt, 'assetCss' => $assetCss, 'assetSearch' => $assetSearch, 'basePath' => $input->basePath,
+            'contentHtml' => $contentHtmlWithIds, 'feedContentHtml' => $feedContentHtml, 'searchText' => $searchText, 'toc' => $toc, 'readingMinutes' => $readingMinutes, 'ogImage' => $ogImage, 'generateLlmsTxt' => $input->generateLlmsTxt, 'assetCss' => $assetCss, 'assetSearch' => $assetSearch, 'basePath' => $input->basePath, 'navPages' => $navPages,
             'jsonLd' => json_encode(['@context' => 'https://schema.org', '@graph' => $graph], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR),
         ];
     }
@@ -211,6 +237,25 @@ final class StaticBuilder
         return '<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>' . $this->xml($input->siteName) . '</title><link>' . $this->xml($input->siteUrl) . '</link><description>' . $this->xml($input->about) . '</description><lastBuildDate>' . $this->date($builtAt) . '</lastBuildDate>' . implode('', $items) . '</channel></rss>';
     }
 
+    /** @param list<ArticleDocument> $articles */
+    private function atom(array $articles, BuildInput $input, string $builtAt): string
+    {
+        $feedUrl = $this->url($input, '/atom.xml');
+        $siteUrl = rtrim($input->siteUrl, '/') . '/';
+        $updated = (new DateTimeImmutable($builtAt))->format(DATE_ATOM);
+        $entries = array_map(function (ArticleDocument $article) use ($input): string {
+            $url = $this->url($input, '/articles/' . $article->slug . '/');
+            $date = (string) $article->frontMatter->get('date');
+            $published = (new DateTimeImmutable($date))->format(DATE_ATOM);
+            $modified = (string) $article->frontMatter->get('updated', $date);
+            $updatedDate = (new DateTimeImmutable($modified))->format(DATE_ATOM);
+            $summary = (string) $article->frontMatter->get('summary', '');
+            $summaryTag = $summary !== '' ? '<summary>' . $this->xml($summary) . '</summary>' : '';
+            return '<entry><title>' . $this->xml($article->title) . '</title><link href="' . $this->xml($url) . '"/><id>' . $this->xml($url) . '</id><published>' . $published . '</published><updated>' . $updatedDate . '</updated>' . $summaryTag . '<author><name>' . $this->xml($input->authorName) . '</name></author></entry>';
+        }, $articles);
+        return '<?xml version="1.0" encoding="UTF-8"?><feed xmlns="http://www.w3.org/2005/Atom"><title>' . $this->xml($input->siteName) . '</title><subtitle>' . $this->xml($input->about) . '</subtitle><link href="' . $this->xml($feedUrl) . '" rel="self"/><link href="' . $this->xml($siteUrl) . '"/><id>' . $this->xml($siteUrl) . '</id><updated>' . $updated . '</updated><author><name>' . $this->xml($input->authorName) . '</name></author>' . implode('', $entries) . '</feed>';
+    }
+
     /** @param list<array<string, mixed>> $rendered */
     private function jsonFeed(array $rendered, BuildInput $input): string
     {
@@ -221,11 +266,17 @@ final class StaticBuilder
         return json_encode(['version' => 'https://jsonfeed.org/version/1.1', 'title' => $input->siteName, 'home_page_url' => $input->siteUrl, 'feed_url' => $this->url($input, '/feed.json'), 'authors' => [['name' => $input->authorName]], 'items' => $items], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) . "\n";
     }
 
-    /** @param list<ArticleDocument> $articles */
-    private function sitemap(array $articles, BuildInput $input, array $topicSlugs, string $builtAt): string
+    /**
+     * @param list<ArticleDocument> $articles
+     * @param list<ArticleDocument> $pages
+     */
+    private function sitemap(array $articles, array $pages, BuildInput $input, array $topicSlugs, string $builtAt): string
     {
         $siteLastmod = substr($builtAt, 0, 10);
         $urls = [[$this->url($input, '/'), $siteLastmod], [$this->url($input, '/about/'), $siteLastmod]];
+        foreach ($pages as $page) {
+            $urls[] = [$this->url($input, '/' . $page->slug . '/'), (string) $page->frontMatter->get('updated', (string) $page->frontMatter->get('date'))];
+        }
         foreach ($articles as $article) {
             $urls[] = [$this->url($input, '/articles/' . $article->slug . '/'), (string) $article->frontMatter->get('updated', (string) $article->frontMatter->get('date'))];
         }
@@ -351,5 +402,26 @@ final class StaticBuilder
         $latinWords = preg_match_all('/[\p{L}\p{N}]+(?:[\x{2019}\x{0027}-][\p{L}\p{N}]+)*/u', $latinText);
         $minutes = (($cjkCharacters === false ? 0 : $cjkCharacters) / 300) + (($latinWords === false ? 0 : $latinWords) / 200);
         return max(1, (int) ceil($minutes));
+    }
+
+    private function resolveOgImage(ArticleDocument $article, string $contentHtml, BuildInput $input): ?string
+    {
+        $cover = $article->frontMatter->get('cover_image');
+        if (is_string($cover) && trim($cover) !== '') {
+            return $this->absoluteImageUrl(trim($cover), $input);
+        }
+        if (preg_match('/<img\b[^>]*\bsrc=(["\'])(.*?)\1/i', $contentHtml, $matches) === 1 && trim($matches[2]) !== '') {
+            return $this->absoluteImageUrl(trim($matches[2]), $input);
+        }
+        return null;
+    }
+
+    private function absoluteImageUrl(string $src, BuildInput $input): string
+    {
+        if (str_starts_with($src, 'http://') || str_starts_with($src, 'https://')) {
+            return $src;
+        }
+        $path = '/' . ltrim($src, '/');
+        return rtrim($input->siteUrl, '/') . $path;
     }
 }

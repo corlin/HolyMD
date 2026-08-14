@@ -501,6 +501,47 @@ final class ArticleControllerTest extends TestCase
         self::assertStringContainsString('5 MB', $response->body);
     }
 
+    public function test_multiple_images_upload_and_delete(): void
+    {
+        $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);
+        $png1 = $this->root . '/upload1.png';
+        $png2 = $this->root . '/upload2.png';
+        $pixel = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', true);
+        file_put_contents($png1, $pixel);
+        file_put_contents($png2, $pixel);
+
+        // Upload multiple files simultaneously
+        $response = $router->dispatch(new ServerRequest('POST', '/admin/media', [], ['csrf_token' => 'expected-token'], [
+            'image' => [
+                'name' => ['pic1.png', 'pic2.png'],
+                'tmp_name' => [$png1, $png2],
+                'size' => [filesize($png1), filesize($png2)],
+                'error' => [UPLOAD_ERR_OK, UPLOAD_ERR_OK],
+            ],
+        ]));
+        self::assertSame(303, $response->status);
+        $files = glob($this->root . '/media/*.png') ?: [];
+        self::assertCount(2, $files);
+
+        // Delete one of the uploaded images
+        $targetFilename = basename($files[0]);
+        $deleteResponse = $router->dispatch(new ServerRequest('POST', '/admin/media/delete', [], [
+            'csrf_token' => 'expected-token',
+            'filename' => $targetFilename,
+        ]));
+        self::assertSame(303, $deleteResponse->status);
+        self::assertFileDoesNotExist($this->root . '/media/' . $targetFilename);
+        $remaining = glob($this->root . '/media/*.png') ?: [];
+        self::assertCount(1, $remaining);
+
+        // Deleting non-existent image returns 422
+        $failResponse = $router->dispatch(new ServerRequest('POST', '/admin/media/delete', [], [
+            'csrf_token' => 'expected-token',
+            'filename' => 'nonexistent.png',
+        ]));
+        self::assertSame(422, $failResponse->status);
+    }
+
     public function test_settings_page_is_explicitly_read_only_for_environment_managed_identity(): void
     {
         $response = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token'])->dispatch(new ServerRequest('GET', '/admin/settings'));

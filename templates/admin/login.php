@@ -17,6 +17,7 @@ ob_start();
       <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>">
       <label>Email <input type="email" name="email" autocomplete="username" required></label>
       <label>Password <input type="password" name="password" autocomplete="current-password" required></label>
+      <label class="remember-me"><input type="checkbox" name="remember_me" value="1"> Remember me for 30 days</label>
       <button type="submit"><span class="icon" aria-hidden="true">login</span>Sign in</button>
     </form>
   </section>

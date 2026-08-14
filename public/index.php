@@ -116,6 +116,13 @@ if (!str_starts_with($path, '/admin')) {
             header('Location: ' . $basePath . $redirectTarget, true, 301);
             exit;
         }
+        $notFound = $siteRoot === false ? false : $siteRoot . '/404.html';
+        if ($notFound !== false && is_file($notFound)) {
+            http_response_code(404);
+            header('Content-Type: text/html; charset=utf-8');
+            readfile($notFound);
+            exit;
+        }
         http_response_code(404); exit;
     }
     $types = ['html' => 'text/html; charset=utf-8', 'xml' => 'application/xml', 'json' => 'application/feed+json', 'txt' => 'text/plain; charset=utf-8', 'css' => 'text/css', 'js' => 'text/javascript'];
@@ -129,6 +136,7 @@ try {
     $container = Bootstrap::createContainer();
 
     if (session_status() === PHP_SESSION_NONE) {
+        ini_set('session.gc_maxlifetime', '2592000');
         session_set_cookie_params(['httponly' => true, 'secure' => (($_SERVER['HTTPS'] ?? '') === 'on'), 'samesite' => 'Lax', 'path' => '/']);
         if (!@session_start()) {
             throw new RuntimeException('The administrator session could not be started.');
@@ -138,27 +146,32 @@ try {
     // HOLYMD_SYNC_PUBLISH=1 publishes and GEO reviews run in-request instead.
     $syncPublish = Env::get('HOLYMD_SYNC_PUBLISH') === '1';
     $queue = $syncPublish ? null : new MySqlJobQueue($container->get(\PDO::class));
-    $controller = new ArticleController(
-    new ArticleRepository($root . '/content/articles'),
-    new VersionService($root . '/content/versions'),
-    new AdminGuard($_SESSION),
-    new Csrf($_SESSION),
-    new PublishService(
+    $pageRepo = new \HolyMD\Content\PageRepository($root . '/content/pages');
+    $publisher = new PublishService(
         new ArticleRepository($root . '/content/articles'), new StaticBuilder(), new AtomicPublicTree(),
         (string) (Env::get('HOLYMD_PUBLIC_TREE') ?: $root . ($flattened ? '/.holymd-current' : '/public/.holymd-current')), (string) (Env::get('HOLYMD_SITE_NAME') ?: 'HolyMD'), (string) (Env::get('HOLYMD_SITE_URL') ?: 'https://example.invalid'),
         (string) (Env::get('HOLYMD_AUTHOR_NAME') ?: 'Author'), (string) (Env::get('HOLYMD_ABOUT') ?: ''),
         Env::get('HOLYMD_LLMS_TXT') === '1', $root . '/content/audit',
         null, $root . '/content/holymd-publish.lock', (string) (Env::get('HOLYMD_SITE_LANGUAGE') ?: 'zh-CN'), new VersionService($root . '/content/versions'),
-    ),
-    $queue,
-    $root . '/content/media',
-    ['site_name' => (string) (Env::get('HOLYMD_SITE_NAME') ?: 'HolyMD'), 'site_url' => (string) (Env::get('HOLYMD_SITE_URL') ?: 'https://example.invalid'), 'author_name' => (string) (Env::get('HOLYMD_AUTHOR_NAME') ?: 'Author'), 'about' => (string) (Env::get('HOLYMD_ABOUT') ?: ''), 'site_language' => (string) (Env::get('HOLYMD_SITE_LANGUAGE') ?: 'zh-CN')],
-    new MarkdownRenderer(),
+        $pageRepo,
+    );
+    $controller = new ArticleController(
+        new ArticleRepository($root . '/content/articles'),
+        new VersionService($root . '/content/versions'),
+        new AdminGuard($_SESSION),
+        new Csrf($_SESSION),
+        $publisher,
+        $queue,
+        $root . '/content/media',
+        ['site_name' => (string) (Env::get('HOLYMD_SITE_NAME') ?: 'HolyMD'), 'site_url' => (string) (Env::get('HOLYMD_SITE_URL') ?: 'https://example.invalid'), 'author_name' => (string) (Env::get('HOLYMD_AUTHOR_NAME') ?: 'Author'), 'about' => (string) (Env::get('HOLYMD_ABOUT') ?: ''), 'site_language' => (string) (Env::get('HOLYMD_SITE_LANGUAGE') ?: 'zh-CN')],
+        new MarkdownRenderer(),
     );
     $geoStore = new MySqlGeoProposalStore($container->get(\PDO::class));
     $geo = new GeoController(new ArticleRepository($root . '/content/articles'), new GeoReviewService($container->get(\HolyMD\Geo\AiClient::class)), $geoStore, new AdminGuard($_SESSION), new Csrf($_SESSION), $queue, new VersionService($root . '/content/versions'));
     $jobs = new JobsController(new JobStatusRepository($container->get(\PDO::class)), new AdminGuard($_SESSION), new Csrf($_SESSION));
-    $response = (new Router($controller, $geo, new AuthController($container->get(\PDO::class), $_SESSION, new Csrf($_SESSION)), $jobs))->dispatch(new ServerRequest(
+    $profile = new \HolyMD\Admin\ProfileController($container->get(\PDO::class), new AdminGuard($_SESSION), new Csrf($_SESSION));
+    $pages = new \HolyMD\Admin\PageController($pageRepo, new AdminGuard($_SESSION), new Csrf($_SESSION), $publisher, new MarkdownRenderer());
+    $response = (new Router($controller, $geo, new AuthController($container->get(\PDO::class), $_SESSION, new Csrf($_SESSION)), $jobs, $profile, $pages))->dispatch(new ServerRequest(
         $_SERVER['REQUEST_METHOD'] ?? 'GET',
         $path,
         array_change_key_case(function_exists('getallheaders') ? (getallheaders() ?: []) : [], CASE_UPPER),

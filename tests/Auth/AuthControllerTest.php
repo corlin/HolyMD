@@ -35,6 +35,19 @@ final class AuthControllerTest extends TestCase
         self::assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $this->session['csrf_token']);
     }
 
+    public function test_login_with_remember_me_sets_session_flag_and_logout_clears_it(): void
+    {
+        $this->session['csrf_token'] = 'login-token';
+        $response = $this->router()->dispatch(new ServerRequest('POST', '/admin/login', [], ['email' => 'admin@example.test', 'password' => 'correct horse', 'remember_me' => '1', 'csrf_token' => 'login-token']));
+
+        self::assertSame(303, $response->status);
+        self::assertTrue($this->session['remember_me'] ?? false);
+
+        $logoutResponse = $this->router()->dispatch(new ServerRequest('POST', '/admin/logout', [], ['csrf_token' => $this->session['csrf_token']]));
+        self::assertSame(303, $logoutResponse->status);
+        self::assertArrayNotHasKey('remember_me', $this->session);
+    }
+
     public function test_invalid_credentials_do_not_create_a_session(): void
     {
         $this->session['csrf_token'] = 'login-token';
