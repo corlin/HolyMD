@@ -57,6 +57,39 @@ $activeNav = 'articles';
   </section>
 
   <aside class="right-rail">
+    <?php
+    $metadataValue = static function (string $key) use ($article): string {
+        $value = $article->frontMatter->get($key);
+        if ($value === null) return '';
+        if (!is_array($value)) return (string) $value;
+        $isStringList = array_is_list($value) && array_reduce($value, static fn (bool $ok, mixed $item): bool => $ok && is_string($item), true);
+        if ($isStringList) return implode("\n", $value);
+        return json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+    };
+    $geoField = static function (string $key, string $label, string $hint) use ($article, $escape, $publicationFormId, $metadataValue): string {
+        $html = '<div class="geo-field" data-geo-field="' . $key . '"><label>' . $escape($label) . '<textarea name="' . $key . '" data-metadata-input form="' . $publicationFormId . '">' . $escape($metadataValue($key)) . '</textarea></label>';
+        $html .= '<p class="muted">' . $escape($hint) . '</p><ol class="geo-field-suggestions" data-geo-suggestions aria-label="Suggested ' . $escape($label) . ' values"></ol></div>';
+        return $html;
+    };
+    ?>
+    <?php require dirname(__DIR__) . '/geo-panel.php'; ?>
+
+    <details class="metadata-block" open>
+      <summary class="eyebrow-summary">Metadata</summary>
+      <h2>Front matter</h2>
+      <p class="muted">Summary, topics and citations feed llms.txt, JSON-LD and search. List fields take one item per line; structured values use JSON.</p>
+      <?= $geoField('summary', 'Summary', 'One or two sentences describing the article.') ?>
+      <label>Topics (one per line)<textarea name="topics" data-metadata-input form="<?= $publicationFormId ?>"><?= $escape($metadataValue('topics')) ?></textarea></label>
+      <?= $geoField('entities', 'Entities', 'One entity per line.') ?>
+      <?= $geoField('faq', 'FAQ', 'Question/answer pairs as JSON once the field is structured.') ?>
+      <?= $geoField('sources', 'Sources', 'One URL per line.') ?>
+      <?= $geoField('alt_text', 'Alt text', 'One description per line, matching image order.') ?>
+      <?= $geoField('hierarchy', 'Hierarchy', 'Outline text, or JSON once the field is structured.') ?>
+      <?= $geoField('internal_links', 'Internal links', 'One link per line.') ?>
+      <label>Previous slugs (one per line)<textarea name="previous_slugs" data-metadata-input form="<?= $publicationFormId ?>"><?= $escape($metadataValue('previous_slugs')) ?></textarea></label>
+      <?= $geoField('structured_data', 'Structured data', 'JSON object.') ?>
+    </details>
+
     <details class="version-history-block">
       <summary class="eyebrow-summary">Version history (<?= count($versions) ?>)</summary>
       <h2>Published versions</h2>
@@ -78,37 +111,6 @@ $activeNav = 'articles';
         </form>
       </details>
     <?php endif; ?>
-    <?php
-    $metadataValue = static function (string $key) use ($article): string {
-        $value = $article->frontMatter->get($key);
-        if ($value === null) return '';
-        if (!is_array($value)) return (string) $value;
-        $isStringList = array_is_list($value) && array_reduce($value, static fn (bool $ok, mixed $item): bool => $ok && is_string($item), true);
-        if ($isStringList) return implode("\n", $value);
-        return json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
-    };
-    $geoField = static function (string $key, string $label, string $hint) use ($article, $escape, $publicationFormId, $metadataValue): string {
-        $html = '<div class="geo-field" data-geo-field="' . $key . '"><label>' . $escape($label) . '<textarea name="' . $key . '" data-metadata-input form="' . $publicationFormId . '">' . $escape($metadataValue($key)) . '</textarea></label>';
-        $html .= '<p class="muted">' . $escape($hint) . '</p><ol class="geo-field-suggestions" data-geo-suggestions aria-label="Suggested ' . $escape($label) . ' values"></ol></div>';
-        return $html;
-    };
-    ?>
-    <details class="metadata-block">
-      <summary class="eyebrow-summary">Metadata</summary>
-      <h2>Front matter</h2>
-      <p class="muted">Summary, topics and citations feed llms.txt, JSON-LD and search. List fields take one item per line; structured values use JSON.</p>
-      <?= $geoField('summary', 'Summary', 'One or two sentences describing the article.') ?>
-      <label>Topics (one per line)<textarea name="topics" data-metadata-input form="<?= $publicationFormId ?>"><?= $escape($metadataValue('topics')) ?></textarea></label>
-      <?= $geoField('entities', 'Entities', 'One entity per line.') ?>
-      <?= $geoField('faq', 'FAQ', 'Question/answer pairs as JSON once the field is structured.') ?>
-      <?= $geoField('sources', 'Sources', 'One URL per line.') ?>
-      <?= $geoField('alt_text', 'Alt text', 'One description per line, matching image order.') ?>
-      <?= $geoField('hierarchy', 'Hierarchy', 'Outline text, or JSON once the field is structured.') ?>
-      <?= $geoField('internal_links', 'Internal links', 'One link per line.') ?>
-      <label>Previous slugs (one per line)<textarea name="previous_slugs" data-metadata-input form="<?= $publicationFormId ?>"><?= $escape($metadataValue('previous_slugs')) ?></textarea></label>
-      <?= $geoField('structured_data', 'Structured data', 'JSON object.') ?>
-    </details>
-    <?php require dirname(__DIR__) . '/geo-panel.php'; ?>
   </aside>
 </main>
 <?php

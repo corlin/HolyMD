@@ -288,6 +288,17 @@
     tag.textContent = proposal.type;
     header.append(tag);
 
+    const fieldKey = FIELD_BY_TYPE[proposal.type];
+    const targetInput = fieldKey ? document.querySelector(`[data-metadata-input][name="${fieldKey}"]`) : null;
+    const currentVal = targetInput ? targetInput.value.trim() : '';
+
+    if (proposal.status === 'pending') {
+      const badge = document.createElement('span');
+      badge.className = 'geo-diff-badge ' + (currentVal ? 'badge-replace' : 'badge-new');
+      badge.textContent = currentVal ? 'Replace' : 'New';
+      header.append(badge);
+    }
+
     if (proposal.status === 'accepted' || proposal.status === 'rejected') {
       const statusPill = document.createElement('span');
       statusPill.className = 'geo-status-pill ' + proposal.status;
@@ -299,7 +310,49 @@
     const output = document.createElement('output');
     output.className = 'geo-card-body';
     output.dataset.geoDiff = '';
-    output.textContent = typeof proposal.value === 'string' ? proposal.value : JSON.stringify(proposal.value, null, 2);
+
+    // Visual rendering for structured types (FAQ, Entities, etc.)
+    if (proposal.type === 'faq' && Array.isArray(proposal.value)) {
+      const faqList = document.createElement('div');
+      faqList.className = 'geo-faq-preview';
+      proposal.value.forEach(qa => {
+        const qaItem = document.createElement('div');
+        qaItem.className = 'geo-faq-item';
+        const qEl = document.createElement('div');
+        qEl.className = 'geo-faq-q';
+        qEl.textContent = 'Q: ' + (qa.question || '');
+        const aEl = document.createElement('div');
+        aEl.className = 'geo-faq-a';
+        aEl.textContent = 'A: ' + (qa.answer || '');
+        qaItem.append(qEl, aEl);
+        faqList.append(qaItem);
+      });
+      output.append(faqList);
+    } else if ((proposal.type === 'entities' || proposal.type === 'topics') && Array.isArray(proposal.value)) {
+      const pillList = document.createElement('div');
+      pillList.className = 'geo-pill-list';
+      proposal.value.forEach(val => {
+        const pill = document.createElement('span');
+        pill.className = 'geo-pill';
+        pill.textContent = val;
+        pillList.append(pill);
+      });
+      output.append(pillList);
+    } else if (currentVal && proposal.status === 'pending') {
+      const diffBox = document.createElement('div');
+      diffBox.className = 'geo-diff-box';
+      const curRow = document.createElement('div');
+      curRow.className = 'geo-diff-row';
+      curRow.innerHTML = '<span class="geo-diff-label">Current value</span><div class="geo-diff-current">' + currentVal.replace(/</g, '&lt;') + '</div>';
+      const propRow = document.createElement('div');
+      propRow.className = 'geo-diff-row';
+      const propText = typeof proposal.value === 'string' ? proposal.value : JSON.stringify(proposal.value, null, 2);
+      propRow.innerHTML = '<span class="geo-diff-label">Proposed value</span><div class="geo-diff-proposed">' + propText.replace(/</g, '&lt;') + '</div>';
+      diffBox.append(curRow, propRow);
+      output.append(diffBox);
+    } else {
+      output.textContent = typeof proposal.value === 'string' ? proposal.value : JSON.stringify(proposal.value, null, 2);
+    }
     item.append(output);
 
     if (proposal.status !== 'accepted' && proposal.status !== 'rejected') {
@@ -311,12 +364,25 @@
         button.type = 'button';
         button.dataset.action = action;
         button.className = 'btn-geo-' + action;
-        button.textContent = action === 'accept' ? (proposal.type === 'metadata' ? 'Fill fields & accept' : 'Fill & accept') : (action === 'reject' ? 'Reject' : 'Edit');
+        button.textContent = action === 'accept' ? (proposal.type === 'metadata' ? 'Fill & accept' : (currentVal ? 'Replace & accept' : 'Fill & accept')) : (action === 'reject' ? 'Reject' : 'Edit');
         actions.append(button);
       });
       item.append(actions);
     }
     return item;
+  };
+
+  const updateSummaryBar = proposals => {
+    const summaryBar = panel.querySelector('[data-geo-summary-bar]');
+    const countEl = panel.querySelector('[data-geo-pending-count]');
+    if (!summaryBar || !countEl) return;
+    const pending = proposals.filter(p => p.status === 'pending');
+    if (pending.length > 0) {
+      summaryBar.hidden = false;
+      countEl.textContent = pending.length + ' proposal' + (pending.length > 1 ? 's' : '') + ' pending';
+    } else {
+      summaryBar.hidden = true;
+    }
   };
 
   const renderProposals = proposals => {
@@ -334,11 +400,13 @@
       else if (catchAllList) catchAllList.append(proposalCard(proposal));
     });
     if (catchAll) catchAll.hidden = !catchAllList || catchAllList.childElementCount === 0;
+    updateSummaryBar(proposals);
   };
 
   const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
   const poll = async () => {
     reviewButton.disabled = true;
+    const stages = ['Analyzing prose structure…', 'Extracting entities & topics…', 'Synthesizing FAQs & metadata…', 'Finalizing proposals…'];
     for (let attempt = 0; attempt < 60; attempt++) {
       const response = await fetch(`${base}/admin/articles/${slug}/geo/review`);
       const payload = await response.json();
@@ -355,7 +423,8 @@
         reviewButton.textContent = 'Retry GEO review';
         throw Error(payload.failure || 'GEO review failed');
       }
-      status.textContent = payload.status === 'running' ? 'GEO review running…' : 'GEO review queued — waiting for Cron worker…';
+      const stageText = stages[attempt % stages.length];
+      status.textContent = payload.status === 'running' ? `GEO review running — ${stageText}` : 'GEO review queued — waiting for Cron worker…';
       reviewButton.textContent = 'Refresh GEO status';
       await sleep(Math.min(15000, 2000 + attempt * 500));
     }
@@ -408,6 +477,81 @@
     }
     return filled;
   };
+
+  // Batch actions
+  const acceptAllButton = panel.querySelector('[data-geo-accept-all]');
+  if (acceptAllButton) {
+    acceptAllButton.onclick = async () => {
+      const pendingCards = Array.from(document.querySelectorAll('.geo-proposal-card:not(.is-accepted):not(.is-rejected)'));
+      if (pendingCards.length === 0) return;
+      acceptAllButton.disabled = true;
+      let anyFilled = false;
+      try {
+        for (const card of pendingCards) {
+          const proposal = card._geoProposal;
+          if (!proposal || isUntargeted(proposal)) continue;
+          const filled = fillProposal(proposal);
+          if (filled.length > 0) anyFilled = true;
+        }
+        if (anyFilled) await geoApi.flushSave();
+        for (const card of pendingCards) {
+          const proposal = card._geoProposal;
+          if (!proposal) continue;
+          await request(`${base}/admin/geo/proposals/${proposal.id}/accept`, {expected_checksum: geoApi.checksum()});
+          card.classList.add('is-accepted');
+          const header = card.querySelector('.geo-card-header');
+          if (header && !header.querySelector('.geo-status-pill.accepted')) {
+            const pill = document.createElement('span');
+            pill.className = 'geo-status-pill accepted';
+            pill.textContent = 'Accepted ✓';
+            header.append(pill);
+          }
+          const actions = card.querySelector('.geo-card-actions');
+          if (actions) actions.remove();
+        }
+        status.textContent = 'All proposals accepted and applied to metadata.';
+        const summaryBar = panel.querySelector('[data-geo-summary-bar]');
+        if (summaryBar) summaryBar.hidden = true;
+      } catch (error) {
+        status.textContent = 'Batch accept failed: ' + (error.message || 'Error');
+      } finally {
+        acceptAllButton.disabled = false;
+      }
+    };
+  }
+
+  const rejectAllButton = panel.querySelector('[data-geo-reject-all]');
+  if (rejectAllButton) {
+    rejectAllButton.onclick = async () => {
+      const pendingCards = Array.from(document.querySelectorAll('.geo-proposal-card:not(.is-accepted):not(.is-rejected)'));
+      if (pendingCards.length === 0) return;
+      rejectAllButton.disabled = true;
+      try {
+        for (const card of pendingCards) {
+          const proposal = card._geoProposal;
+          if (!proposal) continue;
+          await request(`${base}/admin/geo/proposals/${proposal.id}/reject`);
+          card.classList.add('is-rejected');
+          const header = card.querySelector('.geo-card-header');
+          if (header && !header.querySelector('.geo-status-pill.rejected')) {
+            const pill = document.createElement('span');
+            pill.className = 'geo-status-pill rejected';
+            pill.textContent = 'Rejected';
+            header.append(pill);
+          }
+          const actions = card.querySelector('.geo-card-actions');
+          if (actions) actions.remove();
+        }
+        status.textContent = 'All proposals rejected.';
+        const summaryBar = panel.querySelector('[data-geo-summary-bar]');
+        if (summaryBar) summaryBar.hidden = true;
+      } catch (error) {
+        status.textContent = 'Batch reject failed: ' + (error.message || 'Error');
+      } finally {
+        rejectAllButton.disabled = false;
+      }
+    };
+  }
 
   document.addEventListener('click', async event => {
     const button = event.target.closest('.geo-proposal-card button[data-action]');
@@ -475,6 +619,11 @@
       const actions = item.querySelector('.geo-card-actions');
       if (actions) actions.remove();
       status.textContent = 'Proposal accepted and applied to article metadata.';
+      const pendingCards = document.querySelectorAll('.geo-proposal-card:not(.is-accepted):not(.is-rejected)');
+      if (pendingCards.length === 0) {
+        const summaryBar = panel.querySelector('[data-geo-summary-bar]');
+        if (summaryBar) summaryBar.hidden = true;
+      }
       return;
     }
 
@@ -496,6 +645,11 @@
       const actions = item.querySelector('.geo-card-actions');
       if (actions) actions.remove();
       status.textContent = 'Proposal rejected.';
+      const pendingCards = document.querySelectorAll('.geo-proposal-card:not(.is-accepted):not(.is-rejected)');
+      if (pendingCards.length === 0) {
+        const summaryBar = panel.querySelector('[data-geo-summary-bar]');
+        if (summaryBar) summaryBar.hidden = true;
+      }
     }
   });
 
