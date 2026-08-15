@@ -17,16 +17,6 @@ final readonly class Router
     {
     }
 
-    public static function admin(ArticleController $articles, ?GeoController $geo = null): self
-    {
-        return new self($articles, $geo);
-    }
-
-    public static function auth(AuthController $auth): self
-    {
-        return new self(auth: $auth);
-    }
-
     public function dispatch(ServerRequest $request): Response
     {
         if ($this->auth !== null && $request->path === '/admin/login' && in_array($request->method, ['GET', 'POST'], true)) return $this->auth->login($request);

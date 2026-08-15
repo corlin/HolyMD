@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use HolyMD\Bootstrap;
 use HolyMD\Config\Env;
+use HolyMD\Config\PublicationSettings;
 use HolyMD\Admin\ArticleController;
 use HolyMD\Admin\JobsController;
 use HolyMD\Admin\VersionService;
@@ -14,8 +15,6 @@ use HolyMD\Http\Csrf;
 use HolyMD\Http\Router;
 use HolyMD\Http\ServerRequest;
 use HolyMD\Geo\GeoController;
-use HolyMD\Geo\GeoProposalStore;
-use HolyMD\Geo\FileGeoReviewStore;
 use HolyMD\Geo\GeoReviewService;
 use HolyMD\Geo\MySqlGeoProposalStore;
 use HolyMD\Publish\AtomicPublicTree;
@@ -147,12 +146,11 @@ try {
     $syncPublish = Env::get('HOLYMD_SYNC_PUBLISH') === '1';
     $queue = $syncPublish ? null : new MySqlJobQueue($container->get(\PDO::class));
     $pageRepo = new \HolyMD\Content\PageRepository($root . '/content/pages');
+    $publication = PublicationSettings::fromEnvironment();
     $publisher = new PublishService(
         new ArticleRepository($root . '/content/articles'), new StaticBuilder(), new AtomicPublicTree(),
-        (string) (Env::get('HOLYMD_PUBLIC_TREE') ?: $root . ($flattened ? '/.holymd-current' : '/public/.holymd-current')), (string) (Env::get('HOLYMD_SITE_NAME') ?: 'HolyMD'), (string) (Env::get('HOLYMD_SITE_URL') ?: 'https://example.invalid'),
-        (string) (Env::get('HOLYMD_AUTHOR_NAME') ?: 'Author'), (string) (Env::get('HOLYMD_ABOUT') ?: ''),
-        Env::get('HOLYMD_LLMS_TXT') === '1', $root . '/content/audit',
-        null, $root . '/content/holymd-publish.lock', (string) (Env::get('HOLYMD_SITE_LANGUAGE') ?: 'zh-CN'), new VersionService($root . '/content/versions'),
+        (string) (Env::get('HOLYMD_PUBLIC_TREE') ?: $root . ($flattened ? '/.holymd-current' : '/public/.holymd-current')), $publication, $root . '/content/audit',
+        null, $root . '/content/holymd-publish.lock', new VersionService($root . '/content/versions'),
         $pageRepo,
     );
     $controller = new ArticleController(
@@ -163,7 +161,7 @@ try {
         $publisher,
         $queue,
         $root . '/content/media',
-        ['site_name' => (string) (Env::get('HOLYMD_SITE_NAME') ?: 'HolyMD'), 'site_url' => (string) (Env::get('HOLYMD_SITE_URL') ?: 'https://example.invalid'), 'author_name' => (string) (Env::get('HOLYMD_AUTHOR_NAME') ?: 'Author'), 'about' => (string) (Env::get('HOLYMD_ABOUT') ?: ''), 'site_language' => (string) (Env::get('HOLYMD_SITE_LANGUAGE') ?: 'zh-CN')],
+        $publication->adminValues(),
         new MarkdownRenderer(),
     );
     $geoStore = new MySqlGeoProposalStore($container->get(\PDO::class));
@@ -172,7 +170,7 @@ try {
     $profile = new \HolyMD\Admin\ProfileController($container->get(\PDO::class), new AdminGuard($_SESSION), new Csrf($_SESSION));
     $pages = new \HolyMD\Admin\PageController($pageRepo, new AdminGuard($_SESSION), new Csrf($_SESSION), $publisher, new MarkdownRenderer());
     $response = (new Router($controller, $geo, new AuthController($container->get(\PDO::class), $_SESSION, new Csrf($_SESSION)), $jobs, $profile, $pages))->dispatch(new ServerRequest(
-        $_SERVER['REQUEST_METHOD'] ?? 'GET',
+        (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'HEAD') ? 'GET' : ($_SERVER['REQUEST_METHOD'] ?? 'GET'),
         $path,
         array_change_key_case(function_exists('getallheaders') ? (getallheaders() ?: []) : [], CASE_UPPER),
         $_POST,

@@ -9,6 +9,9 @@ use HolyMD\Geo\AiClient;
 use HolyMD\Geo\AiResponse;
 use HolyMD\Geo\GeoController;
 use HolyMD\Geo\GeoProposalStore;
+use HolyMD\Geo\GeoProposal;
+use HolyMD\Geo\GeoProposalId;
+use HolyMD\Geo\GeoReview;
 use HolyMD\Geo\GeoReviewService;
 use HolyMD\Geo\InMemoryGeoProposalStore;
 use HolyMD\Http\Csrf;
@@ -59,6 +62,48 @@ final class GeoControllerTest extends TestCase
         self::assertStringContainsString("proposal.type === 'hierarchy'", $javascript);
         self::assertStringNotContainsString('prompt(', $javascript);
     }
+    public function test_review_uses_the_store_interface_to_record_proposals(): void
+    {
+        $store = new RecordingGeoProposalStore();
+        $router = $this->router(['admin_user_id' => 1, 'csrf_token' => 'token'], $store);
+
+        $response = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/geo/review', [], ['csrf_token' => 'token']));
+        $payload = json_decode($response->body, true, flags: JSON_THROW_ON_ERROR);
+
+        self::assertSame(200, $response->status);
+        self::assertTrue($store->recordReviewCalled);
+        self::assertSame('recorded-proposal', $payload['proposals'][0]['id']);
+    }
+
+    public function test_status_uses_the_store_interface_for_a_non_mysql_adapter(): void
+    {
+        $store = new RecordingGeoProposalStore();
+        $router = $this->router(['admin_user_id' => 1, 'csrf_token' => 'token'], $store);
+        $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/geo/review', [], ['csrf_token' => 'token']));
+
+        $response = $router->dispatch(new ServerRequest('GET', '/admin/articles/first-note/geo/review'));
+        $payload = json_decode($response->body, true, flags: JSON_THROW_ON_ERROR);
+
+        self::assertSame(200, $response->status);
+        self::assertSame('completed', $payload['status']);
+        self::assertSame('recorded-proposal', $payload['proposals'][0]['id']);
+    }
+
+    public function test_status_reads_the_current_proposal_state_from_the_store_interface(): void
+    {
+        $store = new InMemoryGeoProposalStore();
+        $router = $this->router(['admin_user_id' => 1, 'csrf_token' => 'token'], $store);
+        $review = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/geo/review', [], ['csrf_token' => 'token']));
+        $proposalId = json_decode($review->body, true, flags: JSON_THROW_ON_ERROR)['proposals'][0]['id'];
+        $checksum = hash('sha256', (new ArticleRepository($this->root))->read('first-note')->serialize());
+        $router->dispatch(new ServerRequest('POST', '/admin/geo/proposals/' . $proposalId . '/accept', [], ['csrf_token' => 'token', 'expected_checksum' => $checksum]));
+
+        $status = $router->dispatch(new ServerRequest('GET', '/admin/articles/first-note/geo/review'));
+        $payload = json_decode($status->body, true, flags: JSON_THROW_ON_ERROR);
+
+        self::assertSame(200, $status->status);
+        self::assertSame('accepted', $payload['proposals'][0]['status']);
+    }
     public function test_edit_decodes_structured_metadata_and_rejects_malformed_json_before_accept(): void {
         $store = new InMemoryGeoProposalStore(); $router = $this->router(['admin_user_id'=>1,'csrf_token'=>'token'],$store);
         $document=(new ArticleRepository($this->root))->read('first-note'); $hash=hash('sha256',$document->bodyMarkdown);
@@ -107,6 +152,50 @@ final class GeoControllerTest extends TestCase
     private function router(array $session, GeoProposalStore $store): Router {
         $articles = new ArticleRepository($this->root); $controller = new ArticleController($articles, new VersionService($this->root . '/versions'), new AdminGuard($session), new Csrf($session));
         $client = new class implements AiClient { public function analyze(string $systemPrompt, string $articleMarkdown): AiResponse { return new AiResponse('{"proposals":[{"type":"summary","value":"Summary"}],"findings":[]}'); } };
-        return Router::admin($controller, new GeoController($articles, new GeoReviewService($client), $store, new AdminGuard($session), new Csrf($session)));
+        return new Router($controller, new GeoController($articles, new GeoReviewService($client), $store, new AdminGuard($session), new Csrf($session)));
+    }
+}
+
+final class RecordingGeoProposalStore implements GeoProposalStore
+{
+    public bool $recordReviewCalled = false;
+
+    /** @var array<string, GeoProposal> */
+    private array $proposals = [];
+
+    /** @var array{reviewId:int,status:string,failure:?string,proposals:list<array<string,mixed>>}|null */
+    private ?array $latest = null;
+
+    public function get(GeoProposalId $id): GeoProposal
+    {
+        return $this->proposals[$id->value] ?? throw new \InvalidArgumentException('GEO proposal was not found.');
+    }
+
+    public function save(GeoProposal $proposal): void
+    {
+        $this->proposals[$proposal->id->value] = $proposal;
+    }
+
+    public function markAccepted(GeoProposalId $id, string $nextInputChecksum, ?int $administratorId = null): void {}
+    public function markRejected(GeoProposalId $id, ?int $administratorId = null): void {}
+    /** @return list<GeoProposal> */
+    public function recordReview(\HolyMD\Content\ArticleDocument $document, ?string $snapshotPath, GeoReview $review): array
+    {
+        $this->recordReviewCalled = true;
+        $proposal = new GeoProposal(new GeoProposalId('recorded-proposal'), $document->slug, $review->bodyHash, $review->proposals[0]->type, $review->proposals[0]->value);
+        $this->save($proposal);
+        $this->latest = [
+            'reviewId' => 1,
+            'status' => 'completed',
+            'failure' => null,
+            'proposals' => [['id' => $proposal->id->value, 'type' => $proposal->type, 'value' => $proposal->value, 'status' => $proposal->status]],
+        ];
+        return [$proposal];
+    }
+
+    /** @return array{reviewId:int,status:string,failure:?string,proposals:list<array<string,mixed>>}|null */
+    public function latestReview(string $articleSlug): ?array
+    {
+        return $this->latest;
     }
 }

@@ -15,7 +15,6 @@ final readonly class PageRepository
         'assets',
         'articles',
         'topics',
-        'about',
         'rss',
         'atom',
         'feed',

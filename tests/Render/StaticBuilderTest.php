@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace HolyMD\Tests\Render;
 
+use HolyMD\Config\PublicationSettings;
 use HolyMD\Content\ArticleDocument;
 use HolyMD\Content\FrontMatter;
 use HolyMD\Render\BuildInput;
@@ -37,7 +38,7 @@ final class StaticBuilderTest extends TestCase
             new ArticleDocument('second-post', 'Second post', 'Body two.', new FrontMatter(['title' => 'Second post', 'slug' => 'second-post', 'date' => '2026-08-11', 'topics' => ['Notes', 'Updates']]), '/articles/second-post.md'),
         ];
 
-        $manifest = (new StaticBuilder())->build(new BuildInput($articles, 'HolyMD Notes', 'https://example.test', 'Ada Author', 'About Ada.', true), $this->outputRoot);
+        $manifest = (new StaticBuilder())->build($this->input($articles, 'HolyMD Notes', 'https://example.test', 'Ada Author', 'About Ada.', true), $this->outputRoot);
 
         self::assertSame(2, $manifest->articleCount);
         self::assertFileExists($this->outputRoot . '/articles/first-post/index.html');
@@ -70,7 +71,7 @@ final class StaticBuilderTest extends TestCase
     public function test_closes_lists_and_quotes_before_following_blocks(): void
     {
         $article = new ArticleDocument('blocks', 'Blocks', "- item\n# Heading\n> quote\n## Subheading", new FrontMatter(['title' => 'Blocks', 'slug' => 'blocks', 'date' => '2026-08-12']), '/blocks');
-        (new StaticBuilder())->build(new BuildInput([$article], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
+        (new StaticBuilder())->build($this->input([$article], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
         $html = (string) file_get_contents($this->outputRoot . '/articles/blocks/index.html');
         self::assertStringContainsString("<ul>\n<li>item</li>\n</ul>\n<h2 id=\"heading\">Heading</h2>\n<blockquote>", $html);
         self::assertStringContainsString("</blockquote>\n<h3 id=\"subheading\">Subheading</h3>", $html);
@@ -80,7 +81,7 @@ final class StaticBuilderTest extends TestCase
     public function test_closes_quote_before_list(): void
     {
         $article = new ArticleDocument('transitions', 'Transitions', "> quote\n- item", new FrontMatter(['title' => 'Transitions', 'slug' => 'transitions', 'date' => '2026-08-12']), '/transitions');
-        (new StaticBuilder())->build(new BuildInput([$article], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
+        (new StaticBuilder())->build($this->input([$article], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
         $html = (string) file_get_contents($this->outputRoot . '/articles/transitions/index.html');
         self::assertStringContainsString("</blockquote>\n<ul>", $html);
     }
@@ -88,7 +89,7 @@ final class StaticBuilderTest extends TestCase
     public function test_renders_visible_sources_and_propagates_them_to_json_ld(): void
     {
         $article = new ArticleDocument('sourced', 'Sourced', 'Evidence.', new FrontMatter(['title' => 'Sourced', 'slug' => 'sourced', 'date' => '2026-08-12', 'sources' => ['https://example.org/evidence']]), '/sourced');
-        (new StaticBuilder())->build(new BuildInput([$article], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
+        (new StaticBuilder())->build($this->input([$article], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
         $html = (string) file_get_contents($this->outputRoot . '/articles/sourced/index.html');
         self::assertStringContainsString('<section aria-labelledby="sources-heading">', $html);
         self::assertStringContainsString('https://example.org/evidence', $html);
@@ -102,7 +103,7 @@ final class StaticBuilderTest extends TestCase
             new ArticleDocument('latest', 'Latest essay', 'A second thought.', new FrontMatter(['title' => 'Latest essay', 'slug' => 'latest', 'date' => '2026-08-11', 'summary' => 'Another configured summary.', 'topics' => ['Notes']]), '/latest'),
         ];
 
-        $manifest = (new StaticBuilder())->build(new BuildInput($articles, 'HolyMD Notes', 'https://example.test', 'Ada Author', 'A short author biography.'), $this->outputRoot);
+        $manifest = (new StaticBuilder())->build($this->input($articles, 'HolyMD Notes', 'https://example.test', 'Ada Author', 'A short author biography.'), $this->outputRoot);
 
         $styles = (string) file_get_contents(dirname(__DIR__, 2) . '/templates/public/site.css');
         $script = (string) file_get_contents(dirname(__DIR__, 2) . '/templates/public/search.js');
@@ -135,10 +136,6 @@ final class StaticBuilderTest extends TestCase
         self::assertStringContainsString('Published', $article);
         self::assertStringContainsString('Sources', $article);
 
-        $about = (string) file_get_contents($this->outputRoot . '/about/index.html');
-        self::assertStringContainsString('A short author biography.', $about);
-        self::assertStringContainsString('<nav aria-label="Primary">', $about);
-
         $topic = (string) file_get_contents($this->outputRoot . '/topics/notes/index.html');
         self::assertStringContainsString('Articles on Notes', $topic);
         self::assertStringContainsString('<nav aria-label="Primary">', $topic);
@@ -147,9 +144,9 @@ final class StaticBuilderTest extends TestCase
     public function test_renders_configured_valid_site_language_on_every_page(): void
     {
         $article = new ArticleDocument('language', 'Language', 'Body.', new FrontMatter(['title' => 'Language', 'slug' => 'language', 'date' => '2026-08-12', 'topics' => ['Notes']]), '/language');
-        (new StaticBuilder())->build(new BuildInput([$article], 'Notes', 'https://example.test', 'Ada', 'About Ada', false, 'fr-CA'), $this->outputRoot);
+        (new StaticBuilder())->build($this->input([$article], 'Notes', 'https://example.test', 'Ada', 'About Ada', false, 'fr-CA'), $this->outputRoot);
 
-        foreach (['/index.html', '/about/index.html', '/articles/language/index.html', '/topics/notes/index.html'] as $path) {
+        foreach (['/index.html', '/articles/language/index.html', '/topics/notes/index.html'] as $path) {
             self::assertStringContainsString('<html lang="fr-CA">', (string) file_get_contents($this->outputRoot . $path));
         }
     }
@@ -159,7 +156,7 @@ final class StaticBuilderTest extends TestCase
         $article = new ArticleDocument('language', 'Language', 'Body.', new FrontMatter(['title' => 'Language', 'slug' => 'language', 'date' => '2026-08-12']), '/language');
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('site language');
-        (new StaticBuilder())->build(new BuildInput([$article], 'Notes', 'https://example.test', 'Ada', 'About Ada', false, 'invalid language'), $this->outputRoot);
+        (new StaticBuilder())->build($this->input([$article], 'Notes', 'https://example.test', 'Ada', 'About Ada', false, 'invalid language'), $this->outputRoot);
     }
 
     public function test_rejects_duplicate_articles_and_topic_slug_collisions(): void
@@ -167,14 +164,14 @@ final class StaticBuilderTest extends TestCase
         $one = new ArticleDocument('same', 'One', 'Body', new FrontMatter(['title' => 'One', 'slug' => 'same', 'date' => '2026-08-12']), '/one');
         $two = new ArticleDocument('same', 'Two', 'Body', new FrontMatter(['title' => 'Two', 'slug' => 'same', 'date' => '2026-08-11']), '/two');
         $this->expectException(\RuntimeException::class);
-        (new StaticBuilder())->build(new BuildInput([$one, $two], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
+        (new StaticBuilder())->build($this->input([$one, $two], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
     }
 
     public function test_symbol_topics_receive_distinct_stable_routes(): void
     {
         $one = new ArticleDocument('cpp', 'C++', 'Body', new FrontMatter(['title' => 'C++', 'slug' => 'cpp', 'date' => '2026-08-12', 'topics' => ['C++']]), '/cpp');
         $two = new ArticleDocument('csharp', 'C#', 'Body', new FrontMatter(['title' => 'C#', 'slug' => 'csharp', 'date' => '2026-08-11', 'topics' => ['C#']]), '/csharp');
-        (new StaticBuilder())->build(new BuildInput([$one, $two], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
+        (new StaticBuilder())->build($this->input([$one, $two], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
 
         $routes = glob($this->outputRoot . '/topics/c-*/index.html') ?: [];
         self::assertCount(2, $routes);
@@ -185,7 +182,7 @@ final class StaticBuilderTest extends TestCase
     public function test_chinese_topic_uses_one_consistent_public_route_across_discovery_pages(): void
     {
         $article = new ArticleDocument('network', 'Network', 'Body.', new FrontMatter(['title' => 'Network', 'slug' => 'network', 'date' => '2026-08-12', 'topics' => ['复杂网络']]), '/network');
-        (new StaticBuilder())->build(new BuildInput([$article], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
+        (new StaticBuilder())->build($this->input([$article], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
 
         $routes = glob($this->outputRoot . '/topics/topic-*/index.html') ?: [];
         self::assertCount(1, $routes);
@@ -199,7 +196,7 @@ final class StaticBuilderTest extends TestCase
     public function test_numeric_topic_uses_a_valid_consistent_route(): void
     {
         $article = new ArticleDocument('year', 'Year', 'Body.', new FrontMatter(['title' => 'Year', 'slug' => 'year', 'date' => '2026-08-12', 'topics' => ['2026']]), '/year');
-        (new StaticBuilder())->build(new BuildInput([$article], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
+        (new StaticBuilder())->build($this->input([$article], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
 
         foreach (['/index.html', '/articles/year/index.html', '/topics/2026/index.html', '/sitemap.xml'] as $path) {
             self::assertFileExists($this->outputRoot . $path);
@@ -211,7 +208,7 @@ final class StaticBuilderTest extends TestCase
     {
         $markdown = "# Section One\n\nContent one.\n\n## Subsection A\n\nContent A.\n\n# Section Two\n\nContent two.";
         $article = new ArticleDocument('toc-test', 'TOC Test', $markdown, new FrontMatter(['title' => 'TOC Test', 'slug' => 'toc-test', 'date' => '2026-08-12']), '/toc-test');
-        (new StaticBuilder())->build(new BuildInput([$article], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
+        (new StaticBuilder())->build($this->input([$article], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
         $html = (string) file_get_contents($this->outputRoot . '/articles/toc-test/index.html');
 
         self::assertStringContainsString('class="toc-box"', $html);
@@ -224,7 +221,7 @@ final class StaticBuilderTest extends TestCase
     {
         $markdown = "# 300–800 & **Value**\n\nFirst.\n\n# 300 800 Value 2\n\nSecond.\n\n# 300–800 & *Value*\n\nThird.\n\n# 中文标题\n\nFourth.";
         $article = new ArticleDocument('toc-duplicates', 'TOC duplicates', $markdown, new FrontMatter(['title' => 'TOC duplicates', 'slug' => 'toc-duplicates', 'date' => '2026-08-12']), '/toc-duplicates');
-        (new StaticBuilder())->build(new BuildInput([$article], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
+        (new StaticBuilder())->build($this->input([$article], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
         $html = (string) file_get_contents($this->outputRoot . '/articles/toc-duplicates/index.html');
 
         self::assertStringContainsString('<h2 id="300-800-value">300–800 &amp; <strong>Value</strong></h2>', $html);
@@ -239,11 +236,11 @@ final class StaticBuilderTest extends TestCase
     public function test_public_pages_do_not_link_to_disabled_llms_outputs(): void
     {
         $article = new ArticleDocument('without-llms', 'Without LLMs', 'Body.', new FrontMatter(['title' => 'Without LLMs', 'slug' => 'without-llms', 'date' => '2026-08-12', 'topics' => ['Notes']]), '/without-llms');
-        (new StaticBuilder())->build(new BuildInput([$article], 'Site', 'https://example.test', 'Author', 'About', false), $this->outputRoot);
+        (new StaticBuilder())->build($this->input([$article], 'Site', 'https://example.test', 'Author', 'About', false), $this->outputRoot);
 
         self::assertFileDoesNotExist($this->outputRoot . '/llms.txt');
         self::assertFileDoesNotExist($this->outputRoot . '/llms-full.txt');
-        foreach (['/index.html', '/about/index.html', '/articles/without-llms/index.html', '/topics/notes/index.html'] as $path) {
+        foreach (['/index.html', '/articles/without-llms/index.html', '/topics/notes/index.html'] as $path) {
             $html = (string) file_get_contents($this->outputRoot . $path);
             self::assertStringNotContainsString('href="/llms.txt"', $html, $path);
             self::assertStringNotContainsString('href="/llms-full.txt"', $html, $path);
@@ -253,14 +250,14 @@ final class StaticBuilderTest extends TestCase
     public function test_public_toc_starts_closed_and_theme_controls_expose_selection_state(): void
     {
         $article = new ArticleDocument('accessible-controls', 'Accessible controls', "# One\n\nFirst.\n\n# Two\n\nSecond.\n\n# Three\n\nThird.", new FrontMatter(['title' => 'Accessible controls', 'slug' => 'accessible-controls', 'date' => '2026-08-12', 'topics' => ['Notes']]), '/accessible-controls');
-        (new StaticBuilder())->build(new BuildInput([$article], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
+        (new StaticBuilder())->build($this->input([$article], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
 
         $articleHtml = (string) file_get_contents($this->outputRoot . '/articles/accessible-controls/index.html');
         self::assertStringContainsString('class="toc-rail" aria-labelledby="desktop-toc-heading"', $articleHtml);
         self::assertStringContainsString('<details class="toc-box">', $articleHtml);
         self::assertStringNotContainsString('<details class="toc-box" open>', $articleHtml);
 
-        foreach (['/index.html', '/about/index.html', '/articles/accessible-controls/index.html', '/topics/notes/index.html'] as $path) {
+        foreach (['/index.html', '/articles/accessible-controls/index.html', '/topics/notes/index.html'] as $path) {
             $html = (string) file_get_contents($this->outputRoot . $path);
             self::assertStringContainsString('class="theme-switcher" role="group" aria-label="Theme switcher"', $html, $path);
             self::assertSame(1, substr_count($html, 'aria-pressed="true"'), $path);
@@ -287,7 +284,7 @@ final class StaticBuilderTest extends TestCase
             new ArticleDocument('one', 'One', 'Body one.', new FrontMatter(['title' => 'One', 'slug' => 'one', 'date' => '2026-08-12']), '/one'),
             new ArticleDocument('two', 'Two', 'Body two.', new FrontMatter(['title' => 'Two', 'slug' => 'two', 'date' => '2026-08-11']), '/two'),
         ];
-        (new StaticBuilder(null, $counter))->build(new BuildInput($articles, 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
+        (new StaticBuilder(null, $counter))->build($this->input($articles, 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
 
         self::assertSame(2, $counter->calls);
         $feed = (string) file_get_contents($this->outputRoot . '/feed.json');
@@ -297,7 +294,7 @@ final class StaticBuilderTest extends TestCase
     public function test_injected_build_timestamp_drives_feed_and_sitemap_freshness_signals(): void
     {
         $article = new ArticleDocument('fresh', 'Fresh', 'Body.', new FrontMatter(['title' => 'Fresh', 'slug' => 'fresh', 'date' => '2026-08-12', 'updated' => '2026-08-10']), '/fresh');
-        (new StaticBuilder())->build(new BuildInput([$article], 'Site', 'https://example.test', 'Author', 'About', false, 'zh-CN', '2026-08-13T04:00:00+00:00'), $this->outputRoot);
+        (new StaticBuilder())->build($this->input([$article], 'Site', 'https://example.test', 'Author', 'About', false, 'zh-CN', '2026-08-13T04:00:00+00:00'), $this->outputRoot);
 
         $rss = (string) file_get_contents($this->outputRoot . '/rss.xml');
         self::assertStringContainsString('<lastBuildDate>', $rss);
@@ -311,7 +308,8 @@ final class StaticBuilderTest extends TestCase
     public function test_base_path_prefixes_internal_links_and_assets(): void
     {
         $article = new ArticleDocument('based', 'Based', 'Body.', new FrontMatter(['title' => 'Based', 'slug' => 'based', 'date' => '2026-08-12', 'topics' => ['Notes']]), '/based');
-        (new StaticBuilder())->build(new BuildInput([$article], 'Site', 'https://example.test/holymd', 'Author', 'About', false, 'zh-CN', null, '/holymd'), $this->outputRoot);
+        $page = new ArticleDocument('about', 'About', 'Body.', new FrontMatter(['title' => 'About', 'slug' => 'about', 'date' => '2026-08-12', 'nav_order' => 1]), '/about');
+        (new StaticBuilder())->build($this->input([$article], 'Site', 'https://example.test/holymd', 'Author', 'About', false, 'zh-CN', null, '/holymd', [$page]), $this->outputRoot);
 
         $styles = (string) file_get_contents(dirname(__DIR__, 2) . '/templates/public/site.css');
         $cssUrl = '/holymd/assets/site.' . substr(hash('sha256', $styles), 0, 10) . '.css';
@@ -326,7 +324,7 @@ final class StaticBuilderTest extends TestCase
     public function test_search_index_exposes_plain_text_and_metadata_with_a_size_cap(): void
     {
         $article = new ArticleDocument('long', 'Long', str_repeat('word ', 5000), new FrontMatter(['title' => 'Long', 'slug' => 'long', 'date' => '2026-08-12', 'summary' => 'Sum', 'topics' => ['Notes']]), '/long');
-        (new StaticBuilder())->build(new BuildInput([$article], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
+        (new StaticBuilder())->build($this->input([$article], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
 
         $index = json_decode((string) file_get_contents($this->outputRoot . '/search-index.json'), true, flags: JSON_THROW_ON_ERROR);
         self::assertArrayHasKey('builtAt', $index);
@@ -351,7 +349,7 @@ final class StaticBuilderTest extends TestCase
             'metadata_suggestion' => 'Suggested metadata for title & description',
         ]);
         $article = new ArticleDocument('geo-test', 'GEO Test Article', 'Article body markdown.', $frontMatter, '/geo-test');
-        (new StaticBuilder())->build(new BuildInput([$article], 'Site', 'https://example.test', 'Author', 'About', true), $this->outputRoot);
+        (new StaticBuilder())->build($this->input([$article], 'Site', 'https://example.test', 'Author', 'About', true), $this->outputRoot);
 
         $llmsTxt = (string) file_get_contents($this->outputRoot . '/llms.txt');
         self::assertStringContainsString('- [GEO Test Article](https://example.test/articles/geo-test/): A GEO-reviewed summary for AI search.', $llmsTxt);
@@ -379,7 +377,7 @@ final class StaticBuilderTest extends TestCase
             throw new \ErrorException($message, 0, $severity);
         });
         try {
-            (new StaticBuilder())->build(new BuildInput([$article], 'Site', 'https://example.test', 'Author', 'About', true), $this->outputRoot);
+            (new StaticBuilder())->build($this->input([$article], 'Site', 'https://example.test', 'Author', 'About', true), $this->outputRoot);
         } finally {
             restore_error_handler();
         }
@@ -403,7 +401,7 @@ final class StaticBuilderTest extends TestCase
         ]);
         $article = new ArticleDocument('applied-geo', 'Applied GEO metadata', "![](/media/flow.png)\n", $frontMatter, '/applied-geo');
 
-        (new StaticBuilder())->build(new BuildInput([$article], 'Site', 'https://example.test', 'Author', 'About', true), $this->outputRoot);
+        (new StaticBuilder())->build($this->input([$article], 'Site', 'https://example.test', 'Author', 'About', true), $this->outputRoot);
 
         $html = (string) file_get_contents($this->outputRoot . '/articles/applied-geo/index.html');
         self::assertStringContainsString('alt="A diagram of the GEO review flow"', $html);
@@ -419,7 +417,7 @@ final class StaticBuilderTest extends TestCase
         $title = "Safe]\n- [Injected](https://evil.test)";
         $article = new ArticleDocument('safe', $title, 'Body.', new FrontMatter(['title' => $title, 'slug' => 'safe', 'date' => '2026-08-12']), '/safe');
 
-        (new StaticBuilder())->build(new BuildInput([$article], 'Site', 'https://example.test', 'Author', 'About', true), $this->outputRoot);
+        (new StaticBuilder())->build($this->input([$article], 'Site', 'https://example.test', 'Author', 'About', true), $this->outputRoot);
 
         $llms = (string) file_get_contents($this->outputRoot . '/llms.txt');
         $full = (string) file_get_contents($this->outputRoot . '/llms-full.txt');
@@ -439,7 +437,7 @@ final class StaticBuilderTest extends TestCase
         ]);
         $article = new ArticleDocument('legacy-review', 'Legacy review', 'Body.', $frontMatter, '/legacy-review');
 
-        (new StaticBuilder())->build(new BuildInput([$article], 'Site', 'https://example.test', 'Author', 'About', true), $this->outputRoot);
+        (new StaticBuilder())->build($this->input([$article], 'Site', 'https://example.test', 'Author', 'About', true), $this->outputRoot);
 
         $full = (string) file_get_contents($this->outputRoot . '/llms-full.txt');
         self::assertStringNotContainsString('Author: unknown', $full);
@@ -451,7 +449,7 @@ final class StaticBuilderTest extends TestCase
     {
         $english = new ArticleDocument('english-time', 'English time', implode(' ', array_fill(0, 300, 'word')), new FrontMatter(['title' => 'English time', 'slug' => 'english-time', 'date' => '2026-08-12']), '/english-time');
         $chinese = new ArticleDocument('chinese-time', 'Chinese time', str_repeat('字', 300), new FrontMatter(['title' => 'Chinese time', 'slug' => 'chinese-time', 'date' => '2026-08-11']), '/chinese-time');
-        (new StaticBuilder())->build(new BuildInput([$english, $chinese], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
+        (new StaticBuilder())->build($this->input([$english, $chinese], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
 
         self::assertStringContainsString('2 min read', (string) file_get_contents($this->outputRoot . '/articles/english-time/index.html'));
         self::assertStringContainsString('1 min read', (string) file_get_contents($this->outputRoot . '/articles/chinese-time/index.html'));
@@ -463,7 +461,7 @@ final class StaticBuilderTest extends TestCase
         $bodyImageArticle = new ArticleDocument('body-post', 'Body Post', 'Some text and ![photo](/media/photo.png).', new FrontMatter(['title' => 'Body Post', 'slug' => 'body-post', 'date' => '2026-08-11']), '/body-post');
         $noImageArticle = new ArticleDocument('no-image', 'No Image', 'Just pure text.', new FrontMatter(['title' => 'No Image', 'slug' => 'no-image', 'date' => '2026-08-10']), '/no-image');
 
-        (new StaticBuilder())->build(new BuildInput([$coverArticle, $bodyImageArticle, $noImageArticle], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
+        (new StaticBuilder())->build($this->input([$coverArticle, $bodyImageArticle, $noImageArticle], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
 
         $coverHtml = (string) file_get_contents($this->outputRoot . '/articles/cover-post/index.html');
         self::assertStringContainsString('<meta property="og:image" content="https://example.test/media/hero.jpg">', $coverHtml);
@@ -487,7 +485,7 @@ final class StaticBuilderTest extends TestCase
             $articles[] = new ArticleDocument("post-{$i}", "Post {$i}", "Body {$i}", new FrontMatter(['title' => "Post {$i}", 'slug' => "post-{$i}", 'date' => sprintf('2026-08-%02d', 30 - $i)]), "/post-{$i}");
         }
 
-        (new StaticBuilder())->build(new BuildInput($articles, 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
+        (new StaticBuilder())->build($this->input($articles, 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
 
         $home = (string) file_get_contents($this->outputRoot . '/index.html');
         // 1 featured + 10 in archive list = 11 post headings
@@ -504,7 +502,7 @@ final class StaticBuilderTest extends TestCase
         $page2 = new ArticleDocument('terms', 'Terms', '# Terms Rules', new FrontMatter(['title' => 'Terms', 'slug' => 'terms', 'date' => '2026-08-14', 'nav_order' => 1, 'status' => 'published']), '/terms');
         $draftPage = new ArticleDocument('secret', 'Secret', '# Secret', new FrontMatter(['title' => 'Secret', 'slug' => 'secret', 'date' => '2026-08-14', 'status' => 'draft']), '/secret');
 
-        (new StaticBuilder())->build(new BuildInput([$article], 'Site', 'https://example.test', 'Author', 'About', false, 'zh-CN', null, '', [$page1, $page2, $draftPage]), $this->outputRoot);
+        (new StaticBuilder())->build($this->input([$article], 'Site', 'https://example.test', 'Author', 'About', false, 'zh-CN', null, '', [$page1, $page2, $draftPage]), $this->outputRoot);
 
         self::assertFileExists($this->outputRoot . '/privacy/index.html');
         self::assertFileExists($this->outputRoot . '/terms/index.html');
@@ -526,5 +524,29 @@ final class StaticBuilderTest extends TestCase
         self::assertNotFalse($termsPos);
         self::assertNotFalse($privacyPos);
         self::assertLessThan($privacyPos, $termsPos);
+    }
+
+    /**
+     * @param list<ArticleDocument> $articles
+     * @param list<ArticleDocument> $pages
+     */
+    private function input(
+        array $articles,
+        string $siteName,
+        string $siteUrl,
+        string $authorName,
+        string $about,
+        bool $generateLlmsTxt = false,
+        string $siteLanguage = 'zh-CN',
+        ?string $builtAt = null,
+        string $basePath = '',
+        array $pages = [],
+    ): BuildInput {
+        return new BuildInput(
+            $articles,
+            new PublicationSettings($siteName, $siteUrl, $authorName, $about, $generateLlmsTxt, $siteLanguage, $basePath),
+            $builtAt,
+            $pages,
+        );
     }
 }

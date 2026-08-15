@@ -16,14 +16,42 @@ final readonly class GeoController {
     public function review(ServerRequest $request): Response {
         if (($failure = $this->authorize($request)) !== null) return $failure;
         $slug = $this->slug($request->path); if ($slug === null) return Response::json(['error' => 'Invalid article route.'], 404);
-        try { $document = $this->articles->read($slug); if ($this->queue !== null && $this->versions !== null) { $version = $this->versions->captureReviewInput($document); $jobId = $this->queue->enqueueGeoReview($document, 'review-inputs/' . $version->value . '.md'); return Response::json(['articleSlug' => $slug, 'queued' => true, 'jobId' => $jobId], 202); } $result = $this->reviews->review($document); if ($this->proposals instanceof MySqlGeoProposalStore && $this->versions !== null) { $version = $this->versions->captureReviewInput($document); $proposals = $this->proposals->persistSyncReview($document, 'review-inputs/' . $version->value . '.md', $result); } else { foreach ($result->proposals as $proposal) $this->proposals->save($proposal); $proposals = $result->proposals; } return Response::json(['articleSlug' => $result->articleSlug, 'bodyHash' => $result->bodyHash, 'findings' => $result->findings, 'proposals' => array_map(static fn (GeoProposal $p): array => ['id' => $p->id->value, 'type' => $p->type, 'value' => $p->value, 'status' => $p->status], $proposals)]); }
-        catch (InvalidArgumentException $exception) { return Response::json(['error' => $exception->getMessage()], 422); }
+        try {
+            $document = $this->articles->read($slug);
+            if ($this->queue !== null && $this->versions !== null) {
+                $version = $this->versions->captureReviewInput($document);
+                $jobId = $this->queue->enqueueGeoReview($document, 'review-inputs/' . $version->value . '.md');
+                return Response::json(['articleSlug' => $slug, 'queued' => true, 'jobId' => $jobId], 202);
+            }
+
+            $review = $this->reviews->review($document);
+            $snapshotPath = null;
+            if ($this->versions !== null) {
+                $version = $this->versions->captureReviewInput($document);
+                $snapshotPath = 'review-inputs/' . $version->value . '.md';
+            }
+            $proposals = $this->proposals->recordReview($document, $snapshotPath, $review);
+
+            return Response::json([
+                'articleSlug' => $review->articleSlug,
+                'bodyHash' => $review->bodyHash,
+                'findings' => $review->findings,
+                'proposals' => array_map(static fn (GeoProposal $proposal): array => [
+                    'id' => $proposal->id->value,
+                    'type' => $proposal->type,
+                    'value' => $proposal->value,
+                    'status' => $proposal->status,
+                ], $proposals),
+            ]);
+        } catch (InvalidArgumentException $exception) {
+            return Response::json(['error' => $exception->getMessage()], 422);
+        }
     }
     public function status(ServerRequest $request): Response {
         try { $this->guard->requireAdministrator(); } catch (Unauthorized) { return Response::json(['error' => 'Administrator authentication is required.'], 401); }
         $slug = $this->slug($request->path); if ($slug === null) return Response::json(['error' => 'Invalid article route.'], 404);
-        if (!$this->proposals instanceof MySqlGeoProposalStore) return Response::json(['error' => 'Queued GEO status is not configured.'], 404);
-        $status = $this->proposals->latestForArticle($slug); return $status === null ? Response::json(['status' => 'none', 'proposals' => []]) : Response::json($status);
+        $status = $this->proposals->latestReview($slug);
+        return $status === null ? Response::json(['status' => 'none', 'proposals' => []]) : Response::json($status);
     }
     public function accept(ServerRequest $request): Response { return $this->decision($request, true); }
     public function reject(ServerRequest $request): Response { return $this->decision($request, false); }

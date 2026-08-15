@@ -8,6 +8,7 @@ use HolyMD\Admin\ArticleController;
 use HolyMD\Admin\VersionService;
 use HolyMD\Auth\AdminGuard;
 use HolyMD\Content\ArticleRepository;
+use HolyMD\Config\PublicationSettings;
 use HolyMD\Http\Csrf;
 use HolyMD\Http\Router;
 use HolyMD\Http\ServerRequest;
@@ -572,7 +573,7 @@ final class ArticleControllerTest extends TestCase
     {
         $repository = new ArticleRepository($this->root . '/articles');
         $controller = new ArticleController($repository, new VersionService($this->root . '/versions'), new AdminGuard(['admin_user_id' => 7]), new Csrf(['csrf_token' => 'expected-token']));
-        $response = Router::admin($controller)->dispatch(new ServerRequest('POST', '/admin/articles/first-note/publish', ['ACCEPT' => 'text/html'], ['csrf_token' => 'expected-token']));
+        $response = (new Router($controller))->dispatch(new ServerRequest('POST', '/admin/articles/first-note/publish', ['ACCEPT' => 'text/html'], ['csrf_token' => 'expected-token']));
 
         self::assertSame(503, $response->status);
         self::assertSame('text/html; charset=utf-8', $response->headers['Content-Type']);
@@ -584,9 +585,9 @@ final class ArticleControllerTest extends TestCase
     public function test_browser_publication_validation_error_is_escaped_in_html(): void
     {
         $repository = new ArticleRepository($this->root . '/articles');
-        $publisher = new PublishService($repository, new StaticBuilder(), new AtomicPublicTree(), $this->root . '/public', '<Bad Site>', 'https://example.invalid', '<script>alert(1)</script>', 'About');
+        $publisher = new PublishService($repository, new StaticBuilder(), new AtomicPublicTree(), $this->root . '/public', new PublicationSettings('<Bad Site>', 'https://example.invalid', '<script>alert(1)</script>', 'About'));
         $controller = new ArticleController($repository, new VersionService($this->root . '/versions'), new AdminGuard(['admin_user_id' => 7]), new Csrf(['csrf_token' => 'expected-token']), $publisher);
-        $response = Router::admin($controller)->dispatch(new ServerRequest('POST', '/admin/articles/first-note/publish', ['ACCEPT' => 'text/html'], ['csrf_token' => 'expected-token']));
+        $response = (new Router($controller))->dispatch(new ServerRequest('POST', '/admin/articles/first-note/publish', ['ACCEPT' => 'text/html'], ['csrf_token' => 'expected-token']));
 
         self::assertSame(422, $response->status);
         self::assertStringContainsString('Publication failed', $response->body);
@@ -637,9 +638,10 @@ final class ArticleControllerTest extends TestCase
     {
         $repository = new ArticleRepository($this->root . '/articles');
         $versions = new VersionService($this->root . '/versions');
-        $publisher = new PublishService($repository, new StaticBuilder(), new AtomicPublicTree(), $this->root . '/public/.holymd-current', 'Test publication', 'https://example.test', 'Ada Test', 'About Ada.', false, null, null, null, 'zh-CN', $versions);
-        $controller = new ArticleController($repository, $versions, new AdminGuard($session), new Csrf($session), $publisher, null, $this->root . '/media', ['site_name' => 'Test publication', 'site_url' => 'https://example.test', 'author_name' => 'Ada Test', 'about' => 'About Ada.', 'site_language' => 'zh-CN']);
-        return Router::admin($controller);
+        $publication = new PublicationSettings('Test publication', 'https://example.test', 'Ada Test', 'About Ada.');
+        $publisher = new PublishService($repository, new StaticBuilder(), new AtomicPublicTree(), $this->root . '/public/.holymd-current', $publication, versions: $versions);
+        $controller = new ArticleController($repository, $versions, new AdminGuard($session), new Csrf($session), $publisher, null, $this->root . '/media', $publication->adminValues());
+        return new Router($controller);
     }
 
     private function publishedRoot(): string

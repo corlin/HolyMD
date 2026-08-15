@@ -95,7 +95,6 @@ final class StaticBuilder
         $this->write($temporaryRoot . '/index.html', $this->renderer->render('index', [
             'siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'about' => $input->about, 'siteLanguage' => $input->siteLanguage, 'articles' => $articles, 'topics' => $topics, 'topicSlugs' => $topicSlugs, 'generateLlmsTxt' => $input->generateLlmsTxt, 'assetCss' => $assetCss, 'assetSearch' => $assetSearch, 'basePath' => $input->basePath, 'navPages' => $navPages,
         ]));
-        $this->write($temporaryRoot . '/about/index.html', $this->renderer->render('about', ['siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'about' => $input->about, 'siteLanguage' => $input->siteLanguage, 'generateLlmsTxt' => $input->generateLlmsTxt, 'assetCss' => $assetCss, 'assetSearch' => $assetSearch, 'basePath' => $input->basePath, 'navPages' => $navPages]));
         $this->write($temporaryRoot . '/404.html', $this->renderer->render('404', ['siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'siteLanguage' => $input->siteLanguage, 'generateLlmsTxt' => $input->generateLlmsTxt, 'assetCss' => $assetCss, 'assetSearch' => $assetSearch, 'basePath' => $input->basePath, 'navPages' => $navPages]));
         $this->write($temporaryRoot . $assetCss, $styles);
         $this->write($temporaryRoot . $assetSearch, $script);
@@ -109,7 +108,7 @@ final class StaticBuilder
             $robotsTxt .= "LLMs-Txt: " . $this->url($input, '/llms.txt') . "\nLLMs-Full-Txt: " . $this->url($input, '/llms-full.txt') . "\n";
         }
         $this->write($temporaryRoot . '/robots.txt', $robotsTxt);
-        $files = [...$files, 'index.html', 'about/index.html', '404.html', substr($assetCss, 1), substr($assetSearch, 1), 'rss.xml', 'atom.xml', 'feed.json', 'sitemap.xml', 'search-index.json', 'robots.txt'];
+        $files = [...$files, 'index.html', '404.html', substr($assetCss, 1), substr($assetSearch, 1), 'rss.xml', 'atom.xml', 'feed.json', 'sitemap.xml', 'search-index.json', 'robots.txt'];
         if ($input->generateLlmsTxt) {
             $lines = ['# ' . $input->siteName, '', $input->about, ''];
             foreach ($articles as $article) {
@@ -273,7 +272,7 @@ final class StaticBuilder
     private function sitemap(array $articles, array $pages, BuildInput $input, array $topicSlugs, string $builtAt): string
     {
         $siteLastmod = substr($builtAt, 0, 10);
-        $urls = [[$this->url($input, '/'), $siteLastmod], [$this->url($input, '/about/'), $siteLastmod]];
+        $urls = [[$this->url($input, '/'), $siteLastmod]];
         foreach ($pages as $page) {
             $urls[] = [$this->url($input, '/' . $page->slug . '/'), (string) $page->frontMatter->get('updated', (string) $page->frontMatter->get('date'))];
         }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace HolyMD\Tests\EndToEnd;
 
+use HolyMD\Config\PublicationSettings;
 use HolyMD\Content\ArticleDocument;
 use HolyMD\Content\ArticleRepository;
 use HolyMD\Content\FrontMatter;
@@ -149,11 +150,7 @@ final class PublishFlowTest extends TestCase
             new StaticBuilder(),
             new AtomicPublicTree(),
             $this->root . '/public/.holymd-current',
-            'HolyMD E2E',
-            'https://e2e.test',
-            'E2E Author',
-            'About the E2E author.',
-            true,
+            new PublicationSettings('HolyMD E2E', 'https://e2e.test', 'E2E Author', 'About the E2E author.', true),
             $this->root . '/audit',
         );
     }

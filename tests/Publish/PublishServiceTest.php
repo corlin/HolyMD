@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace HolyMD\Tests\Publish;
 
 use HolyMD\Admin\VersionService;
+use HolyMD\Config\PublicationSettings;
 use HolyMD\Content\ArticleRepository;
 use HolyMD\Publish\ArticleId;
 use HolyMD\Publish\AtomicPublicTree;
@@ -34,6 +35,14 @@ final class PublishServiceTest extends TestCase
     protected function tearDown(): void
     {
         $this->removeDirectory($this->root);
+    }
+
+    public function test_publish_and_rebuild_share_one_render_pipeline(): void
+    {
+        $source = (string) file_get_contents(__DIR__ . '/../../src/Publish/PublishService.php');
+
+        self::assertSame(1, substr_count($source, 'new BuildInput('));
+        self::assertStringContainsString('private function renderSite(', $source);
     }
 
     public function test_renderer_failure_keeps_live_tree_and_manifest_unchanged(): void
@@ -135,11 +144,7 @@ final class PublishServiceTest extends TestCase
             $builder ?? new StaticBuilder(),
             new AtomicPublicTree(),
             $this->root . '/public/.holymd-current',
-            'HolyMD Notes',
-            'https://example.test',
-            'Ada Author',
-            'About Ada.',
-            true,
+            $this->publication(),
             $this->root . '/audit',
         );
     }
@@ -151,22 +156,17 @@ final class PublishServiceTest extends TestCase
             $builder ?? new StaticBuilder(),
             new AtomicPublicTree(),
             $this->root . '/public/.holymd-current',
-            'HolyMD Notes',
-            'https://example.test',
-            'Ada Author',
-            'About Ada.',
-            true,
+            $this->publication(),
             $this->root . '/audit',
             null,
             null,
-            'zh-CN',
             new VersionService($this->root . '/versions'),
         );
     }
 
     public function test_persistence_failure_does_not_expose_a_new_tree(): void
     {
-        $service = new PublishService(new ArticleRepository($this->root . '/articles'), new StaticBuilder(), new AtomicPublicTree(), $this->root . '/public/.holymd-current', 'HolyMD Notes', 'https://example.test', 'Ada Author', 'About Ada.', false, $this->root . '/audit', static function (): void { throw new RuntimeException('disk full'); });
+        $service = new PublishService(new ArticleRepository($this->root . '/articles'), new StaticBuilder(), new AtomicPublicTree(), $this->root . '/public/.holymd-current', $this->publication(false), $this->root . '/audit', static function (): void { throw new RuntimeException('disk full'); });
 
         $this->expectExceptionMessage('disk full');
         try { $service->publish(new ArticleId('first-note')); }
@@ -206,7 +206,7 @@ final class PublishServiceTest extends TestCase
     {
         $service = new PublishService(
             new ArticleRepository($this->root . '/articles'), new StaticBuilder(), new AtomicPublicTree(),
-            $this->root . '/public/.holymd-current', 'HolyMD', 'https://example.invalid', 'Author', '', false, null, null, null, 'zh-CN',
+            $this->root . '/public/.holymd-current', new PublicationSettings('HolyMD', 'https://example.invalid', 'Author', ''),
         );
 
         $this->expectException(\InvalidArgumentException::class);
@@ -222,8 +222,7 @@ final class PublishServiceTest extends TestCase
     {
         $service = new PublishService(
             new ArticleRepository($this->root . '/articles'), new StaticBuilder(), new AtomicPublicTree(),
-            $this->root . '/public/.holymd-current', 'REPLACE_WITH_PUBLICATION_NAME', 'https://REPLACE_WITH_YOUR_DOMAIN', 'REPLACE_WITH_AUTHOR_NAME',
-            'REPLACE_WITH_AUTHOR_BIOGRAPHY', false, null, null, null, 'zh-CN',
+            $this->root . '/public/.holymd-current', new PublicationSettings('REPLACE_WITH_PUBLICATION_NAME', 'https://REPLACE_WITH_YOUR_DOMAIN', 'REPLACE_WITH_AUTHOR_NAME', 'REPLACE_WITH_AUTHOR_BIOGRAPHY'),
         );
 
         $this->expectException(\InvalidArgumentException::class);
@@ -240,5 +239,10 @@ final class PublishServiceTest extends TestCase
             is_dir($childPath) && !is_link($childPath) ? $this->removeDirectory($childPath) : unlink($childPath);
         }
         rmdir($path);
+    }
+
+    private function publication(bool $generateLlmsTxt = true): PublicationSettings
+    {
+        return new PublicationSettings('HolyMD Notes', 'https://example.test', 'Ada Author', 'About Ada.', $generateLlmsTxt);
     }
 }

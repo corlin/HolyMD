@@ -60,4 +60,13 @@ final class PageRepositoryTest extends TestCase
         $doc = new ArticleDocument('admin', 'Admin Page', 'Body', new FrontMatter(['title' => 'Admin Page', 'slug' => 'admin', 'date' => '2026-08-14']), $this->pagesRoot . '/admin.md');
         $repo->write($doc);
     }
+
+    public function test_allows_about_slug_for_custom_pages(): void
+    {
+        $repo = new PageRepository($this->pagesRoot);
+        $doc = new ArticleDocument('about', 'About Me', '# About Content', new FrontMatter(['title' => 'About Me', 'slug' => 'about', 'date' => '2026-08-14', 'nav_order' => 99]), $this->pagesRoot . '/about.md');
+        $repo->write($doc);
+        self::assertTrue($repo->exists('about'));
+        self::assertSame('About Me', $repo->read('about')->title);
+    }
 }

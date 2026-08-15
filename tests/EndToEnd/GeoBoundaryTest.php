@@ -10,6 +10,7 @@ use HolyMD\Auth\AdminGuard;
 use HolyMD\Content\ArticleDocument;
 use HolyMD\Content\ArticleRepository;
 use HolyMD\Content\FrontMatter;
+use HolyMD\Config\PublicationSettings;
 use HolyMD\Geo\AiClient;
 use HolyMD\Geo\AiResponse;
 use HolyMD\Geo\GeoPrompt;
@@ -175,11 +176,7 @@ final class GeoBoundaryTest extends TestCase
                 new StaticBuilder(),
                 new AtomicPublicTree(),
                 $pubRoot . '/public/.holymd-current',
-                'GEO Boundary E2E',
-                'https://geo-boundary.test',
-                'Boundary Author',
-                'About the boundary author.',
-                false,
+                new PublicationSettings('GEO Boundary E2E', 'https://geo-boundary.test', 'Boundary Author', 'About the boundary author.'),
                 $pubRoot . '/audit',
             );
             $service->publish(new ArticleId('deep-dive'));
