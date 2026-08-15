@@ -8,7 +8,6 @@ use HolyMD\Config\PublicationSettings;
 use HolyMD\Content\ArticleDocument;
 use HolyMD\Content\FrontMatter;
 use HolyMD\Render\BuildInput;
-use HolyMD\Render\MarkdownRendererInterface;
 use HolyMD\Render\StaticBuilder;
 use PHPUnit\Framework\TestCase;
 
@@ -272,8 +271,9 @@ final class StaticBuilderTest extends TestCase
 
     public function test_each_article_is_rendered_exactly_once_per_build(): void
     {
-        $counter = new class implements MarkdownRendererInterface {
+        $counter = new class extends \HolyMD\Render\MarkdownRenderer {
             public int $calls = 0;
+            public function __construct() {}
             public function render(string $markdown): string
             {
                 $this->calls++;

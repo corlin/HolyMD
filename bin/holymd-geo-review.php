@@ -26,7 +26,7 @@ if (!is_array($row) || !is_string($row['input_checksum'] ?? null) || !is_string(
 }
 $expectedChecksum = (string) $row['input_checksum'];
 $snapshotPath = (string) $row['snapshot_path'];
-$versionId = new \HolyMD\Admin\VersionId((string) basename($snapshotPath, '.md'));
+$versionId = (string) basename($snapshotPath, '.md');
 $versionService = new \HolyMD\Admin\VersionService($root . '/content/versions');
 try {
     $document = str_starts_with($snapshotPath, 'review-inputs/')

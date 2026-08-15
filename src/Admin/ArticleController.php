@@ -13,7 +13,6 @@ use HolyMD\Content\FrontMatter;
 use HolyMD\Http\Csrf;
 use HolyMD\Http\Response;
 use HolyMD\Http\ServerRequest;
-use HolyMD\Publish\ArticleId;
 use HolyMD\Publish\PublishService;
 use HolyMD\Queue\MySqlJobQueue;
 use HolyMD\Render\MarkdownRenderer;
@@ -21,6 +20,8 @@ use InvalidArgumentException;
 
 final readonly class ArticleController
 {
+    use AdminAuthorizationTrait;
+
     public function __construct(
         private ArticleRepository $articles,
         private VersionService $versions,
@@ -153,7 +154,7 @@ final readonly class ArticleController
             if (preg_match('#^/admin/articles/([a-z0-9]+(?:-[a-z0-9]+)*)/restore/([a-f0-9]{32})$#', $request->path, $matches) !== 1) {
                 throw new InvalidArgumentException('Invalid article restore route.');
             }
-            $version = new VersionId($matches[2]);
+            $version = $matches[2];
             $document = $this->versions->restore($version, $matches[1]);
             $this->articles->write($document);
             return Response::redirect('/admin/articles/' . $document->slug . '/edit');
@@ -188,10 +189,10 @@ final readonly class ArticleController
             }
             if ($matches[2] === 'publish' && $selectedVersion === null) $selectedVersion = $this->versions->capturePublicationInput($article);
             if ($this->queue !== null) {
-                $jobId = $this->queue->enqueueBuild($article, $matches[2], $selectedVersion?->value === null ? null : 'publish-inputs/' . $selectedVersion->value . '.md');
+                $jobId = $this->queue->enqueueBuild($article, $matches[2], $selectedVersion === null ? null : 'publish-inputs/' . $selectedVersion . '.md');
                 return $this->publicationResponse($matches[1], $matches[2], true, $jobId);
             }
-            $result = $matches[2] === 'publish' ? $this->publisher->publish(new ArticleId($matches[1]), $selectedVersion) : $this->publisher->withdraw(new ArticleId($matches[1]));
+            $result = $matches[2] === 'publish' ? $this->publisher->publish($matches[1], $selectedVersion) : $this->publisher->withdraw($matches[1]);
             return $this->publicationResponse($matches[1], $matches[2]);
         } catch (InvalidArgumentException $exception) {
             return $this->publicationError($exception->getMessage(), 422, $matches[1]);
@@ -345,40 +346,12 @@ final readonly class ArticleController
         return array_values(array_map('basename', array_filter(glob($this->mediaRoot . '/*') ?: [], 'is_file')));
     }
 
-    private function authorizeMutation(ServerRequest $request): ?Response
-    {
-        try {
-            $this->guard->requireAdministrator();
-        } catch (Unauthorized) {
-            return Response::json(['error' => 'Administrator authentication is required.'], 401);
-        }
-        if (!$this->csrf->valid($request)) {
-            return Response::json(['error' => 'CSRF token is invalid.'], 419);
-        }
-        return null;
-    }
-
     private function slugFromPath(string $path): string
     {
         if (preg_match('#^/admin/articles/([a-z0-9]+(?:-[a-z0-9]+)*)/draft$#', $path, $matches) !== 1) {
             throw new InvalidArgumentException('Invalid article draft route.');
         }
         return $matches[1];
-    }
-
-    private function safeSlug(string $value): string
-    {
-        $value = trim($value);
-        $transliterated = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $value);
-        if ($transliterated !== false) {
-            $value = $transliterated;
-        }
-        $slug = (string) preg_replace('/[^a-z0-9]+/', '-', strtolower($value));
-        $slug = trim($slug, '-');
-        if ($slug === '') {
-            throw new InvalidArgumentException('Article title or slug must contain letters or numbers.');
-        }
-        return $slug;
     }
 
     private function submittedArticle(ServerRequest $request, ArticleDocument $existing): ArticleDocument

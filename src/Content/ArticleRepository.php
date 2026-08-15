@@ -9,8 +9,33 @@ use RuntimeException;
 
 final readonly class ArticleRepository
 {
-    public function __construct(private string $articlesRoot)
+    public const RESERVED_PAGE_SLUGS = [
+        'admin',
+        'media',
+        'assets',
+        'articles',
+        'topics',
+        'rss',
+        'atom',
+        'feed',
+        'sitemap',
+        'robots',
+        'llms',
+        'llms-full',
+    ];
+
+    /** @param list<string> $reservedSlugs */
+    public function __construct(
+        private string $articlesRoot,
+        private array $reservedSlugs = [],
+    ) {
+    }
+
+    public function validateSlug(string $slug): void
     {
+        if (in_array(strtolower($slug), $this->reservedSlugs, true)) {
+            throw new InvalidArgumentException(sprintf('Slug "%s" is reserved.', $slug));
+        }
     }
 
     public function read(string $path): ArticleDocument
@@ -18,42 +43,44 @@ final readonly class ArticleRepository
         $sourcePath = $this->safePath($path);
         $markdown = file_get_contents($sourcePath);
         if ($markdown === false) {
-            throw new RuntimeException(sprintf('Unable to read article "%s".', $path));
+            throw new RuntimeException(sprintf('Unable to read content "%s".', $path));
         }
         [$frontMatter, $body] = FrontMatter::parse($markdown);
         $slug = $frontMatter->get('slug');
         $title = $frontMatter->get('title');
         if (!is_string($slug) || !is_string($title)) {
-            throw new InvalidArgumentException('Article front matter requires title, slug, and date.');
+            throw new InvalidArgumentException('Content front matter requires title, slug, and date.');
         }
         return new ArticleDocument($slug, $title, $body, $frontMatter, $sourcePath);
     }
 
     public function write(ArticleDocument $document): void
     {
-        $this->ensureArticlesRootExists();
+        $this->validateSlug($document->slug);
+        $this->ensureRootExists();
         $sourcePath = $this->safePath($document->slug);
         if (file_put_contents($sourcePath, $document->serialize(), LOCK_EX) === false) {
-            throw new RuntimeException(sprintf('Unable to write article "%s".', $document->slug));
+            throw new RuntimeException(sprintf('Unable to write content "%s".', $document->slug));
         }
     }
 
     public function writeIfUnchanged(ArticleDocument $document, string $expectedChecksum): bool
     {
+        $this->validateSlug($document->slug);
         if (preg_match('/^[a-f0-9]{64}$/', $expectedChecksum) !== 1) {
-            throw new InvalidArgumentException('Article checksum must be a SHA-256 value.');
+            throw new InvalidArgumentException('Checksum must be a SHA-256 value.');
         }
 
-        $this->ensureArticlesRootExists();
+        $this->ensureRootExists();
         $sourcePath = $this->safePath($document->slug);
         $handle = @fopen($sourcePath, 'c+');
         if ($handle === false) {
-            throw new RuntimeException(sprintf('Unable to lock article "%s".', $document->slug));
+            throw new RuntimeException(sprintf('Unable to lock content "%s".', $document->slug));
         }
 
         try {
             if (!flock($handle, LOCK_EX)) {
-                throw new RuntimeException(sprintf('Unable to lock article "%s".', $document->slug));
+                throw new RuntimeException(sprintf('Unable to lock content "%s".', $document->slug));
             }
             rewind($handle);
             $current = stream_get_contents($handle);
@@ -63,7 +90,7 @@ final readonly class ArticleRepository
             $serialized = $document->serialize();
             rewind($handle);
             if (!ftruncate($handle, 0) || fwrite($handle, $serialized) !== strlen($serialized) || !fflush($handle)) {
-                throw new RuntimeException(sprintf('Unable to write article "%s".', $document->slug));
+                throw new RuntimeException(sprintf('Unable to write content "%s".', $document->slug));
             }
             return true;
         } finally {
@@ -81,7 +108,7 @@ final readonly class ArticleRepository
     {
         $path = $this->safePath($slug);
         if (!is_file($path) || !unlink($path)) {
-            throw new RuntimeException(sprintf('Unable to delete article "%s".', $slug));
+            throw new RuntimeException(sprintf('Unable to delete content "%s".', $slug));
         }
     }
 
@@ -98,16 +125,16 @@ final readonly class ArticleRepository
     private function safePath(string $path): string
     {
         if (!preg_match('/^[a-z0-9]+(?:-[a-z0-9]+)*(?:\.md)?$/', $path)) {
-            throw new InvalidArgumentException('Article path must be a safe article slug.');
+            throw new InvalidArgumentException('Path must be a safe slug.');
         }
         $slug = preg_replace('/\.md$/', '', $path);
         return $this->articlesRoot . '/' . $slug . '.md';
     }
 
-    private function ensureArticlesRootExists(): void
+    private function ensureRootExists(): void
     {
         if (!is_dir($this->articlesRoot) && !@mkdir($this->articlesRoot, 0775, true) && !is_dir($this->articlesRoot)) {
-            throw new RuntimeException(sprintf('Unable to create articles directory "%s".', $this->articlesRoot));
+            throw new RuntimeException(sprintf('Unable to create directory "%s".', $this->articlesRoot));
         }
     }
 }

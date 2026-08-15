@@ -17,7 +17,6 @@ $activeNav = 'pages';
   </div>
   <ul class="article-list">
     <?php
-    $statusIcons = ['draft' => 'edit_note', 'published' => 'check_circle', 'withdrawn' => 'visibility_off'];
     foreach ($pages as $page):
         $status = (string) $page->frontMatter->get('status', 'draft');
         $modified = filemtime($page->sourcePath);
@@ -28,10 +27,7 @@ $activeNav = 'pages';
         <a href="<?= $path('/admin/pages/' . rawurlencode($page->slug) . '/edit') ?>">
           <strong><?= htmlspecialchars($page->title, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></strong>
         </a>
-        <span class="status status-<?= htmlspecialchars($status) ?>">
-          <span class="icon" aria-hidden="true"><?= $statusIcons[$status] ?? 'circle' ?></span>
-          <?= htmlspecialchars(ucfirst($status)) ?>
-        </span>
+        <?php require __DIR__ . '/../_status_badge.php'; ?>
       </div>
       <div class="article-row-meta">
         <span>Route: /<?= htmlspecialchars($page->slug) ?>/</span>

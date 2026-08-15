@@ -21,11 +21,7 @@ require __DIR__ . '/_header.php';
       <div class="toc-rail-inner">
         <p class="eyebrow">In this essay</p>
         <h2 id="desktop-toc-heading">Contents</h2>
-        <ol>
-          <?php foreach ($toc as $item): ?>
-            <li class="toc-level-<?= (int) $item['level'] ?>"><a href="#<?= htmlspecialchars($item['id']) ?>"><?= htmlspecialchars($item['title']) ?></a></li>
-          <?php endforeach; ?>
-        </ol>
+        <?php require __DIR__ . '/_toc.php'; ?>
       </div>
     </aside>
     <?php endif; ?>
@@ -39,11 +35,7 @@ require __DIR__ . '/_header.php';
       <?php if (!empty($toc) && count($toc) >= 3): ?>
       <details class="toc-box">
         <summary>Table of Contents</summary>
-        <ol>
-          <?php foreach ($toc as $item): ?>
-            <li class="toc-level-<?= (int) $item['level'] ?>"><a href="#<?= htmlspecialchars($item['id']) ?>"><?= htmlspecialchars($item['title']) ?></a></li>
-          <?php endforeach; ?>
-        </ol>
+        <?php require __DIR__ . '/_toc.php'; ?>
       </details>
       <?php endif; ?>
       <div id="article-content" class="prose"><?= $contentHtml ?></div>
@@ -51,7 +43,7 @@ require __DIR__ . '/_header.php';
     <?php if ($internalLinks !== []): ?><section aria-labelledby="internal-links-heading"><div class="article-section related"><h2 id="internal-links-heading">Related links</h2><ul><?php foreach ($internalLinks as $internalLink): ?><li><a href="<?= htmlspecialchars($internalLink, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($internalLink) ?></a></li><?php endforeach; ?></ul></div></section><?php endif; ?>
     <?php if ($faq !== []): ?><section aria-labelledby="faq-heading"><div class="article-section"><h2 id="faq-heading">Frequently asked questions</h2><?php foreach ($faq as $entry): ?><details><summary><?= htmlspecialchars($entry['question']) ?></summary><p><?= htmlspecialchars($entry['answer']) ?></p></details><?php endforeach; ?></div></section><?php endif; ?>
     <aside class="author-box" aria-labelledby="author-heading"><p class="eyebrow">About the author</p><h2 id="author-heading"><?= htmlspecialchars($authorName) ?></h2><p><?= htmlspecialchars($siteName) ?> is a personal publication.</p></aside>
-    <?php if ($related !== []): ?><section class="article-section related" aria-labelledby="related-heading"><p class="eyebrow">Continue reading</p><h2 id="related-heading">Related articles</h2><div class="article-list"><?php foreach ($related as $relatedArticle): ?><article class="article-row"><div><h3><a href="<?= $basePath ?>/articles/<?= htmlspecialchars($relatedArticle->slug) ?>/"><?= htmlspecialchars($relatedArticle->title) ?></a></h3><?php $relatedSummary = (string) $relatedArticle->frontMatter->get('summary', ''); if ($relatedSummary !== ''): ?><p><?= htmlspecialchars($relatedSummary) ?></p><?php endif; ?></div><a class="quiet-arrow" href="<?= $basePath ?>/articles/<?= htmlspecialchars($relatedArticle->slug) ?>/" aria-label="Read <?= htmlspecialchars($relatedArticle->title) ?>"><span class="icon" aria-hidden="true">arrow_forward</span></a></article><?php endforeach; ?></div></section><?php endif; ?>
+    <?php if ($related !== []): ?><section class="article-section related" aria-labelledby="related-heading"><p class="eyebrow">Continue reading</p><h2 id="related-heading">Related articles</h2><div class="article-list"><?php foreach ($related as $article): $showDate = false; require __DIR__ . '/_article_row.php'; endforeach; ?></div></section><?php endif; ?>
     </div>
   </div></article></main>
   <dialog class="image-viewer" aria-labelledby="image-viewer-title">

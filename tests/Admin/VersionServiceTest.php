@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace HolyMD\Tests\Admin;
 
 use HolyMD\Admin\VersionService;
-use HolyMD\Admin\VersionId;
 use HolyMD\Content\ArticleDocument;
 use HolyMD\Content\ArticleRepository;
 use HolyMD\Content\FrontMatter;
@@ -39,7 +38,7 @@ final class VersionServiceTest extends TestCase
 
         self::assertFileExists($this->root . '/index.json');
         $index = json_decode((string) file_get_contents($this->root . '/index.json'), true, flags: JSON_THROW_ON_ERROR);
-        self::assertSame([$id->value], $index['first']);
+        self::assertSame([$id], $index['first']);
     }
 
     public function test_list_reads_from_the_index_and_orders_descending(): void
@@ -48,8 +47,8 @@ final class VersionServiceTest extends TestCase
         $second = $this->publish($this->document('first', "Two\n"));
         $other = $this->publish($this->document('other'));
 
-        self::assertSame([$second->value, $first->value], array_map(static fn ($id) => $id->value, $this->service->list('first')));
-        self::assertSame([$other->value], array_map(static fn ($id) => $id->value, $this->service->list('other')));
+        self::assertSame([$second, $first], $this->service->list('first'));
+        self::assertSame([$other], $this->service->list('other'));
     }
 
     public function test_list_does_not_treat_unindexed_snapshot_files_as_published_versions(): void
@@ -75,8 +74,8 @@ final class VersionServiceTest extends TestCase
 
         self::assertSame("Body\n", $this->service->restoreReviewInput($id, 'first')->bodyMarkdown);
         self::assertSame([], $this->service->list('first'));
-        self::assertFileDoesNotExist($this->root . '/' . $id->value . '.md');
-        self::assertFileExists($this->root . '/review-inputs/' . $id->value . '.md');
+        self::assertFileDoesNotExist($this->root . '/' . $id . '.md');
+        self::assertFileExists($this->root . '/review-inputs/' . $id . '.md');
     }
 
     public function test_publication_input_becomes_a_content_version_only_when_confirmed(): void
@@ -90,14 +89,14 @@ final class VersionServiceTest extends TestCase
         self::assertSame([], $this->service->list('first'));
 
         $this->service->confirmPublished('first', $id);
-        self::assertSame([$id->value], array_map(static fn (VersionId $version): string => $version->value, $this->service->list('first')));
+        self::assertSame([$id], $this->service->list('first'));
         self::assertSame("Body\n", $this->service->restore($id, 'first')->bodyMarkdown);
     }
 
     public function test_indexed_missing_files_are_filtered_from_listings(): void
     {
         $id = $this->publish($this->document('first'));
-        unlink($this->root . '/' . $id->value . '.md');
+        unlink($this->root . '/' . $id . '.md');
 
         self::assertSame([], $this->service->list('first'));
     }
@@ -114,12 +113,12 @@ final class VersionServiceTest extends TestCase
         $public = $repository->read('public');
         $pointer = $public->frontMatter->get('published_version');
         self::assertIsString($pointer);
-        self::assertSame("Public body\n", $this->service->restore(new \HolyMD\Admin\VersionId($pointer), 'public')->bodyMarkdown);
+        self::assertSame("Public body\n", $this->service->restore($pointer, 'public')->bodyMarkdown);
         self::assertNull($repository->read('draft')->frontMatter->get('published_version'));
         self::assertSame(0, $this->service->pinPublished($repository));
     }
 
-    private function publish(ArticleDocument $document): VersionId
+    private function publish(ArticleDocument $document): string
     {
         $id = $this->service->capturePublicationInput($document);
         $this->service->stagePublished($id);

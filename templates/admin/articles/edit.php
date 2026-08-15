@@ -63,7 +63,7 @@ $activeNav = 'articles';
       <p class="muted">A restorable Markdown version is created only after a successful publish.</p>
       <ul class="versions">
         <?php foreach ($versions as $version): ?>
-          <li><form method="post" action="<?= $path('/admin/articles/' . rawurlencode($article->slug) . '/restore/' . $version->value) ?>"><input type="hidden" name="csrf_token" value="<?= $escape($csrfToken) ?>"><button type="submit"><span class="icon" aria-hidden="true">history</span>Restore <?= $escape(substr($version->value, 0, 8)) ?></button></form></li>
+          <li><form method="post" action="<?= $path('/admin/articles/' . rawurlencode($article->slug) . '/restore/' . $version) ?>"><input type="hidden" name="csrf_token" value="<?= $escape($csrfToken) ?>"><button type="submit"><span class="icon" aria-hidden="true">history</span>Restore <?= $escape(substr($version, 0, 8)) ?></button></form></li>
         <?php endforeach; ?>
       </ul>
     </details>

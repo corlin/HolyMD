@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace HolyMD\Auth;
 
+final class Unauthorized extends \RuntimeException {}
+
 final readonly class AdminGuard
 {
     /** @param array<string, mixed> $session */

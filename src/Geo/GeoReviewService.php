@@ -5,7 +5,7 @@ use HolyMD\Content\ArticleDocument;
 use InvalidArgumentException;
 use JsonException;
 final readonly class GeoReviewService {
-    public function __construct(private AiClient $client, private ?GeoReviewStore $store = null) {}
+    public function __construct(private AiClient $client, private ?GeoProposalStore $store = null) {}
     public function review(ArticleDocument $document): GeoReview {
         $hash = hash('sha256', $document->bodyMarkdown);
         try { $payload = json_decode($this->client->analyze(GeoPrompt::system(), $document->serialize())->json, true, 512, JSON_THROW_ON_ERROR); $review = $this->validatedReview($payload, $document->slug, $hash); $this->store?->saveReview($review); return $review; }
@@ -18,7 +18,7 @@ final readonly class GeoReviewService {
             if (is_array($proposal) && isset($proposal['value_json']) && !isset($proposal['value'])) { try { $proposal['value'] = json_decode((string) $proposal['value_json'], true, 64, JSON_THROW_ON_ERROR); } catch (JsonException) { throw new InvalidArgumentException('Proposal value_json is invalid JSON.'); } unset($proposal['value_json']); }
             if (!is_array($proposal) || !is_string($proposal['type'] ?? null) || !array_key_exists('value', $proposal)) throw new InvalidArgumentException('Every proposal requires a type and value.');
             if (!in_array($proposal['type'], GeoReview::TYPES, true) || array_diff(array_keys($proposal), ['type', 'value']) !== [] || !$this->validValue($proposal['type'], $proposal['value'])) throw new InvalidArgumentException('Response contains an unsupported GEO proposal.');
-            $proposals[] = new GeoProposal(new GeoProposalId('review-' . substr($hash, 0, 16) . '-' . $index), $slug, $hash, $proposal['type'], $proposal['value']);
+            $proposals[] = new GeoProposal('review-' . substr($hash, 0, 16) . '-' . $index, $slug, $hash, $proposal['type'], $proposal['value']);
         }
         foreach ($payload['findings'] as $finding) if (!is_string($finding)) throw new InvalidArgumentException('Every GEO finding must be text.');
         return new GeoReview($slug, $hash, $proposals, $payload['findings']);
@@ -26,7 +26,7 @@ final readonly class GeoReviewService {
 
     private function validValue(string $type, mixed $value): bool
     {
-        if ($this->containsForbiddenKey($value)) return false;
+        if (self::containsForbiddenKey($value)) return false;
         if (is_string($value) || is_int($value) || is_float($value) || is_bool($value)) return true;
         if (is_array($value)) {
             foreach ($value as $item) if (!is_string($item) && !is_int($item) && !is_float($item) && !is_bool($item) && !is_array($item) && $item !== null) return false;
@@ -35,12 +35,12 @@ final readonly class GeoReviewService {
         return false;
     }
 
-    private function containsForbiddenKey(mixed $value): bool
+    public static function containsForbiddenKey(mixed $value): bool
     {
         if (!is_array($value)) return false;
         foreach ($value as $key => $item) {
             if (is_string($key) && in_array(strtolower(preg_replace('/[^a-z0-9_]/i', '', $key)), ['body', 'content', 'markdown', 'body_markdown', 'bodymarkdown', 'rewrite'], true)) return true;
-            if ($this->containsForbiddenKey($item)) return true;
+            if (self::containsForbiddenKey($item)) return true;
         }
         return false;
     }

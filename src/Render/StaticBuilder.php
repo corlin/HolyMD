@@ -11,9 +11,9 @@ use RuntimeException;
 final class StaticBuilder
 {
     private TemplateRenderer $renderer;
-    private MarkdownRendererInterface $markdownRenderer;
+    private MarkdownRenderer $markdownRenderer;
 
-    public function __construct(?TemplateRenderer $renderer = null, ?MarkdownRendererInterface $markdownRenderer = null)
+    public function __construct(?TemplateRenderer $renderer = null, ?MarkdownRenderer $markdownRenderer = null)
     {
         $this->renderer = $renderer ?? new TemplateRenderer(dirname(__DIR__, 2) . '/templates/public');
         $this->markdownRenderer = $markdownRenderer ?? new MarkdownRenderer();

@@ -7,7 +7,6 @@ namespace HolyMD\Tests\Publish;
 use HolyMD\Admin\VersionService;
 use HolyMD\Config\PublicationSettings;
 use HolyMD\Content\ArticleRepository;
-use HolyMD\Publish\ArticleId;
 use HolyMD\Publish\AtomicPublicTree;
 use HolyMD\Publish\PublishService;
 use HolyMD\Render\StaticBuilder;
@@ -50,7 +49,7 @@ final class PublishServiceTest extends TestCase
         $service = $this->versionedService(new StaticBuilder(new TemplateRenderer($this->root . '/missing-templates')));
 
         try {
-            $service->publish(new ArticleId('first-note'));
+            $service->publish('first-note');
             self::fail('Expected a renderer failure.');
         } catch (RuntimeException $exception) {
             self::assertStringContainsString('Template', $exception->getMessage());
@@ -68,7 +67,7 @@ final class PublishServiceTest extends TestCase
         file_put_contents($this->root . '/articles/renamed.md', "---\ntitle: Renamed\nslug: renamed\ndate: 2026-08-11\nstatus: published\nprevious_slugs:\n  - old-name\n---\nPublished\n");
         file_put_contents($this->root . '/articles/withdrawn.md', "---\ntitle: Withdrawn\nslug: withdrawn\ndate: 2026-08-10\nstatus: withdrawn\n---\nGone\n");
 
-        $result = $this->service()->publish(new ArticleId('first-note'));
+        $result = $this->service()->publish('first-note');
 
         self::assertSame(2, $result->manifest->articleCount);
         self::assertFileExists($this->released() . '/articles/old-name/index.html');
@@ -85,7 +84,7 @@ final class PublishServiceTest extends TestCase
     public function test_publishing_another_article_keeps_the_previous_public_snapshot(): void
     {
         $service = $this->versionedService();
-        $service->publish(new ArticleId('first-note'));
+        $service->publish('first-note');
 
         $repository = new ArticleRepository($this->root . '/articles');
         $published = $repository->read('first-note');
@@ -98,7 +97,7 @@ final class PublishServiceTest extends TestCase
         ));
         file_put_contents($this->root . '/articles/second-note.md', "---\ntitle: Second note\nslug: second-note\ndate: 2026-08-13\nstatus: draft\n---\nSecond body\n");
 
-        $service->publish(new ArticleId('second-note'));
+        $service->publish('second-note');
 
         $firstPublic = (string) file_get_contents($this->released() . '/articles/first-note/index.html');
         self::assertStringContainsString('Body', $firstPublic);
@@ -113,14 +112,14 @@ final class PublishServiceTest extends TestCase
         $working = $repository->read('first-note');
         $repository->write(new \HolyMD\Content\ArticleDocument($working->slug, $working->title, "Newer working body\n", $working->frontMatter, $working->sourcePath));
 
-        $this->versionedService()->publish(new ArticleId('first-note'), $selected);
+        $this->versionedService()->publish('first-note', $selected);
 
         $public = (string) file_get_contents($this->released() . '/articles/first-note/index.html');
         self::assertStringContainsString('Body', $public);
         self::assertStringNotContainsString('Newer working body', $public);
         $saved = $repository->read('first-note');
         self::assertSame("Newer working body\n", $saved->bodyMarkdown);
-        self::assertSame($selected->value, $saved->frontMatter->get('published_version'));
+        self::assertSame($selected, $saved->frontMatter->get('published_version'));
     }
 
     private function released(): string
@@ -169,13 +168,13 @@ final class PublishServiceTest extends TestCase
         $service = new PublishService(new ArticleRepository($this->root . '/articles'), new StaticBuilder(), new AtomicPublicTree(), $this->root . '/public/.holymd-current', $this->publication(false), $this->root . '/audit', static function (): void { throw new RuntimeException('disk full'); });
 
         $this->expectExceptionMessage('disk full');
-        try { $service->publish(new ArticleId('first-note')); }
+        try { $service->publish('first-note'); }
         finally { self::assertSame('previous site', file_get_contents($this->root . '/public/site/index.html')); }
     }
 
     public function test_no_redirect_manifest_is_generated_without_previous_slugs(): void
     {
-        $this->service()->publish(new ArticleId('first-note'));
+        $this->service()->publish('first-note');
 
         self::assertFileDoesNotExist($this->released() . '/.holymd-redirects.json');
     }
@@ -185,7 +184,7 @@ final class PublishServiceTest extends TestCase
         file_put_contents($this->root . '/articles/bad-metadata.md', "---\ntitle: Bad metadata\nslug: bad-metadata\ndate: 2026-08-11\nstatus: published\ntopics:\n  - ''\nsources:\n  - ftp://example.test/file\n---\nBad\n");
 
         try {
-            $this->service()->publish(new ArticleId('first-note'));
+            $this->service()->publish('first-note');
             self::fail('Expected metadata validation to fail.');
         } catch (\InvalidArgumentException $exception) {
             self::assertStringContainsString('invalid citation URL', $exception->getMessage());
@@ -199,7 +198,7 @@ final class PublishServiceTest extends TestCase
     {
         file_put_contents($this->root . '/articles/other.md', "---\ntitle: Other\nslug: other\ndate: 2026-08-11\nstatus: published\nprevious_slugs:\n  - first-note\n---\nOther\n");
         $this->expectException(\InvalidArgumentException::class);
-        $this->service()->publish(new ArticleId('first-note'));
+        $this->service()->publish('first-note');
     }
 
     public function test_rejects_placeholder_public_identity_before_building(): void
@@ -211,7 +210,7 @@ final class PublishServiceTest extends TestCase
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('site URL');
-        try { $service->publish(new ArticleId('first-note')); }
+        try { $service->publish('first-note'); }
         finally {
             self::assertSame('previous site', file_get_contents($this->root . '/public/site/index.html'));
             self::assertSame('draft', (new ArticleRepository($this->root . '/articles'))->read('first-note')->frontMatter->get('status'));
@@ -227,7 +226,7 @@ final class PublishServiceTest extends TestCase
 
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('placeholder');
-        $service->publish(new ArticleId('first-note'));
+        $service->publish('first-note');
     }
 
     private function removeDirectory(string $path): void

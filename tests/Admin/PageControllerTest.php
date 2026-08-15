@@ -7,12 +7,11 @@ namespace HolyMD\Tests\Admin;
 use HolyMD\Admin\PageController;
 use HolyMD\Auth\AdminGuard;
 use HolyMD\Content\ArticleDocument;
+use HolyMD\Content\ArticleRepository;
 use HolyMD\Content\FrontMatter;
-use HolyMD\Content\PageRepository;
 use HolyMD\Http\Csrf;
 use HolyMD\Http\Router;
 use HolyMD\Http\ServerRequest;
-use HolyMD\Render\MarkdownRenderer;
 use PHPUnit\Framework\TestCase;
 
 final class PageControllerTest extends TestCase
@@ -77,7 +76,7 @@ final class PageControllerTest extends TestCase
         self::assertStringContainsString('Terms of Service', $editResponse->body);
 
         // 4. Save draft
-        $repo = new PageRepository($this->root . '/pages');
+        $repo = new ArticleRepository($this->root . '/pages', ArticleRepository::RESERVED_PAGE_SLUGS);
         $page = $repo->read('terms');
         $checksum = hash('sha256', $page->serialize());
 
@@ -121,8 +120,8 @@ final class PageControllerTest extends TestCase
     {
         $guard = new AdminGuard($this->session);
         $csrf = new Csrf($this->session);
-        $repo = new PageRepository($this->root . '/pages');
-        $controller = new PageController($repo, $guard, $csrf, null, new MarkdownRenderer());
+        $repo = new ArticleRepository($this->root . '/pages', ArticleRepository::RESERVED_PAGE_SLUGS);
+        $controller = new PageController($repo, $guard, $csrf);
         return new Router(pages: $controller);
     }
 }

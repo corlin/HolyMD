@@ -25,7 +25,7 @@ $withdraw = in_array('--withdraw', $argv, true);
 $versionIndex = array_search('--version', $argv, true);
 $versionValue = $versionIndex === false ? null : ($argv[$versionIndex + 1] ?? null);
 $publication = PublicationSettings::fromEnvironment();
-$pages = new \HolyMD\Content\PageRepository($root . '/content/pages');
+$pages = new ArticleRepository($root . '/content/pages', ArticleRepository::RESERVED_PAGE_SLUGS);
 
 if (!$dryRun && !$rebuild && !is_string($slug)) {
     fwrite(STDERR, "Usage: holymd-build.php --dry-run | --rebuild | --article <slug>\n");
@@ -58,5 +58,5 @@ if ($rebuild) {
 }
 
 if (!$withdraw && (!is_string($versionValue) || preg_match('/^[a-f0-9]{32}$/', $versionValue) !== 1)) { fwrite(STDERR, "A publish build requires --version <snapshot-id>.\n"); exit(64); }
-$result = $withdraw ? $service->withdraw(new \HolyMD\Publish\ArticleId($slug)) : $service->publish(new \HolyMD\Publish\ArticleId($slug), new VersionId($versionValue));
+$result = $withdraw ? $service->withdraw($slug) : $service->publish($slug, $versionValue);
 fwrite(STDOUT, $result->validation->text() . "\nPublished {$result->manifest->articleCount} article(s).\n");

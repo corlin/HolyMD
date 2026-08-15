@@ -5,12 +5,10 @@ declare(strict_types=1);
 namespace HolyMD\Publish;
 
 use DateTimeImmutable;
-use HolyMD\Admin\VersionId;
 use HolyMD\Admin\VersionService;
 use HolyMD\Content\ArticleDocument;
 use HolyMD\Content\ArticleMetadataValidator;
 use HolyMD\Content\ArticleRepository;
-use HolyMD\Content\PageRepository;
 use HolyMD\Config\PublicationSettings;
 use HolyMD\Render\BuildInput;
 use HolyMD\Render\BuildManifest;
@@ -32,7 +30,7 @@ final readonly class PublishService
         private ?Closure $persist = null,
         private ?string $lockPath = null,
         private ?VersionService $versions = null,
-        private ?PageRepository $pages = null,
+        private ?ArticleRepository $pages = null,
     ) {
     }
 
@@ -48,7 +46,7 @@ final readonly class PublishService
                 if ($this->versions !== null) {
                     $pointer = $document->frontMatter->get('published_version');
                     if (is_string($pointer) && preg_match('/^[a-f0-9]{32}$/', $pointer) === 1) {
-                        $publishedDocument = $this->versions->restore(new VersionId($pointer), $document->slug);
+                        $publishedDocument = $this->versions->restore($pointer, $document->slug);
                     }
                 }
                 $documents[] = $publishedDocument->withFrontMatter($publishedDocument->frontMatter->with('status', 'published'));
@@ -64,17 +62,17 @@ final readonly class PublishService
         }
     }
 
-    public function publish(ArticleId $id, ?VersionId $selectedVersion = null): PublishResult
+    public function publish(string $slug, ?string $selectedVersion = null): PublishResult
     {
-        return $this->build($id, 'published', $selectedVersion);
+        return $this->build($slug, 'published', $selectedVersion);
     }
 
-    public function withdraw(ArticleId $id): PublishResult
+    public function withdraw(string $slug): PublishResult
     {
-        return $this->build($id, 'withdrawn');
+        return $this->build($slug, 'withdrawn');
     }
 
-    private function build(ArticleId $id, string $nextStatus, ?VersionId $selectedVersion = null): PublishResult
+    private function build(string $slug, string $nextStatus, ?string $selectedVersion = null): PublishResult
     {
         $lock = $this->lock();
         $temporaryRoot = dirname($this->liveRoot) . '/.' . basename($this->liveRoot) . '-build-' . bin2hex(random_bytes(6));
@@ -82,19 +80,19 @@ final readonly class PublishService
         $persisted = [];
         $versionsToConfirm = [];
         try {
-            $working = $this->articles->read($id->slug);
+            $working = $this->articles->read($slug);
             $documents = [];
             $updates = [];
             foreach ($this->articles->all() as $document) {
-                if ($document->slug === $id->slug) {
+                if ($document->slug === $slug) {
                     if ($nextStatus === 'published') {
                         $version = $this->versions === null ? null : ($selectedVersion ?? $this->versions->capturePublicationInput($working));
-                        $publicDocument = $version === null ? $working : $this->publicationInput($version, $id->slug);
+                        $publicDocument = $version === null ? $working : $this->publicationInput($version, $slug);
                         if (!$publicDocument instanceof ArticleDocument) throw new RuntimeException('The selected publication version could not be restored.');
                         $documents[] = $publicDocument->withFrontMatter($publicDocument->frontMatter->with('status', 'published'));
                         $frontMatter = $working->frontMatter->with('status', 'published');
                         if ($version !== null) {
-                            $frontMatter = $frontMatter->with('published_version', $version->value);
+                            $frontMatter = $frontMatter->with('published_version', $version);
                             $versionsToConfirm[$working->slug] = $version;
                         }
                         $updates[] = $working->withFrontMatter($frontMatter);
@@ -108,10 +106,10 @@ final readonly class PublishService
                 if ($this->versions !== null) {
                     $pointer = $document->frontMatter->get('published_version');
                     if (is_string($pointer) && preg_match('/^[a-f0-9]{32}$/', $pointer) === 1) {
-                        $publishedDocument = $this->versions->restore(new VersionId($pointer), $document->slug);
+                        $publishedDocument = $this->versions->restore($pointer, $document->slug);
                     } else {
                         $version = $this->versions->capturePublicationInput($document);
-                        $updates[] = $document->withFrontMatter($document->frontMatter->with('published_version', $version->value));
+                        $updates[] = $document->withFrontMatter($document->frontMatter->with('published_version', $version));
                         $versionsToConfirm[$document->slug] = $version;
                     }
                 }
@@ -126,14 +124,14 @@ final readonly class PublishService
                 $persisted[] = $updated->slug;
             }
             $this->publicTree->swap($temporaryRoot, $this->liveRoot);
-            if ($this->versions !== null) foreach ($versionsToConfirm as $slug => $version) $this->versions->confirmPublished($slug, $version);
-            $this->audit($id, $nextStatus, 'published');
+            if ($this->versions !== null) foreach ($versionsToConfirm as $articleSlug => $version) $this->versions->confirmPublished($articleSlug, $version);
+            $this->audit($slug, $nextStatus, 'published');
             return $result;
         } catch (Throwable $exception) {
-            foreach (array_reverse($persisted) as $slug) {
-                try { $this->persist($originals[$slug]); } catch (Throwable) { /* audit retains the failed recovery context */ }
+            foreach (array_reverse($persisted) as $itemSlug) {
+                try { $this->persist($originals[$itemSlug]); } catch (Throwable) { /* audit retains the failed recovery context */ }
             }
-            $this->audit($id, $nextStatus, 'failed', $exception->getMessage());
+            $this->audit($slug, $nextStatus, 'failed', $exception->getMessage());
             throw $exception;
         } finally {
             if (is_dir($temporaryRoot)) $this->remove($temporaryRoot);
@@ -142,7 +140,7 @@ final readonly class PublishService
         }
     }
 
-    private function publicationInput(VersionId $version, string $slug): ArticleDocument
+    private function publicationInput(string $version, string $slug): ArticleDocument
     {
         if ($this->versions === null) throw new RuntimeException('Article version storage is not configured.');
         try {
@@ -217,11 +215,11 @@ final readonly class PublishService
         if (file_put_contents($root . '/.holymd-manifest.json', $json, LOCK_EX) === false) throw new RuntimeException('Unable to write build manifest.');
     }
 
-    private function audit(ArticleId $id, string $action, string $status, ?string $error = null): void
+    private function audit(string $slug, string $action, string $status, ?string $error = null): void
     {
         if ($this->auditRoot === null) return;
         if (!is_dir($this->auditRoot) && !mkdir($this->auditRoot, 0775, true) && !is_dir($this->auditRoot)) return;
-        file_put_contents($this->auditRoot . '/publish.jsonl', json_encode(['article_slug' => $id->slug, 'action' => $action, 'status' => $status, 'error' => $error, 'created_at' => gmdate(DATE_ATOM)], JSON_THROW_ON_ERROR) . "\n", FILE_APPEND | LOCK_EX);
+        file_put_contents($this->auditRoot . '/publish.jsonl', json_encode(['article_slug' => $slug, 'action' => $action, 'status' => $status, 'error' => $error, 'created_at' => gmdate(DATE_ATOM)], JSON_THROW_ON_ERROR) . "\n", FILE_APPEND | LOCK_EX);
     }
 
     private function remove(string $path): void

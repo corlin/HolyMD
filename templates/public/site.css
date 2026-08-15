@@ -138,7 +138,7 @@ h3 { margin: 0; font-size: clamp(1.45rem, 2.5vw, 2rem); }
 .author-box p:not(.eyebrow) { color: var(--ink-soft); }
 .page-intro { min-height: 61vh; padding-top: clamp(3rem, 8vw, 7rem); padding-bottom: 5rem; }
 .page-intro .deck { max-width: 38rem; }
-.about-copy { margin-top: 2rem; }
+.muted { color: var(--ink-soft); }
 .topic-articles { margin-top: 3rem; }
 .site-footer { margin-top: 5rem; padding: 2rem 0; border-top: 1px solid var(--rule); color: var(--ink-soft); font-size: .84rem; }
 .site-footer > div { display: flex; justify-content: space-between; gap: 1rem; align-items: center; }
@@ -218,4 +218,7 @@ body:has(.image-viewer[open]) { overflow: hidden; }
 .prose input[type="checkbox"] { width: auto; margin-right: .45rem; }
 .load-more-wrap { margin-top: 2.5rem; text-align: center; }
 .button-load-more { display: inline-flex; align-items: center; justify-content: center; padding: .75rem 1.75rem; background: var(--paper-deep); color: var(--accent); border: 1px solid var(--rule); border-radius: 4px; font-family: var(--sans); font-size: .92rem; font-weight: 600; cursor: pointer; transition: background .15s ease, border-color .15s ease; }
-.button-load-more:hover { background: var(--paper-soft); border-color: var(--accent); }
+.button-load-more:hover { background: color-mix(in srgb, var(--paper-deep) 80%, var(--accent) 8%); border-color: var(--accent); }
+
+
+

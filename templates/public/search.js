@@ -99,16 +99,20 @@
       empty.textContent = 'No matching articles.';
       results.appendChild(empty);
     } else {
+      var basePath = (document.querySelector('a.wordmark') ? document.querySelector('a.wordmark').getAttribute('href') : '').replace(/\/$/, '');
       hits.slice(0, 12).forEach(function (article) {
         var row = document.createElement('article');
         row.className = 'article-row';
         var body = document.createElement('div');
         var kicker = document.createElement('p');
         kicker.className = 'article-kicker';
-        kicker.textContent = article.date;
+        var time = document.createElement('time');
+        time.dateTime = article.date;
+        time.textContent = article.date;
+        kicker.appendChild(time);
         var heading = document.createElement('h3');
         var link = document.createElement('a');
-        link.href = 'articles/' + encodeURIComponent(article.slug) + '/';
+        link.href = basePath + '/articles/' + encodeURIComponent(article.slug) + '/';
         link.textContent = article.title;
         heading.appendChild(link);
         body.appendChild(kicker);

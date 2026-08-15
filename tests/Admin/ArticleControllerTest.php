@@ -344,7 +344,12 @@ final class ArticleControllerTest extends TestCase
         file_put_contents($this->root . '/articles/first-note.md', "---\ntitle: First note\nslug: first-note\ndate: 2026-08-12\n---\nChanged body\n");
         $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);
 
-        $response = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/restore/' . $version->value, [], ['csrf_token' => 'expected-token']));
+        $response = $router->dispatch(new ServerRequest('GET', '/admin/articles/first-note/edit'));
+        self::assertSame(200, $response->status);
+        self::assertStringContainsString('/admin/articles/first-note/restore/' . $version, $response->body);
+        self::assertStringNotContainsString('Warning', $response->body);
+
+        $response = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/restore/' . $version, [], ['csrf_token' => 'expected-token']));
 
         self::assertSame(303, $response->status);
         self::assertSame("Original body\n", (new ArticleRepository($this->root . '/articles'))->read('first-note')->bodyMarkdown);
@@ -354,7 +359,7 @@ final class ArticleControllerTest extends TestCase
     {
         $versions = new VersionService($this->root . '/versions');
         $document = (new ArticleRepository($this->root . '/articles'))->read('first-note');
-        self::assertSame($versions->capturePublicationInput($document)->value, $versions->capturePublicationInput($document)->value);
+        self::assertSame($versions->capturePublicationInput($document), $versions->capturePublicationInput($document));
         self::assertCount(1, glob($this->root . '/versions/publish-inputs/*.md') ?: []);
         self::assertSame([], $versions->list('first-note'));
     }
@@ -606,7 +611,7 @@ final class ArticleControllerTest extends TestCase
         $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);
 
         self::assertSame([], $versions->list('first-note'));
-        $response = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/restore/' . $secondVersion->value, [], ['csrf_token' => 'expected-token']));
+        $response = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/restore/' . $secondVersion, [], ['csrf_token' => 'expected-token']));
 
         self::assertSame(422, $response->status);
         self::assertSame("Original body\n", (new ArticleRepository($this->root . '/articles'))->read('first-note')->bodyMarkdown);

@@ -11,22 +11,22 @@ final readonly class MySqlGeoProposalStore implements GeoProposalStore
 {
     public function __construct(private PDO $pdo) {}
 
-    public function get(GeoProposalId $id): GeoProposal
+    public function get(string $id): GeoProposal
     {
         $query = $this->pdo->prepare('SELECT geo_proposals.id, geo_proposals.proposal_type, geo_proposals.proposed_metadata, geo_proposals.status, articles.slug, geo_reviews.input_checksum, article_versions.body_checksum FROM geo_proposals INNER JOIN geo_reviews ON geo_reviews.id = geo_proposals.geo_review_id INNER JOIN articles ON articles.id = geo_reviews.article_id INNER JOIN article_versions ON article_versions.id = geo_reviews.article_version_id WHERE geo_proposals.id = ?');
-        $query->execute([$id->value]);
+        $query->execute([$id]);
         $row = $query->fetch();
         if (!is_array($row)) throw new InvalidArgumentException('GEO proposal was not found.');
         $value = json_decode((string) $row['proposed_metadata'], true, 512, JSON_THROW_ON_ERROR);
         if (!is_array($value) && !is_string($value)) throw new RuntimeException('Stored GEO proposal metadata is invalid.');
-        return new GeoProposal(new GeoProposalId((string) $row['id']), (string) $row['slug'], (string) $row['input_checksum'], (string) $row['proposal_type'], $value, (string) $row['status'], (string) $row['body_checksum']);
+        return new GeoProposal((string) $row['id'], (string) $row['slug'], (string) $row['input_checksum'], (string) $row['proposal_type'], $value, (string) $row['status'], (string) $row['body_checksum']);
     }
 
     public function save(GeoProposal $proposal): void
     {
         $json = json_encode($proposal->value, JSON_THROW_ON_ERROR);
         $update = $this->pdo->prepare("UPDATE geo_proposals SET proposed_metadata = ?, proposal_key = ? WHERE id = ? AND status = 'pending'");
-        $update->execute([$json, hash('sha256', $proposal->id->value . ':' . $proposal->type . ':' . $json), $proposal->id->value]);
+        $update->execute([$json, hash('sha256', $proposal->id . ':' . $proposal->type . ':' . $json), $proposal->id]);
         if ($update->rowCount() !== 1) throw new InvalidArgumentException('Only a pending GEO proposal can be edited.');
     }
 
@@ -37,17 +37,17 @@ final readonly class MySqlGeoProposalStore implements GeoProposalStore
         $review->execute([$slug]); $row = $review->fetch(); if (!is_array($row)) return null;
         $query = $this->pdo->prepare('SELECT id FROM geo_proposals WHERE geo_review_id = ? ORDER BY id'); $query->execute([$row['id']]);
         $proposals = [];
-        foreach ($query->fetchAll() as $proposalRow) { $proposal = $this->get(new GeoProposalId((string) $proposalRow['id'])); $proposals[] = ['id' => $proposal->id->value, 'type' => $proposal->type, 'value' => $proposal->value, 'status' => $proposal->status]; }
+        foreach ($query->fetchAll() as $proposalRow) { $proposal = $this->get((string) $proposalRow['id']); $proposals[] = ['id' => $proposal->id, 'type' => $proposal->type, 'value' => $proposal->value, 'status' => $proposal->status]; }
         return ['reviewId' => (int) $row['id'], 'status' => (string) $row['status'], 'failure' => $row['failure_message'] === null ? null : (string) $row['failure_message'], 'proposals' => $proposals];
     }
 
-    public function markAccepted(GeoProposalId $id, string $nextInputChecksum, ?int $administratorId = null): void
+    public function markAccepted(string $id, string $nextInputChecksum, ?int $administratorId = null): void
     {
         if (preg_match('/^[a-f0-9]{64}$/', $nextInputChecksum) !== 1) throw new InvalidArgumentException('GEO proposal checksum is invalid.');
         $this->pdo->beginTransaction();
         try {
             $review = $this->pdo->prepare("SELECT geo_review_id FROM geo_proposals WHERE id = ? AND status = 'pending' FOR UPDATE");
-            $review->execute([$id->value]);
+            $review->execute([$id]);
             $reviewId = $review->fetchColumn();
             if ($reviewId === false) throw new InvalidArgumentException('Only a pending GEO proposal can be decided.');
             $this->mark($id, 'accepted', $administratorId);
@@ -60,7 +60,7 @@ final readonly class MySqlGeoProposalStore implements GeoProposalStore
             throw $exception;
         }
     }
-    public function markRejected(GeoProposalId $id, ?int $administratorId = null): void
+    public function markRejected(string $id, ?int $administratorId = null): void
     {
         $this->pdo->beginTransaction();
         try {
@@ -92,7 +92,7 @@ final readonly class MySqlGeoProposalStore implements GeoProposalStore
             foreach ($review->proposals as $proposal) {
                 $json = json_encode($proposal->value, JSON_THROW_ON_ERROR);
                 $insert->execute([$reviewId, $proposal->type, $json, hash('sha256', $reviewId . ':' . $proposal->type . ':' . $json)]);
-                $persisted[] = $this->get(new GeoProposalId((string) $this->pdo->lastInsertId()));
+                $persisted[] = $this->get((string) $this->pdo->lastInsertId());
             }
             $this->pdo->commit();
         } catch (\Throwable $exception) {
@@ -101,10 +101,14 @@ final readonly class MySqlGeoProposalStore implements GeoProposalStore
         }
         return $persisted;
     }
-    private function mark(GeoProposalId $id, string $status, ?int $administratorId = null): void { $statement = $this->pdo->prepare("UPDATE geo_proposals SET status = ?, decision_by_admin_user_id = ?, decided_at = UTC_TIMESTAMP(6) WHERE id = ? AND status = 'pending'"); $statement->execute([$status, $administratorId, $id->value]); if ($statement->rowCount() !== 1) throw new InvalidArgumentException('Only a pending GEO proposal can be decided.'); }
-    private function auditDecision(GeoProposalId $id, string $status, ?int $administratorId): void
+
+    public function saveReview(GeoReview $review): void {}
+    public function enqueueRetry(string $articleSlug, string $bodyHash, string $reason): void {}
+
+    private function mark(string $id, string $status, ?int $administratorId = null): void { $statement = $this->pdo->prepare("UPDATE geo_proposals SET status = ?, decision_by_admin_user_id = ?, decided_at = UTC_TIMESTAMP(6) WHERE id = ? AND status = 'pending'"); $statement->execute([$status, $administratorId, $id]); if ($statement->rowCount() !== 1) throw new InvalidArgumentException('Only a pending GEO proposal can be decided.'); }
+    private function auditDecision(string $id, string $status, ?int $administratorId): void
     {
         $statement = $this->pdo->prepare("INSERT INTO audit_events (admin_user_id, event_type, subject_type, subject_id, event_data) VALUES (?, 'geo_proposal_decided', 'geo_proposal', ?, ?)");
-        $statement->execute([$administratorId, (int) $id->value, json_encode(['status' => $status], JSON_THROW_ON_ERROR)]);
+        $statement->execute([$administratorId, (int) $id, json_encode(['status' => $status], JSON_THROW_ON_ERROR)]);
     }
 }

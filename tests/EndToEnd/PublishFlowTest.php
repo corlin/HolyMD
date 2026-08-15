@@ -12,7 +12,6 @@ use HolyMD\Geo\AiClient;
 use HolyMD\Geo\AiResponse;
 use HolyMD\Geo\GeoReviewService;
 use HolyMD\Geo\InMemoryGeoProposalStore;
-use HolyMD\Publish\ArticleId;
 use HolyMD\Publish\AtomicPublicTree;
 use HolyMD\Publish\PublishService;
 use HolyMD\Render\StaticBuilder;
@@ -78,7 +77,7 @@ final class PublishFlowTest extends TestCase
         $repository->write($published);
 
         // --- Publish via PublishService ---
-        $result = $this->publishService()->publish(new ArticleId('php-84-features'));
+        $result = $this->publishService()->publish('php-84-features');
 
         self::assertSame(1, $result->manifest->articleCount);
 
@@ -114,7 +113,7 @@ final class PublishFlowTest extends TestCase
             "---\ntitle: Removed Article\nslug: removed\ndate: 2026-08-11\nstatus: withdrawn\n---\nGone from discovery.\n",
         );
 
-        $this->publishService()->publish(new ArticleId('active'));
+        $this->publishService()->publish('active');
 
         $currentRoot = $this->released();
         $feedJson = (string) file_get_contents($currentRoot . '/feed.json');

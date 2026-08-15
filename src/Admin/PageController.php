@@ -5,47 +5,31 @@ declare(strict_types=1);
 namespace HolyMD\Admin;
 
 use HolyMD\Auth\AdminGuard;
-use HolyMD\Auth\Unauthorized;
 use HolyMD\Content\ArticleDocument;
+use HolyMD\Content\ArticleRepository;
 use HolyMD\Content\FrontMatter;
-use HolyMD\Content\PageRepository;
 use HolyMD\Http\Csrf;
 use HolyMD\Http\Response;
 use HolyMD\Http\ServerRequest;
 use HolyMD\Publish\PublishService;
-use HolyMD\Render\MarkdownRenderer;
 use InvalidArgumentException;
 
 final readonly class PageController
 {
+    use AdminAuthorizationTrait;
+
     public function __construct(
-        private PageRepository $pages,
+        private ArticleRepository $pages,
         private AdminGuard $guard,
         private Csrf $csrf,
         private ?PublishService $publisher = null,
-        private ?MarkdownRenderer $markdownRenderer = null,
     ) {
-    }
-
-    public function previewMarkdown(ServerRequest $request): Response
-    {
-        if (($response = $this->authorizeMutation($request)) !== null) {
-            return $response;
-        }
-        $body = $request->input('body');
-        if (!is_string($body) || strlen($body) > 1024 * 1024) {
-            return Response::json(['error' => 'Markdown preview requires a body no larger than 1 MB.'], 422);
-        }
-
-        return Response::json(['html' => ($this->markdownRenderer ?? new MarkdownRenderer())->render($body)]);
     }
 
     public function index(ServerRequest $request): Response
     {
-        try {
-            $this->guard->requireAdministrator();
-        } catch (Unauthorized) {
-            return Response::json(['error' => 'Administrator authentication is required.'], 401);
+        if (($auth = $this->requireAdmin()) !== null) {
+            return $auth;
         }
         $pages = $this->pages->all();
         $csrfToken = $this->csrf->token();
@@ -56,10 +40,8 @@ final readonly class PageController
 
     public function new(ServerRequest $request): Response
     {
-        try {
-            $this->guard->requireAdministrator();
-        } catch (Unauthorized) {
-            return Response::json(['error' => 'Administrator authentication is required.'], 401);
+        if (($auth = $this->requireAdmin()) !== null) {
+            return $auth;
         }
         $csrfToken = $this->csrf->token();
         $today = (new \DateTimeImmutable('today'))->format('Y-m-d');
@@ -108,14 +90,14 @@ final readonly class PageController
 
     public function edit(ServerRequest $request): Response
     {
+        if (($auth = $this->requireAdmin()) !== null) {
+            return $auth;
+        }
         try {
-            $this->guard->requireAdministrator();
             if (preg_match('#^/admin/pages/([a-z0-9]+(?:-[a-z0-9]+)*)/edit$#', $request->path, $matches) !== 1) {
                 throw new InvalidArgumentException('Invalid page edit route.');
             }
             $page = $this->pages->read($matches[1]);
-        } catch (Unauthorized) {
-            return Response::json(['error' => 'Administrator authentication is required.'], 401);
         } catch (InvalidArgumentException) {
             return Response::json(['error' => 'Page not found.'], 404);
         }
@@ -234,28 +216,5 @@ final readonly class PageController
             throw new InvalidArgumentException('Invalid page draft route.');
         }
         return $matches[1];
-    }
-
-    private function safeSlug(string $title): string
-    {
-        $slug = preg_replace('/[^a-z0-9]+/i', '-', strtolower(trim($title)));
-        $slug = trim((string) $slug, '-');
-        if ($slug === '') {
-            throw new InvalidArgumentException('A page slug could not be derived from the title.');
-        }
-        return $slug;
-    }
-
-    private function authorizeMutation(ServerRequest $request): ?Response
-    {
-        try {
-            $this->guard->requireAdministrator();
-        } catch (Unauthorized) {
-            return Response::json(['error' => 'Administrator authentication is required.'], 401);
-        }
-        if (!$this->csrf->valid($request)) {
-            return Response::json(['error' => 'CSRF token is invalid.'], 419);
-        }
-        return null;
     }
 }

@@ -16,39 +16,39 @@ final readonly class VersionService
     {
     }
 
-    private function recordPublishedSnapshot(ArticleDocument $document): VersionId
+    private function recordPublishedSnapshot(ArticleDocument $document): string
     {
         $id = $this->writeSnapshot($document, $this->versionsRoot);
-        $this->recordIndex($document->slug, $id->value);
+        $this->recordIndex($document->slug, $id);
         return $id;
     }
 
-    public function captureReviewInput(ArticleDocument $document): VersionId
+    public function captureReviewInput(ArticleDocument $document): string
     {
         return $this->writeSnapshot($document, $this->reviewInputsRoot());
     }
 
-    public function capturePublicationInput(ArticleDocument $document): VersionId
+    public function capturePublicationInput(ArticleDocument $document): string
     {
         return $this->writeSnapshot($document, $this->publicationInputsRoot());
     }
 
-    public function restore(VersionId $id, ?string $expectedSlug = null): ArticleDocument
+    public function restore(string $id, ?string $expectedSlug = null): ArticleDocument
     {
         return $this->restoreFromPath($id, $this->path($id), $expectedSlug);
     }
 
-    public function restoreReviewInput(VersionId $id, ?string $expectedSlug = null): ArticleDocument
+    public function restoreReviewInput(string $id, ?string $expectedSlug = null): ArticleDocument
     {
         return $this->restoreFromPath($id, $this->reviewInputPath($id), $expectedSlug);
     }
 
-    public function restorePublicationInput(VersionId $id, ?string $expectedSlug = null): ArticleDocument
+    public function restorePublicationInput(string $id, ?string $expectedSlug = null): ArticleDocument
     {
         return $this->restoreFromPath($id, $this->publicationInputPath($id), $expectedSlug);
     }
 
-    public function stagePublished(VersionId $id): void
+    public function stagePublished(string $id): void
     {
         if (is_file($this->path($id))) return;
         $source = $this->publicationInputPath($id);
@@ -59,13 +59,13 @@ final readonly class VersionService
         if (!copy($source, $this->path($id))) throw new RuntimeException('Unable to stage the published article version.');
     }
 
-    public function confirmPublished(string $articleSlug, VersionId $id): void
+    public function confirmPublished(string $articleSlug, string $id): void
     {
         $this->restore($id, $articleSlug);
-        $this->recordIndex($articleSlug, $id->value);
+        $this->recordIndex($articleSlug, $id);
     }
 
-    private function restoreFromPath(VersionId $id, string $path, ?string $expectedSlug): ArticleDocument
+    private function restoreFromPath(string $id, string $path, ?string $expectedSlug): ArticleDocument
     {
         if (!is_file($path)) {
             throw new InvalidArgumentException('Article snapshot was not found.');
@@ -87,14 +87,14 @@ final readonly class VersionService
         return $document;
     }
 
-    private function writeSnapshot(ArticleDocument $document, string $directory): VersionId
+    private function writeSnapshot(ArticleDocument $document, string $directory): string
     {
         if (!is_dir($directory) && !mkdir($directory, 0775, true) && !is_dir($directory)) {
             throw new RuntimeException('Unable to create the article snapshot directory.');
         }
         $serialized = $document->serialize();
-        $id = new VersionId(substr(hash('sha256', $serialized), 0, 32));
-        $path = $directory . '/' . $id->value . '.md';
+        $id = substr(hash('sha256', $serialized), 0, 32);
+        $path = $directory . '/' . $id . '.md';
         if (!is_file($path) && file_put_contents($path, $serialized, LOCK_EX) === false) {
             throw new RuntimeException('Unable to write article snapshot.');
         }
@@ -109,27 +109,27 @@ final readonly class VersionService
             $pointer = $document->frontMatter->get('published_version');
             if (is_string($pointer) && preg_match('/^[a-f0-9]{32}$/', $pointer) === 1) {
                 try {
-                    $this->restore(new VersionId($pointer), $document->slug);
+                    $this->restore($pointer, $document->slug);
                     continue;
                 } catch (InvalidArgumentException) {
                     // Re-pin a missing or invalid legacy pointer below.
                 }
             }
             $version = $this->recordPublishedSnapshot($document);
-            $articles->write($document->withFrontMatter($document->frontMatter->with('published_version', $version->value)));
+            $articles->write($document->withFrontMatter($document->frontMatter->with('published_version', $version)));
             $pinned++;
         }
         return $pinned;
     }
 
-    /** @return list<VersionId> */
+    /** @return list<string> */
     public function list(string $articleSlug): array
     {
         $indexed = $this->indexedIds($articleSlug);
         return $indexed ?? [];
     }
 
-    /** @return ?list<VersionId> */
+    /** @return ?list<string> */
     private function indexedIds(string $articleSlug): ?array
     {
         $raw = is_file($this->indexPath()) ? file_get_contents($this->indexPath()) : false;
@@ -146,9 +146,9 @@ final readonly class VersionService
             return null;
         }
         $ids = array_values(array_filter($ids, static fn (mixed $id): bool => is_string($id) && preg_match('/^[a-f0-9]{32}$/', $id) === 1));
-        $ids = array_values(array_filter($ids, fn (string $id): bool => is_file($this->path(new VersionId($id)))));
+        $ids = array_values(array_filter($ids, fn (string $id): bool => is_file($this->path($id))));
         rsort($ids, SORT_STRING);
-        return array_map(static fn (string $id): VersionId => new VersionId($id), $ids);
+        return $ids;
     }
 
     private function recordIndex(string $slug, string $versionId): void
@@ -182,9 +182,9 @@ final readonly class VersionService
         return $this->versionsRoot . '/index.json';
     }
 
-    private function path(VersionId $id): string
+    private function path(string $id): string
     {
-        return $this->versionsRoot . '/' . $id->value . '.md';
+        return $this->versionsRoot . '/' . $id . '.md';
     }
 
     private function reviewInputsRoot(): string
@@ -192,9 +192,9 @@ final readonly class VersionService
         return $this->versionsRoot . '/review-inputs';
     }
 
-    private function reviewInputPath(VersionId $id): string
+    private function reviewInputPath(string $id): string
     {
-        return $this->reviewInputsRoot() . '/' . $id->value . '.md';
+        return $this->reviewInputsRoot() . '/' . $id . '.md';
     }
 
     private function publicationInputsRoot(): string
@@ -202,8 +202,8 @@ final readonly class VersionService
         return $this->versionsRoot . '/publish-inputs';
     }
 
-    private function publicationInputPath(VersionId $id): string
+    private function publicationInputPath(string $id): string
     {
-        return $this->publicationInputsRoot() . '/' . $id->value . '.md';
+        return $this->publicationInputsRoot() . '/' . $id . '.md';
     }
 }

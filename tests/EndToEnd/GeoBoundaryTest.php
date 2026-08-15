@@ -19,7 +19,6 @@ use HolyMD\Geo\InMemoryGeoProposalStore;
 use HolyMD\Http\Csrf;
 use HolyMD\Http\Router;
 use HolyMD\Http\ServerRequest;
-use HolyMD\Publish\ArticleId;
 use HolyMD\Publish\AtomicPublicTree;
 use HolyMD\Publish\PublishService;
 use HolyMD\Render\StaticBuilder;
@@ -179,7 +178,7 @@ final class GeoBoundaryTest extends TestCase
                 new PublicationSettings('GEO Boundary E2E', 'https://geo-boundary.test', 'Boundary Author', 'About the boundary author.'),
                 $pubRoot . '/audit',
             );
-            $service->publish(new ArticleId('deep-dive'));
+            $service->publish('deep-dive');
 
             // Step 4: Final body check
             $final = $repository->read('deep-dive');
