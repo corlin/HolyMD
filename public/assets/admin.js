@@ -312,7 +312,7 @@
     output.dataset.geoDiff = '';
 
     // Visual rendering for structured types (FAQ, Entities, etc.)
-    if (proposal.type === 'faq' && Array.isArray(proposal.value)) {
+    if ((proposal.type === 'faq' || proposal.type === 'faq_candidates') && Array.isArray(proposal.value)) {
       const faqList = document.createElement('div');
       faqList.className = 'geo-faq-preview';
       proposal.value.forEach(qa => {
@@ -485,6 +485,8 @@
       const pendingCards = Array.from(document.querySelectorAll('.geo-proposal-card:not(.is-accepted):not(.is-rejected)'));
       if (pendingCards.length === 0) return;
       acceptAllButton.disabled = true;
+      const originalHtml = acceptAllButton.innerHTML;
+      acceptAllButton.textContent = 'Applying…';
       let anyFilled = false;
       try {
         for (const card of pendingCards) {
@@ -516,6 +518,7 @@
         status.textContent = 'Batch accept failed: ' + (error.message || 'Error');
       } finally {
         acceptAllButton.disabled = false;
+        acceptAllButton.innerHTML = originalHtml;
       }
     };
   }

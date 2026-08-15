@@ -13,7 +13,7 @@ final class StreamHttpTransport implements HttpTransport {
         $this->execute=Closure::fromCallable($execute??static function(array $options):array {
             $handle=curl_init();if($handle===false)throw new GeoAiException('GEO provider transport could not be initialized.',false);
             try { curl_setopt_array($handle,$options);$succeeded=curl_exec($handle)!==false;return ['succeeded'=>$succeeded,'status'=>(int)curl_getinfo($handle,CURLINFO_RESPONSE_CODE),'error'=>curl_error($handle),'errno'=>curl_errno($handle)]; }
-            finally { curl_close($handle); }
+            finally { if (\PHP_VERSION_ID < 80500) @curl_close($handle); }
         });
     }
 
