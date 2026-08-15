@@ -31,7 +31,7 @@ final readonly class MySqlGeoProposalStore implements GeoProposalStore
     }
 
     /** @return array{reviewId:int,status:string,failure:?string,proposals:list<array<string,mixed>>}|null */
-    public function latestForArticle(string $slug): ?array
+    public function latestReview(string $slug): ?array
     {
         $review = $this->pdo->prepare('SELECT geo_reviews.id, geo_reviews.status, geo_reviews.failure_message FROM geo_reviews INNER JOIN articles ON articles.id = geo_reviews.article_id WHERE articles.slug = ? ORDER BY geo_reviews.id DESC LIMIT 1');
         $review->execute([$slug]); $row = $review->fetch(); if (!is_array($row)) return null;
@@ -73,7 +73,7 @@ final readonly class MySqlGeoProposalStore implements GeoProposalStore
         }
     }
     /** Sync deployments (no queue) persist a completed review and its proposals inline, mirroring the worker's rows, so accept/edit/reject keep working on later requests. @return list<GeoProposal> */
-    public function persistSyncReview(ArticleDocument $document, string $snapshotPath, GeoReview $review): array
+    public function recordReview(ArticleDocument $document, ?string $snapshotPath, GeoReview $review): array
     {
         $metadata = hash('sha256', json_encode($document->frontMatter->all(), JSON_THROW_ON_ERROR));
         $checksum = hash('sha256', $document->serialize());
@@ -81,7 +81,7 @@ final readonly class MySqlGeoProposalStore implements GeoProposalStore
         try {
             $this->pdo->prepare("INSERT INTO articles (source_path, slug, state, metadata_checksum) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id), slug=VALUES(slug), state=VALUES(state), metadata_checksum=VALUES(metadata_checksum)")->execute([$document->sourcePath, $document->slug, (string) $document->frontMatter->get('status', 'draft'), $metadata]);
             $articleId = (int) $this->pdo->lastInsertId();
-            if (preg_match('#^review-inputs/[a-f0-9]{32}\.md$#', $snapshotPath) !== 1) throw new InvalidArgumentException('A GEO review requires an immutable review input snapshot.');
+            if (!is_string($snapshotPath) || preg_match('#^review-inputs/[a-f0-9]{32}\.md$#', $snapshotPath) !== 1) throw new InvalidArgumentException('A GEO review requires an immutable review input snapshot.');
             $this->pdo->prepare('INSERT INTO article_versions (article_id, snapshot_path, content_checksum, body_checksum) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)')->execute([$articleId, $snapshotPath, $checksum, hash('sha256', $document->bodyMarkdown)]);
             $versionId = (int) $this->pdo->lastInsertId();
             $requestKey = hash('sha256', $articleId . ':' . $versionId . ':' . $checksum);
@@ -101,8 +101,6 @@ final readonly class MySqlGeoProposalStore implements GeoProposalStore
         }
         return $persisted;
     }
-    public function saveReview(GeoReview $review): void { throw new RuntimeException('Queue GEO reviews are persisted by the worker transaction.'); }
-    public function enqueueRetry(string $articleSlug, string $bodyHash, string $reason): void { throw new RuntimeException('Queue retries are managed by the MySQL worker.'); }
     private function mark(GeoProposalId $id, string $status, ?int $administratorId = null): void { $statement = $this->pdo->prepare("UPDATE geo_proposals SET status = ?, decision_by_admin_user_id = ?, decided_at = UTC_TIMESTAMP(6) WHERE id = ? AND status = 'pending'"); $statement->execute([$status, $administratorId, $id->value]); if ($statement->rowCount() !== 1) throw new InvalidArgumentException('Only a pending GEO proposal can be decided.'); }
     private function auditDecision(GeoProposalId $id, string $status, ?int $administratorId): void
     {

@@ -40,7 +40,7 @@ final class QueueProducerTest extends TestCase
     {
         $schema = (string) file_get_contents(__DIR__ . '/../../database/schema.sql');
         $queue = (string) file_get_contents(__DIR__ . '/../../src/Queue/MySqlJobQueue.php');
-        $worker = (string) file_get_contents(__DIR__ . '/../../bin/holymd-worker.php');
+        $worker = (string) file_get_contents(__DIR__ . '/../../src/Queue/Worker.php');
         $build = (string) file_get_contents(__DIR__ . '/../../bin/holymd-build.php');
 
         self::assertStringContainsString('`article_version_id` BIGINT UNSIGNED NULL', $schema);

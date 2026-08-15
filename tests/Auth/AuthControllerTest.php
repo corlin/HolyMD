@@ -146,6 +146,6 @@ final class AuthControllerTest extends TestCase
 
     private function router(): Router
     {
-        return Router::auth(new AuthController($this->pdo, $this->session, new Csrf($this->session)));
+        return new Router(auth: new AuthController($this->pdo, $this->session, new Csrf($this->session)));
     }
 }

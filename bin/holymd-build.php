@@ -7,6 +7,7 @@ use HolyMD\Content\ArticleDocument;
 use HolyMD\Content\ArticleRepository;
 use HolyMD\Admin\VersionId;
 use HolyMD\Admin\VersionService;
+use HolyMD\Config\PublicationSettings;
 use HolyMD\Publish\AtomicPublicTree;
 use HolyMD\Publish\PublishService;
 use HolyMD\Render\StaticBuilder;
@@ -17,19 +18,17 @@ $root = dirname(__DIR__);
 \HolyMD\Config\Settings::fromEnvironment($root);
 $articles = new ArticleRepository($root . '/content/articles');
 $dryRun = in_array('--dry-run', $argv, true);
+$rebuild = in_array('--rebuild', $argv, true);
 $articleIndex = array_search('--article', $argv, true);
 $slug = $articleIndex === false ? null : ($argv[$articleIndex + 1] ?? null);
 $withdraw = in_array('--withdraw', $argv, true);
 $versionIndex = array_search('--version', $argv, true);
 $versionValue = $versionIndex === false ? null : ($argv[$versionIndex + 1] ?? null);
-$siteName = (string) (\HolyMD\Config\Env::get('HOLYMD_SITE_NAME') ?: 'HolyMD');
-$siteUrl = (string) (\HolyMD\Config\Env::get('HOLYMD_SITE_URL') ?: 'https://example.invalid');
-$authorName = (string) (\HolyMD\Config\Env::get('HOLYMD_AUTHOR_NAME') ?: 'Author');
-$about = (string) (\HolyMD\Config\Env::get('HOLYMD_ABOUT') ?: '');
-$siteLanguage = (string) (\HolyMD\Config\Env::get('HOLYMD_SITE_LANGUAGE') ?: 'zh-CN');
+$publication = PublicationSettings::fromEnvironment();
+$pages = new \HolyMD\Content\PageRepository($root . '/content/pages');
 
-if (!$dryRun && !is_string($slug)) {
-    fwrite(STDERR, "Usage: holymd-build.php --dry-run | --article <slug>\n");
+if (!$dryRun && !$rebuild && !is_string($slug)) {
+    fwrite(STDERR, "Usage: holymd-build.php --dry-run | --rebuild | --article <slug>\n");
     exit(64);
 }
 
@@ -37,8 +36,7 @@ $published = array_values(array_filter($articles->all(), static fn (ArticleDocum
 if ($dryRun) {
     $temporary = sys_get_temp_dir() . '/holymd-dry-run-' . bin2hex(random_bytes(6));
     try {
-        $basePath = '/' . trim((string) \HolyMD\Config\Env::get('HOLYMD_BASE_PATH'), '/');
-        $manifest = (new StaticBuilder())->build(new \HolyMD\Render\BuildInput($published, $siteName, $siteUrl, $authorName, $about, \HolyMD\Config\Env::get('HOLYMD_LLMS_TXT') === '1', $siteLanguage, null, $basePath === '/' ? '' : $basePath), $temporary);
+        $manifest = (new StaticBuilder())->build(new \HolyMD\Render\BuildInput($published, $publication, pages: $pages->all()), $temporary);
         fwrite(STDOUT, "PASS: dry-run build rendered {$manifest->articleCount} published article(s) and " . count($manifest->files) . " file(s).\n");
     } finally {
         if (is_dir($temporary)) {
@@ -51,7 +49,14 @@ if ($dryRun) {
 }
 
 $versions = new VersionService($root . '/content/versions');
-$service = new PublishService($articles, new StaticBuilder(), new AtomicPublicTree(), (string) (\HolyMD\Config\Env::get('HOLYMD_PUBLIC_TREE') ?: $root . '/public/.holymd-current'), $siteName, $siteUrl, $authorName, $about, \HolyMD\Config\Env::get('HOLYMD_LLMS_TXT') === '1', $root . '/content/audit', null, $root . '/content/holymd-publish.lock', $siteLanguage, $versions);
+$service = new PublishService($articles, new StaticBuilder(), new AtomicPublicTree(), (string) (\HolyMD\Config\Env::get('HOLYMD_PUBLIC_TREE') ?: $root . '/public/.holymd-current'), $publication, $root . '/content/audit', null, $root . '/content/holymd-publish.lock', $versions, $pages);
+
+if ($rebuild) {
+    $result = $service->rebuild();
+    fwrite(STDOUT, $result->validation->text() . "\nRebuilt site with {$result->manifest->articleCount} published article(s) and " . count($result->manifest->files) . " file(s).\n");
+    exit(0);
+}
+
 if (!$withdraw && (!is_string($versionValue) || preg_match('/^[a-f0-9]{32}$/', $versionValue) !== 1)) { fwrite(STDERR, "A publish build requires --version <snapshot-id>.\n"); exit(64); }
 $result = $withdraw ? $service->withdraw(new \HolyMD\Publish\ArticleId($slug)) : $service->publish(new \HolyMD\Publish\ArticleId($slug), new VersionId($versionValue));
 fwrite(STDOUT, $result->validation->text() . "\nPublished {$result->manifest->articleCount} article(s).\n");

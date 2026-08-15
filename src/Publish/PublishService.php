@@ -11,6 +11,7 @@ use HolyMD\Content\ArticleDocument;
 use HolyMD\Content\ArticleMetadataValidator;
 use HolyMD\Content\ArticleRepository;
 use HolyMD\Content\PageRepository;
+use HolyMD\Config\PublicationSettings;
 use HolyMD\Render\BuildInput;
 use HolyMD\Render\BuildManifest;
 use HolyMD\Render\StaticBuilder;
@@ -26,15 +27,10 @@ final readonly class PublishService
         private StaticBuilder $builder,
         private AtomicPublicTree $publicTree,
         private string $liveRoot,
-        private string $siteName,
-        private string $siteUrl,
-        private string $authorName,
-        private string $about,
-        private bool $generateLlmsTxt = false,
+        private PublicationSettings $settings,
         private ?string $auditRoot = null,
         private ?Closure $persist = null,
         private ?string $lockPath = null,
-        private string $siteLanguage = 'zh-CN',
         private ?VersionService $versions = null,
         private ?PageRepository $pages = null,
     ) {
@@ -58,15 +54,9 @@ final readonly class PublishService
                 $documents[] = $publishedDocument->withFrontMatter($publishedDocument->frontMatter->with('status', 'published'));
             }
             $published = array_values(array_filter($documents, static fn (ArticleDocument $document): bool => $document->frontMatter->get('status') === 'published'));
-            $validation = $this->validate($published);
-            if (!$validation->isValid()) throw new InvalidArgumentException($validation->text());
-            if (!mkdir($temporaryRoot, 0775, true) && !is_dir($temporaryRoot)) throw new RuntimeException('Unable to create temporary build directory.');
-            $pagesList = $this->pages !== null ? $this->pages->all() : [];
-            $manifest = $this->builder->build(new BuildInput($published, $this->siteName, $this->siteUrl, $this->authorName, $this->about, $this->generateLlmsTxt, $this->siteLanguage, null, $this->basePath(), $pagesList), $temporaryRoot);
-            $manifest = $this->writeRedirects($temporaryRoot, $published, $manifest);
-            $this->writeManifest($temporaryRoot, $manifest);
+            $result = $this->renderSite($published, $temporaryRoot);
             $this->publicTree->swap($temporaryRoot, $this->liveRoot);
-            return new PublishResult($manifest, $validation);
+            return $result;
         } finally {
             if (is_dir($temporaryRoot)) $this->remove($temporaryRoot);
             flock($lock, LOCK_UN);
@@ -128,13 +118,7 @@ final readonly class PublishService
                 $documents[] = $publishedDocument->withFrontMatter($publishedDocument->frontMatter->with('status', 'published'));
             }
             $published = array_values(array_filter($documents, static fn (ArticleDocument $document): bool => $document->frontMatter->get('status') === 'published'));
-            $validation = $this->validate($published);
-            if (!$validation->isValid()) throw new InvalidArgumentException($validation->text());
-            if (!mkdir($temporaryRoot, 0775, true) && !is_dir($temporaryRoot)) throw new RuntimeException('Unable to create temporary build directory.');
-            $pagesList = $this->pages !== null ? $this->pages->all() : [];
-            $manifest = $this->builder->build(new BuildInput($published, $this->siteName, $this->siteUrl, $this->authorName, $this->about, $this->generateLlmsTxt, $this->siteLanguage, null, $this->basePath(), $pagesList), $temporaryRoot);
-            $manifest = $this->writeRedirects($temporaryRoot, $published, $manifest);
-            $this->writeManifest($temporaryRoot, $manifest);
+            $result = $this->renderSite($published, $temporaryRoot);
             if ($this->versions !== null) foreach ($versionsToConfirm as $version) $this->versions->stagePublished($version);
             foreach ($updates as $updated) {
                 $originals[$updated->slug] = $this->articles->read($updated->slug);
@@ -144,7 +128,7 @@ final readonly class PublishService
             $this->publicTree->swap($temporaryRoot, $this->liveRoot);
             if ($this->versions !== null) foreach ($versionsToConfirm as $slug => $version) $this->versions->confirmPublished($slug, $version);
             $this->audit($id, $nextStatus, 'published');
-            return new PublishResult($manifest, $validation);
+            return $result;
         } catch (Throwable $exception) {
             foreach (array_reverse($persisted) as $slug) {
                 try { $this->persist($originals[$slug]); } catch (Throwable) { /* audit retains the failed recovery context */ }
@@ -169,14 +153,22 @@ final readonly class PublishService
     }
 
     /** @param list<ArticleDocument> $published */
+    private function renderSite(array $published, string $temporaryRoot): PublishResult
+    {
+        $validation = $this->validate($published);
+        if (!$validation->isValid()) throw new InvalidArgumentException($validation->text());
+        if (!mkdir($temporaryRoot, 0775, true) && !is_dir($temporaryRoot)) throw new RuntimeException('Unable to create temporary build directory.');
+        $pages = $this->pages?->all() ?? [];
+        $manifest = $this->builder->build(new BuildInput($published, $this->settings, pages: $pages), $temporaryRoot);
+        $manifest = $this->writeRedirects($temporaryRoot, $published, $manifest);
+        $this->writeManifest($temporaryRoot, $manifest);
+        return new PublishResult($manifest, $validation);
+    }
+
+    /** @param list<ArticleDocument> $published */
     private function validate(array $published): ValidationReport
     {
-        $errors = [];
-        $host = strtolower((string) parse_url($this->siteUrl, PHP_URL_HOST));
-        if ($this->siteUrl === '' || $host === '' || str_contains(strtolower($this->siteUrl), 'replace_with_') || $host === 'example.com' || str_ends_with($host, '.example.com') || str_contains($host, 'example.invalid')) $errors[] = 'The public site URL must be configured and cannot use a placeholder domain.';
-        if (trim($this->siteName) === '' || str_starts_with(strtolower(trim($this->siteName)), 'replace_with_') || in_array(strtolower(trim($this->siteName)), ['holymd', 'site', 'your publication'], true)) $errors[] = 'The public site name must be configured and cannot use a placeholder value.';
-        if (trim($this->authorName) === '' || str_starts_with(strtolower(trim($this->authorName)), 'replace_with_') || in_array(strtolower(trim($this->authorName)), ['author', 'your name'], true)) $errors[] = 'The public author name must be configured and cannot use a placeholder value.';
-        if (preg_match('/^[a-z]{2,3}(?:-[A-Z]{2})?$/', $this->siteLanguage) !== 1) $errors[] = 'The public site language must be a valid BCP 47 language tag.';
+        $errors = $this->settings->validationErrors();
         $slugs = [];
         $redirects = [];
         foreach ($published as $article) {
@@ -204,7 +196,7 @@ final readonly class PublishService
                 $path = $temporaryRoot . '/articles/' . $oldSlug . '/index.html';
                 $target = '/articles/' . $article->slug . '/';
                 if (!is_dir(dirname($path)) && !mkdir(dirname($path), 0775, true) && !is_dir(dirname($path))) throw new RuntimeException('Unable to create redirect directory.');
-                $html = '<!doctype html><meta http-equiv="refresh" content="0; url=' . htmlspecialchars($target, ENT_QUOTES, 'UTF-8') . '"><link rel="canonical" href="' . htmlspecialchars(rtrim($this->siteUrl, '/') . $target, ENT_QUOTES, 'UTF-8') . '">';
+                $html = '<!doctype html><meta http-equiv="refresh" content="0; url=' . htmlspecialchars($target, ENT_QUOTES, 'UTF-8') . '"><link rel="canonical" href="' . htmlspecialchars(rtrim($this->settings->siteUrl, '/') . $target, ENT_QUOTES, 'UTF-8') . '">';
                 if (file_put_contents($path, $html, LOCK_EX) === false) throw new RuntimeException('Unable to write redirect.');
                 $files[] = 'articles/' . $oldSlug . '/index.html';
                 // 301 map consumed by the PHP router; the meta-refresh page above
@@ -217,12 +209,6 @@ final readonly class PublishService
             $files[] = '.holymd-redirects.json';
         }
         return new BuildManifest($manifest->articleCount, $files);
-    }
-
-    private function basePath(): string
-    {
-        $base = '/' . trim((string) \HolyMD\Config\Env::get('HOLYMD_BASE_PATH'), '/');
-        return $base === '/' ? '' : $base;
     }
 
     private function writeManifest(string $root, BuildManifest $manifest): void
