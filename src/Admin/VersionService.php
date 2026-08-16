@@ -16,6 +16,47 @@ final readonly class VersionService
     {
     }
 
+    public function recordPublished(ArticleDocument $document): string
+    {
+        return $this->recordPublishedSnapshot($document);
+    }
+
+    public function purge(string $slug): void
+    {
+        $lock = fopen($this->versionsRoot . '/index.lock', 'c');
+        if ($lock === false || !flock($lock, LOCK_EX)) {
+            if (is_resource($lock)) fclose($lock);
+            return;
+        }
+        try {
+            $raw = is_file($this->indexPath()) ? file_get_contents($this->indexPath()) : false;
+            $index = [];
+            if (is_string($raw) && $raw !== '') {
+                $decoded = json_decode($raw, true);
+                if (is_array($decoded)) $index = $decoded;
+            }
+            $ids = $index[$slug] ?? [];
+            if (is_array($ids)) {
+                foreach ($ids as $id) {
+                    if (is_string($id) && preg_match('/^[a-f0-9]{32}$/', $id) === 1) {
+                        $path = $this->path($id);
+                        if (is_file($path)) {
+                            @unlink($path);
+                        }
+                    }
+                }
+            }
+            unset($index[$slug]);
+            $temporary = $this->versionsRoot . '/index.json.tmp';
+            if (file_put_contents($temporary, json_encode($index, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR), LOCK_EX) !== false) {
+                rename($temporary, $this->indexPath());
+            }
+        } finally {
+            flock($lock, LOCK_UN);
+            fclose($lock);
+        }
+    }
+
     private function recordPublishedSnapshot(ArticleDocument $document): string
     {
         $id = $this->writeSnapshot($document, $this->versionsRoot);

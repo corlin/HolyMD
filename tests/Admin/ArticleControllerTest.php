@@ -457,6 +457,7 @@ final class ArticleControllerTest extends TestCase
         $response = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/delete', [], ['csrf_token' => 'expected-token', 'confirm_slug' => 'first-note']));
         self::assertSame(303, $response->status);
         self::assertFalse((new ArticleRepository($this->root . '/articles'))->exists('first-note'));
+        self::assertEmpty((new VersionService($this->root . '/versions'))->list('first-note'));
 
         file_put_contents($this->root . '/articles/public.md', "---\ntitle: Public\nslug: public\ndate: 2026-08-12\nstatus: published\n---\nBody\n");
         $response = $router->dispatch(new ServerRequest('POST', '/admin/articles/public/delete', [], ['csrf_token' => 'expected-token', 'confirm_slug' => 'public']));

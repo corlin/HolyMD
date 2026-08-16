@@ -16,11 +16,67 @@ $skipLabel = 'Skip to content';
 $activeNav = 'writing';
 require __DIR__ . '/_header.php';
 ?>
-  <main id="main-content">
-    <section class="hero shell"><p class="eyebrow">Personal notes from <?= htmlspecialchars($authorName) ?></p><h1><?= htmlspecialchars($siteName) ?></h1><?php if ($about !== ''): ?><p class="intro"><?= nl2br(htmlspecialchars($about), false) ?></p><?php endif; ?></section>
-    <section class="shell section" aria-labelledby="featured-heading"><?php if ($articles !== []): $featured = $articles[0]; ?><div class="section-heading"><p class="eyebrow">Selected</p><h2 id="featured-heading">Featured writing</h2></div><article class="feature-card"><p class="article-kicker"><time datetime="<?= htmlspecialchars((string) $featured->frontMatter->get('date')) ?>"><?= htmlspecialchars((string) $featured->frontMatter->get('date')) ?></time></p><h3><a href="<?= $basePath ?>/articles/<?= htmlspecialchars($featured->slug) ?>/"><?= htmlspecialchars($featured->title) ?></a></h3><?php $summary = (string) $featured->frontMatter->get('summary', ''); if ($summary !== ''): ?><p><?= htmlspecialchars($summary) ?></p><?php endif; ?><a class="text-link" href="<?= $basePath ?>/articles/<?= htmlspecialchars($featured->slug) ?>/">Read the essay <span class="icon" aria-hidden="true">arrow_forward</span></a></article><?php else: ?><div class="section-heading"><p class="eyebrow">Writing</p><h2 id="featured-heading">No published writing yet</h2></div><?php endif; ?></section>
-    <section class="shell section" aria-labelledby="latest-heading"><div class="section-heading"><p class="eyebrow">Archive</p><h2 id="latest-heading">Latest writing</h2></div><div id="latest-articles" class="article-list"><?php foreach (array_slice($articles, 1, 10) as $article): require __DIR__ . '/_article_row.php'; endforeach; ?></div><?php if (count($articles) > 11): ?><div class="load-more-wrap"><button type="button" id="load-more-button" class="button-load-more">Load more writing</button></div><?php endif; ?></section>
-    <?php if ($topics !== []): ?><section class="shell section topic-section" aria-labelledby="topics-heading"><div class="section-heading"><p class="eyebrow">Browse</p><h2 id="topics-heading">Topics</h2></div><ul class="topic-list"><?php foreach ($topics as $topic => $topicArticles): $slug = (string) ($topicSlugs[$topic] ?? ''); ?><li><a href="<?= $basePath ?>/topics/<?= htmlspecialchars($slug, ENT_QUOTES, 'UTF-8') ?>/"><?= htmlspecialchars((string) $topic) ?><span><?= count($topicArticles) ?></span></a></li><?php endforeach; ?></ul></section><?php endif; ?>
-    <section class="shell section search-section" aria-labelledby="search-heading"><div class="section-heading"><p class="eyebrow">Search</p><h2 id="search-heading">Find writing</h2></div><div class="search-field" hidden><span class="icon" aria-hidden="true">search</span><input type="search" id="site-search" aria-label="Search articles" hidden></div><div id="search-results" class="article-list" hidden></div></section>
+  <main id="main-content" class="shell editorial-flow">
+    <h1 class="sr-only"><?= htmlspecialchars($siteName) ?></h1>
+    <?php if ($about !== ''): ?>
+      <div class="editorial-bio">
+        <p class="intro"><?= nl2br(htmlspecialchars($about), false) ?></p>
+      </div>
+    <?php endif; ?>
+
+    <?php if ($articles !== []): ?>
+      <?php $featured = $articles[0]; ?>
+      <section class="editorial-featured" aria-labelledby="featured-heading">
+        <h2 id="featured-heading" class="sr-only">Featured writing</h2>
+        <article class="feature-card">
+          <div class="feature-card-header">
+            <span class="feature-badge">Featured</span>
+            <time class="article-date" datetime="<?= htmlspecialchars((string) $featured->frontMatter->get('date')) ?>"><?= htmlspecialchars((string) $featured->frontMatter->get('date')) ?></time>
+          </div>
+          <h3><a href="<?= $basePath ?>/articles/<?= htmlspecialchars($featured->slug) ?>/"><?= htmlspecialchars($featured->title) ?></a></h3>
+          <?php $summary = (string) $featured->frontMatter->get('summary', ''); if ($summary !== ''): ?>
+            <p class="feature-summary"><?= htmlspecialchars($summary) ?></p>
+          <?php endif; ?>
+          <a class="text-link" href="<?= $basePath ?>/articles/<?= htmlspecialchars($featured->slug) ?>/">
+            Read the essay <span class="icon" aria-hidden="true">arrow_forward</span>
+          </a>
+        </article>
+      </section>
+
+      <?php $latestBatch = array_slice($articles, 1, 10); ?>
+      <?php if ($latestBatch !== []): ?>
+        <section class="editorial-latest" aria-labelledby="latest-heading">
+          <div class="stream-heading">
+            <h2 id="latest-heading">Latest writing</h2>
+          </div>
+          <div id="latest-articles" class="article-list">
+            <?php foreach ($latestBatch as $article): require __DIR__ . '/_article_row.php'; endforeach; ?>
+          </div>
+          <?php if (count($articles) > 11): ?>
+            <div class="load-more-wrap">
+              <button type="button" id="load-more-button" class="button-load-more">Load more writing</button>
+            </div>
+          <?php endif; ?>
+        </section>
+      <?php endif; ?>
+    <?php else: ?>
+      <section class="editorial-empty">
+        <h2 id="featured-heading">No published writing yet</h2>
+        <p class="muted">Check back soon for new essays and notes.</p>
+      </section>
+    <?php endif; ?>
+
+    <?php if ($topics !== []): ?>
+      <section class="editorial-topics" aria-labelledby="topics-heading">
+        <div class="stream-heading">
+          <h2 id="topics-heading">Topics</h2>
+        </div>
+        <ul class="topic-list">
+          <?php foreach ($topics as $topic => $topicArticles): $slug = (string) ($topicSlugs[$topic] ?? ''); ?>
+            <li><a href="<?= $basePath ?>/topics/<?= htmlspecialchars($slug, ENT_QUOTES, 'UTF-8') ?>/"><?= htmlspecialchars((string) $topic) ?><span><?= count($topicArticles) ?></span></a></li>
+          <?php endforeach; ?>
+        </ul>
+      </section>
+    <?php endif; ?>
   </main>
 <?php require __DIR__ . '/_footer.php'; ?>

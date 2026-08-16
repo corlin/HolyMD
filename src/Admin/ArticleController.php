@@ -10,6 +10,8 @@ use HolyMD\Content\ArticleDocument;
 use HolyMD\Content\ArticleMetadataValidator;
 use HolyMD\Content\ArticleRepository;
 use HolyMD\Content\FrontMatter;
+use HolyMD\Geo\GeoAutoMerge;
+use HolyMD\Geo\GeoConfiguration;
 use HolyMD\Http\Csrf;
 use HolyMD\Http\Response;
 use HolyMD\Http\ServerRequest;
@@ -62,6 +64,7 @@ final readonly class ArticleController
             if (!is_string($expectedChecksum) || !$this->articles->writeIfUnchanged($document, $expectedChecksum)) {
                 return Response::json(['error' => 'The article changed in another editor session. Reload before saving again.'], 409);
             }
+            $this->maybeEnqueueGeoReview($document);
             return Response::json(['saved' => true, 'checksum' => hash('sha256', $document->serialize())]);
         } catch (InvalidArgumentException $exception) {
             return Response::json(['error' => $exception->getMessage()], 422);
@@ -118,6 +121,7 @@ final readonly class ArticleController
             $document = new ArticleDocument($slug, $title, $body, $frontMatter, $slug . '.md');
             $this->assertValidMetadata($document);
             $this->articles->write($document);
+            $this->maybeEnqueueGeoReview($document);
             return Response::redirect('/admin/articles/' . rawurlencode($slug) . '/edit');
         } catch (InvalidArgumentException $exception) {
             return Response::json(['error' => $exception->getMessage()], 422);
@@ -226,6 +230,7 @@ final readonly class ArticleController
             if ($article->frontMatter->get('status', 'draft') !== 'draft') throw new InvalidArgumentException('Only draft articles can be deleted. Withdraw a published article first.');
             if ($request->input('confirm_slug') !== $article->slug) throw new InvalidArgumentException('Type the article slug to confirm deletion.');
             $this->articles->delete($article->slug);
+            $this->versions->purge($article->slug);
             return Response::redirect('/admin/articles');
         } catch (InvalidArgumentException $exception) {
             return Response::json(['error' => $exception->getMessage()], 422);
@@ -473,6 +478,27 @@ final readonly class ArticleController
             if (in_array($oldSlug, $publishedSlugs, true)) {
                 throw new InvalidArgumentException(sprintf('Redirect slug "%s" collides with a published route.', $oldSlug));
             }
+        }
+    }
+
+    private function maybeEnqueueGeoReview(ArticleDocument $document): void
+    {
+        if ($this->queue === null || !GeoConfiguration::fromEnvironment()->configured) {
+            return;
+        }
+        $fm = $document->frontMatter;
+        $hasEmptyField = GeoAutoMerge::isEmpty($fm->get('summary'))
+            || GeoAutoMerge::isEmpty($fm->get('entities'))
+            || GeoAutoMerge::isEmpty($fm->get('faq'))
+            || GeoAutoMerge::isEmpty($fm->get('alt_text'));
+        if (!$hasEmptyField) {
+            return;
+        }
+        try {
+            $version = $this->versions->captureReviewInput($document);
+            $this->queue->enqueueGeoReview($document, 'review-inputs/' . $version . '.md');
+        } catch (\Throwable) {
+            // Silently ignore queueing conflicts or background errors
         }
     }
 }

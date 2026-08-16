@@ -23,6 +23,7 @@ final readonly class PageController
         private AdminGuard $guard,
         private Csrf $csrf,
         private ?PublishService $publisher = null,
+        private ?VersionService $versions = null,
     ) {
     }
 
@@ -103,6 +104,7 @@ final readonly class PageController
         }
         $pageChecksum = hash('sha256', $page->serialize());
         $csrfToken = $this->csrf->token();
+        $versions = $this->versions?->list($page->slug) ?? [];
         ob_start();
         require dirname(__DIR__, 2) . '/templates/admin/pages/edit.php';
         return new Response(200, (string) ob_get_clean(), ['Content-Type' => 'text/html; charset=utf-8']);
@@ -145,9 +147,37 @@ final readonly class PageController
             $nextStatus = $action === 'publish' ? 'published' : 'draft';
             $updated = $page->withFrontMatter($page->frontMatter->with('status', $nextStatus));
             $this->pages->write($updated);
+            if ($action === 'publish' && $this->versions !== null) {
+                $versionId = $this->versions->recordPublished($updated);
+                $updated = $updated->withFrontMatter($updated->frontMatter->with('published_version', $versionId));
+                $this->pages->write($updated);
+            }
             if ($this->publisher !== null) {
                 $this->publisher->rebuild();
             }
+            return Response::redirect('/admin/pages/' . rawurlencode($slug) . '/edit');
+        } catch (InvalidArgumentException $exception) {
+            return Response::json(['error' => $exception->getMessage()], 422);
+        }
+    }
+
+    public function restore(ServerRequest $request): Response
+    {
+        if (($response = $this->authorizeMutation($request)) !== null) {
+            return $response;
+        }
+        if (preg_match('#^/admin/pages/([a-z0-9]+(?:-[a-z0-9]+)*)/restore/([a-f0-9]{32})$#', $request->path, $matches) !== 1) {
+            return Response::json(['error' => 'Invalid page restore route.'], 422);
+        }
+        try {
+            $slug = $matches[1];
+            $versionId = $matches[2];
+            $existing = $this->pages->read($slug);
+            if ($this->versions === null) {
+                throw new InvalidArgumentException('Version service is unavailable.');
+            }
+            $restored = $this->versions->restore($versionId, $slug);
+            $this->pages->write($restored->withFrontMatter($restored->frontMatter->with('status', 'draft')));
             return Response::redirect('/admin/pages/' . rawurlencode($slug) . '/edit');
         } catch (InvalidArgumentException $exception) {
             return Response::json(['error' => $exception->getMessage()], 422);
@@ -165,14 +195,14 @@ final readonly class PageController
         try {
             $slug = $matches[1];
             $page = $this->pages->read($slug);
+            if ($page->frontMatter->get('status', 'draft') !== 'draft') {
+                throw new InvalidArgumentException('Only draft pages can be deleted. Withdraw a published page first.');
+            }
             if ($request->input('confirm_slug') !== $page->slug) {
                 throw new InvalidArgumentException('Type the page slug to confirm deletion.');
             }
-            $wasPublished = $page->frontMatter->get('status') === 'published';
             $this->pages->delete($slug);
-            if ($wasPublished && $this->publisher !== null) {
-                $this->publisher->rebuild();
-            }
+            $this->versions?->purge($slug);
             return Response::redirect('/admin/pages');
         } catch (InvalidArgumentException $exception) {
             return Response::json(['error' => $exception->getMessage()], 422);

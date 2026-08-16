@@ -48,6 +48,18 @@ final class GeoReviewServiceTest extends TestCase
             (new GeoReviewService(new RecordingAiClient(json_encode(['proposals' => [['type' => 'metadata', 'value' => [$field => 'rewrite']]], 'findings' => []], JSON_THROW_ON_ERROR))))->review($document);
         }
     }
+
+    public function test_review_handles_raw_string_value_json(): void
+    {
+        $client = new RecordingAiClient('{"proposals":[{"type":"summary","value_json":"A plain text summary without quotes"},{"type":"entities","value_json":"PHP\nMarkdown\nStatic"}],"findings":["Clean notes."]}');
+        $document = new ArticleDocument('first-note', 'First note', "# Exact saved body\n", new FrontMatter(['title' => 'First note', 'slug' => 'first-note', 'date' => '2026-08-12']), '/articles/first-note.md');
+
+        $review = (new GeoReviewService($client))->review($document);
+
+        self::assertSame('summary', $review->proposals[0]->type);
+        self::assertSame('A plain text summary without quotes', $review->proposals[0]->value);
+        self::assertSame(['PHP', 'Markdown', 'Static'], $review->proposals[1]->value);
+    }
 }
 
 final class RecordingAiClient implements AiClient

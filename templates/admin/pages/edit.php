@@ -67,14 +67,29 @@ $activeNav = 'pages';
   <aside class="right-rail">
     <h2>Page details</h2>
     <p class="muted">Public route: <code>/<?= $escape($page->slug) ?>/</code></p>
-    <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--line);">
-      <h2>Delete page</h2>
-      <form method="post" action="<?= $path('/admin/pages/' . rawurlencode($page->slug) . '/delete') ?>" onsubmit="return prompt('Type <?= $escape($page->slug) ?> to confirm deletion:') === '<?= $escape($page->slug) ?>';">
-        <input type="hidden" name="csrf_token" value="<?= $escape($csrfToken) ?>">
-        <input type="hidden" name="confirm_slug" value="<?= $escape($page->slug) ?>">
-        <button type="submit" class="danger" style="width:100%;"><span class="icon" aria-hidden="true">delete</span>Delete page</button>
-      </form>
-    </div>
+
+    <details class="version-history-block">
+      <summary class="eyebrow-summary">Version history (<?= count($versions) ?>)</summary>
+      <h2>Published versions</h2>
+      <p class="muted">A restorable Markdown version is created only after a successful publish.</p>
+      <ul class="versions">
+        <?php foreach ($versions as $version): ?>
+          <li><form method="post" action="<?= $path('/admin/pages/' . rawurlencode($page->slug) . '/restore/' . $version) ?>"><input type="hidden" name="csrf_token" value="<?= $escape($csrfToken) ?>"><button type="submit"><span class="icon" aria-hidden="true">history</span>Restore <?= $escape(substr($version, 0, 8)) ?></button></form></li>
+        <?php endforeach; ?>
+      </ul>
+    </details>
+
+    <?php if ($status === 'draft'): ?>
+      <details class="danger-zone">
+        <summary>Delete draft</summary>
+        <p>This permanently removes the Markdown page and all its published snapshots. Type <strong><?= $escape($page->slug) ?></strong> to confirm.</p>
+        <form method="post" action="<?= $path('/admin/pages/' . rawurlencode($page->slug) . '/delete') ?>">
+          <input type="hidden" name="csrf_token" value="<?= $escape($csrfToken) ?>">
+          <input name="confirm_slug" required autocomplete="off" placeholder="<?= $escape($page->slug) ?>">
+          <button class="danger" type="submit"><span class="icon" aria-hidden="true">delete</span>Delete draft</button>
+        </form>
+      </details>
+    <?php endif; ?>
   </aside>
 </main>
 <?php

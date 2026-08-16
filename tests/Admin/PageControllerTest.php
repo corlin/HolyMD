@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace HolyMD\Tests\Admin;
 
 use HolyMD\Admin\PageController;
+use HolyMD\Admin\VersionService;
 use HolyMD\Auth\AdminGuard;
 use HolyMD\Content\ArticleDocument;
 use HolyMD\Content\ArticleRepository;
@@ -17,6 +18,7 @@ use PHPUnit\Framework\TestCase;
 final class PageControllerTest extends TestCase
 {
     private string $root;
+    private VersionService $versionService;
     /** @var array<string, mixed> */
     private array $session = [];
 
@@ -34,6 +36,13 @@ final class PageControllerTest extends TestCase
         }
         if (is_dir($this->root . '/pages')) {
             rmdir($this->root . '/pages');
+        }
+        $vFiles = glob($this->root . '/versions/*') ?: [];
+        foreach ($vFiles as $file) {
+            unlink($file);
+        }
+        if (is_dir($this->root . '/versions')) {
+            rmdir($this->root . '/versions');
         }
         if (is_dir($this->root)) {
             rmdir($this->root);
@@ -99,21 +108,39 @@ final class PageControllerTest extends TestCase
         ]));
         self::assertSame(303, $publishResponse->status);
         self::assertSame('published', $repo->read('terms')->frontMatter->get('status'));
+        $versions = $this->versionService->list('terms');
+        self::assertCount(1, $versions);
+        $v1 = $versions[0];
 
-        // 6. Withdraw page
+        // 6. Delete when published is rejected
+        $deletePublished = $router->dispatch(new ServerRequest('POST', '/admin/pages/terms/delete', [], [
+            'csrf_token' => 'test-csrf',
+            'confirm_slug' => 'terms',
+        ]));
+        self::assertSame(422, $deletePublished->status);
+
+        // 7. Withdraw page
         $withdrawResponse = $router->dispatch(new ServerRequest('POST', '/admin/pages/terms/withdraw', [], [
             'csrf_token' => 'test-csrf',
         ]));
         self::assertSame(303, $withdrawResponse->status);
         self::assertSame('draft', $repo->read('terms')->frontMatter->get('status'));
 
-        // 7. Delete page
+        // 8. Restore version
+        $restoreResponse = $router->dispatch(new ServerRequest('POST', '/admin/pages/terms/restore/' . $v1, [], [
+            'csrf_token' => 'test-csrf',
+        ]));
+        self::assertSame(303, $restoreResponse->status);
+        self::assertSame('Terms of Service Updated', $repo->read('terms')->title);
+
+        // 9. Delete page (cascading purge versions)
         $deleteResponse = $router->dispatch(new ServerRequest('POST', '/admin/pages/terms/delete', [], [
             'csrf_token' => 'test-csrf',
             'confirm_slug' => 'terms',
         ]));
         self::assertSame(303, $deleteResponse->status);
         self::assertFalse($repo->exists('terms'));
+        self::assertEmpty($this->versionService->list('terms'));
     }
 
     private function router(): Router
@@ -121,7 +148,8 @@ final class PageControllerTest extends TestCase
         $guard = new AdminGuard($this->session);
         $csrf = new Csrf($this->session);
         $repo = new ArticleRepository($this->root . '/pages', ArticleRepository::RESERVED_PAGE_SLUGS);
-        $controller = new PageController($repo, $guard, $csrf);
+        $this->versionService = new VersionService($this->root . '/versions');
+        $controller = new PageController($repo, $guard, $csrf, versions: $this->versionService);
         return new Router(pages: $controller);
     }
 }

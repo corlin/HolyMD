@@ -58,6 +58,7 @@ final readonly class Router
         if ($this->pages !== null && $request->method === 'GET' && preg_match('#^/admin/pages/[a-z0-9]+(?:-[a-z0-9]+)*/edit$#', $request->path) === 1) return $this->pages->edit($request);
         if ($this->pages !== null && $request->method === 'POST' && preg_match('#^/admin/pages/[a-z0-9]+(?:-[a-z0-9]+)*/draft$#', $request->path) === 1) return $this->pages->saveDraft($request);
         if ($this->pages !== null && $request->method === 'POST' && preg_match('#^/admin/pages/[a-z0-9-]+/(publish|withdraw)$#', $request->path) === 1) return $this->pages->publish($request);
+        if ($this->pages !== null && $request->method === 'POST' && preg_match('#^/admin/pages/[a-z0-9-]+/restore/[a-f0-9]{32}$#', $request->path) === 1) return $this->pages->restore($request);
         if ($this->pages !== null && $request->method === 'POST' && preg_match('#^/admin/pages/[a-z0-9-]+/delete$#', $request->path) === 1) return $this->pages->delete($request);
         return Response::json(['error' => 'Not found.'], 404);
     }

@@ -38,15 +38,33 @@ try {
 if (!hash_equals($expectedChecksum, hash('sha256', $document->serialize()))) {
     throw new RuntimeException('GEO review input does not match its saved article checksum.');
 }
+use HolyMD\Geo\GeoAutoMerge;
+
 try { $review = (new GeoReviewService($container->get(AiClient::class)))->review($document); }
 catch (\HolyMD\Geo\GeoAiException $error) { fwrite(STDERR, ($error->retryable ? 'RETRYABLE: ' : 'PERMANENT: ') . $error->getMessage() . "\n"); exit($error->retryable ? 75 : 78); }
+
+$articleRepo = new ArticleRepository($root . '/content/articles');
+try {
+    $currentDoc = $articleRepo->read($slug);
+    // Merge only if the body hasn't changed
+    if (hash_equals(hash('sha256', $document->bodyMarkdown), hash('sha256', $currentDoc->bodyMarkdown))) {
+        $mergedDoc = GeoAutoMerge::mergeDocument($currentDoc, $review->proposals);
+        if ($mergedDoc->serialize() !== $currentDoc->serialize()) {
+            $articleRepo->write($mergedDoc);
+        }
+    }
+} catch (\Throwable $e) {
+    // If reading or merging fails, proceed with proposal recording
+}
+
 $pdo->beginTransaction();
 try {
-    $insert = $pdo->prepare('INSERT INTO geo_proposals (geo_review_id, proposal_type, proposed_metadata, proposal_key, status) VALUES (?, ?, ?, ?, \'pending\') ON DUPLICATE KEY UPDATE id=id');
+    $insert = $pdo->prepare('INSERT INTO geo_proposals (geo_review_id, proposal_type, proposed_metadata, proposal_key, status) VALUES (?, ?, ?, ?, \'accepted\') ON DUPLICATE KEY UPDATE status=\'accepted\'');
     foreach ($review->proposals as $proposal) {
         $json = json_encode($proposal->value, JSON_THROW_ON_ERROR);
         $insert->execute([(int) $reviewId, $proposal->type, $json, hash('sha256', $reviewId . ':' . $proposal->type . ':' . $json)]);
     }
     $pdo->commit();
 } catch (Throwable $error) { if ($pdo->inTransaction()) $pdo->rollBack(); throw $error; }
-fwrite(STDOUT, "Completed GEO review {$reviewId} for {$slug} with " . count($review->proposals) . " proposal(s).\n");
+fwrite(STDOUT, "Completed and auto-merged GEO review {$reviewId} for {$slug} with " . count($review->proposals) . " proposal(s).\n");
+

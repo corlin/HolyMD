@@ -66,28 +66,25 @@ $activeNav = 'articles';
         if ($isStringList) return implode("\n", $value);
         return json_encode($value, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
     };
-    $geoField = static function (string $key, string $label, string $hint) use ($article, $escape, $publicationFormId, $metadataValue): string {
-        $html = '<div class="geo-field" data-geo-field="' . $key . '"><label>' . $escape($label) . '<textarea name="' . $key . '" data-metadata-input form="' . $publicationFormId . '">' . $escape($metadataValue($key)) . '</textarea></label>';
-        $html .= '<p class="muted">' . $escape($hint) . '</p><ol class="geo-field-suggestions" data-geo-suggestions aria-label="Suggested ' . $escape($label) . ' values"></ol></div>';
-        return $html;
+    $metaField = static function (string $key, string $label, string $hint) use ($article, $escape, $publicationFormId, $metadataValue): string {
+        return '<div class="meta-field geo-field" data-geo-field="' . $key . '" data-meta-field="' . $key . '"><label>' . $escape($label) . '<textarea name="' . $key . '" data-metadata-input form="' . $publicationFormId . '">' . $escape($metadataValue($key)) . '</textarea></label><p class="muted">' . $escape($hint) . '</p></div>';
     };
     ?>
     <?php require dirname(__DIR__) . '/geo-panel.php'; ?>
 
-    <details class="metadata-block" open>
-      <summary class="eyebrow-summary">Metadata</summary>
-      <h2>Front matter</h2>
-      <p class="muted">Summary, topics and citations feed llms.txt, JSON-LD and search. List fields take one item per line; structured values use JSON.</p>
-      <?= $geoField('summary', 'Summary', 'One or two sentences describing the article.') ?>
-      <label>Topics (one per line)<textarea name="topics" data-metadata-input form="<?= $publicationFormId ?>"><?= $escape($metadataValue('topics')) ?></textarea></label>
-      <?= $geoField('entities', 'Entities', 'One entity per line.') ?>
-      <?= $geoField('faq', 'FAQ', 'Question/answer pairs as JSON once the field is structured.') ?>
-      <?= $geoField('sources', 'Sources', 'One URL per line.') ?>
-      <?= $geoField('alt_text', 'Alt text', 'One description per line, matching image order.') ?>
-      <?= $geoField('hierarchy', 'Hierarchy', 'Outline text, or JSON once the field is structured.') ?>
-      <?= $geoField('internal_links', 'Internal links', 'One link per line.') ?>
-      <label>Previous slugs (one per line)<textarea name="previous_slugs" data-metadata-input form="<?= $publicationFormId ?>"><?= $escape($metadataValue('previous_slugs')) ?></textarea></label>
-      <?= $geoField('structured_data', 'Structured data', 'JSON object.') ?>
+    <details class="metadata-block">
+      <summary class="eyebrow-summary">✨ 智能元数据（Front Matter）</summary>
+      <p class="muted">保存或发布时，缺失的字段将由 GEO 模型自动静默填充。你也可以在此直接手工微调。</p>
+      <?= $metaField('summary', 'Summary（文章摘要）', '用于 RSS、llms.txt 和 OpenGraph 描述。') ?>
+      <label>Topics（分类/话题）<textarea name="topics" data-metadata-input form="<?= $publicationFormId ?>"><?= $escape($metadataValue('topics')) ?></textarea></label>
+      <?= $metaField('entities', 'Entities（命名实体/关键词）', '每行一个关键词，用于搜索引擎结构化理解。') ?>
+      <?= $metaField('faq', 'FAQ（常见问答候选）', 'JSON 格式问答对。') ?>
+      <?= $metaField('sources', 'Sources（引用来源）', '每行一条 URL。') ?>
+      <?= $metaField('alt_text', 'Alt text（图片描述）', '每行一条图片描述。') ?>
+      <?= $metaField('hierarchy', 'Hierarchy（大纲结构）', '大纲结构或 JSON。') ?>
+      <?= $metaField('internal_links', 'Internal links（内链推荐）', '每行一条站点内链。') ?>
+      <label>Previous slugs（历史别名跳转）<textarea name="previous_slugs" data-metadata-input form="<?= $publicationFormId ?>"><?= $escape($metadataValue('previous_slugs')) ?></textarea></label>
+      <?= $metaField('structured_data', 'Structured data（JSON-LD）', '标准结构化数据对象。') ?>
     </details>
 
     <details class="version-history-block">
@@ -103,10 +100,10 @@ $activeNav = 'articles';
     <?php if ($status === 'draft'): ?>
       <details class="danger-zone">
         <summary>Delete draft</summary>
-        <p>This permanently removes the Markdown file. Type <strong><?= $escape($article->slug) ?></strong> to confirm.</p>
+        <p>This permanently removes the Markdown file and all its published snapshots. Type <strong><?= $escape($article->slug) ?></strong> to confirm.</p>
         <form method="post" action="<?= $path('/admin/articles/' . rawurlencode($article->slug) . '/delete') ?>">
           <input type="hidden" name="csrf_token" value="<?= $escape($csrfToken) ?>">
-          <input name="confirm_slug" required autocomplete="off">
+          <input name="confirm_slug" required autocomplete="off" placeholder="<?= $escape($article->slug) ?>">
           <button class="danger" type="submit"><span class="icon" aria-hidden="true">delete</span>Delete draft</button>
         </form>
       </details>

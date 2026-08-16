@@ -245,7 +245,7 @@
   const panel = document.querySelector('[data-geo-panel]');
   if (!panel || !geoApi) return;
   const slug = panel.dataset.articleSlug;
-  const csrf = panel.querySelector('[data-geo-csrf]').value;
+  const csrf = panel.querySelector('[data-geo-csrf]')?.value || '';
   const status = panel.querySelector('[data-geo-review-status]');
   const reviewButton = panel.querySelector('[data-geo-review]');
 
@@ -260,424 +260,122 @@
     return payload;
   };
 
-  const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
-  const isWebUrl = value => { try { const parsed = new URL(value); return parsed.protocol === 'http:' || parsed.protocol === 'https:'; } catch { return false; } };
-  const FIELD_BY_TYPE = {summary: 'summary', entities: 'entities', faq_candidates: 'faq', sources: 'sources', internal_links: 'internal_links', alt_text: 'alt_text', hierarchy: 'hierarchy', structured_data: 'structured_data'};
-
-  const isUntargeted = proposal => {
-    if (proposal.type === 'hierarchy') return true;
-    if (proposal.type === 'sources') return typeof proposal.value === 'string' && !isWebUrl(proposal.value);
-    if (proposal.type === 'structured_data') {
-      if (typeof proposal.value === 'string') { try { return !isObject(JSON.parse(proposal.value)); } catch { return true; } }
-      return !isObject(proposal.value);
-    }
-    return false;
+  const FIELD_MAP = {
+    summary: 'summary',
+    entities: 'entities',
+    faq_candidates: 'faq',
+    alt_text: 'alt_text',
+    sources: 'sources',
+    internal_links: 'internal_links',
+    structured_data: 'structured_data',
   };
 
-  const proposalCard = proposal => {
-    const item = document.createElement('li');
-    item.className = 'geo-proposal-card' + (proposal.status === 'accepted' ? ' is-accepted' : (proposal.status === 'rejected' ? ' is-rejected' : ''));
-    item.dataset.proposalId = proposal.id;
-    item.dataset.proposalValue = typeof proposal.value === 'string' ? proposal.value : JSON.stringify(proposal.value, null, 2);
-    item._geoProposal = proposal;
-
-    const header = document.createElement('div');
-    header.className = 'geo-card-header';
-    const tag = document.createElement('span');
-    tag.className = 'geo-type-tag';
-    tag.textContent = proposal.type;
-    header.append(tag);
-
-    const fieldKey = FIELD_BY_TYPE[proposal.type];
-    const targetInput = fieldKey ? document.querySelector(`[data-metadata-input][name="${fieldKey}"]`) : null;
-    const currentVal = targetInput ? targetInput.value.trim() : '';
-
-    if (proposal.status === 'pending') {
-      const badge = document.createElement('span');
-      badge.className = 'geo-diff-badge ' + (currentVal ? 'badge-replace' : 'badge-new');
-      badge.textContent = currentVal ? 'Replace' : 'New';
-      header.append(badge);
-    }
-
-    if (proposal.status === 'accepted' || proposal.status === 'rejected') {
-      const statusPill = document.createElement('span');
-      statusPill.className = 'geo-status-pill ' + proposal.status;
-      statusPill.textContent = proposal.status === 'accepted' ? 'Accepted ✓' : 'Rejected';
-      header.append(statusPill);
-    }
-    item.append(header);
-
-    const output = document.createElement('output');
-    output.className = 'geo-card-body';
-    output.dataset.geoDiff = '';
-
-    // Visual rendering for structured types (FAQ, Entities, etc.)
-    if ((proposal.type === 'faq' || proposal.type === 'faq_candidates') && Array.isArray(proposal.value)) {
-      const faqList = document.createElement('div');
-      faqList.className = 'geo-faq-preview';
-      proposal.value.forEach(qa => {
-        const qaItem = document.createElement('div');
-        qaItem.className = 'geo-faq-item';
-        const qEl = document.createElement('div');
-        qEl.className = 'geo-faq-q';
-        qEl.textContent = 'Q: ' + (qa.question || '');
-        const aEl = document.createElement('div');
-        aEl.className = 'geo-faq-a';
-        aEl.textContent = 'A: ' + (qa.answer || '');
-        qaItem.append(qEl, aEl);
-        faqList.append(qaItem);
-      });
-      output.append(faqList);
-    } else if ((proposal.type === 'entities' || proposal.type === 'topics') && Array.isArray(proposal.value)) {
-      const pillList = document.createElement('div');
-      pillList.className = 'geo-pill-list';
-      proposal.value.forEach(val => {
-        const pill = document.createElement('span');
-        pill.className = 'geo-pill';
-        pill.textContent = val;
-        pillList.append(pill);
-      });
-      output.append(pillList);
-    } else if (currentVal && proposal.status === 'pending') {
-      const diffBox = document.createElement('div');
-      diffBox.className = 'geo-diff-box';
-      const curRow = document.createElement('div');
-      curRow.className = 'geo-diff-row';
-      curRow.innerHTML = '<span class="geo-diff-label">Current value</span><div class="geo-diff-current">' + currentVal.replace(/</g, '&lt;') + '</div>';
-      const propRow = document.createElement('div');
-      propRow.className = 'geo-diff-row';
-      const propText = typeof proposal.value === 'string' ? proposal.value : JSON.stringify(proposal.value, null, 2);
-      propRow.innerHTML = '<span class="geo-diff-label">Proposed value</span><div class="geo-diff-proposed">' + propText.replace(/</g, '&lt;') + '</div>';
-      diffBox.append(curRow, propRow);
-      output.append(diffBox);
-    } else {
-      output.textContent = typeof proposal.value === 'string' ? proposal.value : JSON.stringify(proposal.value, null, 2);
-    }
-    item.append(output);
-
-    if (proposal.status !== 'accepted' && proposal.status !== 'rejected') {
-      const actions = document.createElement('div');
-      actions.className = 'geo-card-actions';
-      const fillable = proposal.type === 'metadata' || !isUntargeted(proposal);
-      (fillable ? ['accept', 'reject', 'edit'] : ['reject']).forEach(action => {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.dataset.action = action;
-        button.className = 'btn-geo-' + action;
-        button.textContent = action === 'accept' ? (proposal.type === 'metadata' ? 'Fill & accept' : (currentVal ? 'Replace & accept' : 'Fill & accept')) : (action === 'reject' ? 'Reject' : 'Edit');
-        actions.append(button);
-      });
-      item.append(actions);
-    }
-    return item;
+  const fillValue = proposal => {
+    if (proposal.type === 'hierarchy') return null;
+    const value = proposal.value;
+    if (typeof proposal.value === 'string') return value;
+    if (Array.isArray(value) && value.every(item => typeof item === 'string')) return value.join('\n');
+    return JSON.stringify(value, null, 2);
   };
 
-  const updateSummaryBar = proposals => {
-    const summaryBar = panel.querySelector('[data-geo-summary-bar]');
-    const countEl = panel.querySelector('[data-geo-pending-count]');
-    if (!summaryBar || !countEl) return;
-    const pending = proposals.filter(p => p.status === 'pending');
-    if (pending.length > 0) {
-      summaryBar.hidden = false;
-      countEl.textContent = pending.length + ' proposal' + (pending.length > 1 ? 's' : '') + ' pending';
-    } else {
-      summaryBar.hidden = true;
-    }
-  };
-
-  const renderProposals = proposals => {
-    document.querySelectorAll('[data-geo-field]').forEach(container => {
-      const listEl = container.querySelector('[data-geo-suggestions]');
-      if (listEl) listEl.replaceChildren();
+  const applyProposalsToInputs = async proposals => {
+    if (!Array.isArray(proposals)) return;
+    let anyFilled = false;
+    proposals.forEach(proposal => {
+      const fieldName = FIELD_MAP[proposal.type];
+      if (!fieldName) return;
+      const input = document.querySelector(`[data-metadata-input][name="${fieldName}"], [data-geo-field="${fieldName}"] textarea, [data-meta-field="${fieldName}"] textarea`);
+      if (input && input.value.trim() === '') {
+        const val = fillValue(proposal);
+        if (val !== null) {
+          input.value = val;
+          input.dispatchEvent(new Event('input', {bubbles: true}));
+          anyFilled = true;
+        }
+      }
     });
     const catchAll = panel.querySelector('[data-geo-catchall]');
-    const catchAllList = catchAll ? catchAll.querySelector('[data-geo-catchall-list]') : null;
-    if (catchAllList) catchAllList.replaceChildren();
-    proposals.forEach(proposal => {
-      const field = FIELD_BY_TYPE[proposal.type];
-      const target = field && !isUntargeted(proposal) ? document.querySelector(`[data-geo-field="${field}"] [data-geo-suggestions]`) : null;
-      if (target) target.append(proposalCard(proposal));
-      else if (catchAllList) catchAllList.append(proposalCard(proposal));
-    });
-    if (catchAll) catchAll.hidden = !catchAllList || catchAllList.childElementCount === 0;
-    updateSummaryBar(proposals);
+    if (catchAll) catchAll.hidden = true;
+    if (anyFilled) {
+      await geoApi.flushSave();
+    }
   };
 
-  const sleep = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
+  const sleep = ms => new Promise(res => setTimeout(res, ms));
+
   const poll = async () => {
-    reviewButton.disabled = true;
-    const stages = ['Analyzing prose structure…', 'Extracting entities & topics…', 'Synthesizing FAQs & metadata…', 'Finalizing proposals…'];
+    if (reviewButton) reviewButton.disabled = true;
     for (let attempt = 0; attempt < 60; attempt++) {
       const response = await fetch(`${base}/admin/articles/${slug}/geo/review`);
       const payload = await response.json();
       if (!response.ok) throw Error(payload.error || 'GEO status failed');
       if (payload.status === 'completed') {
-        renderProposals(payload.proposals);
-        status.textContent = 'Review complete';
-        reviewButton.disabled = false;
-        reviewButton.textContent = 'Request GEO review';
+        await applyProposalsToInputs(payload.proposals);
+        if (status) status.textContent = '✨ 智能元数据已自动补齐';
+        if (reviewButton) {
+          reviewButton.disabled = false;
+          reviewButton.innerHTML = '<span class="icon" aria-hidden="true">refresh</span>智能补全';
+        }
         return;
       }
       if (payload.status === 'failed') {
-        reviewButton.disabled = false;
-        reviewButton.textContent = 'Retry GEO review';
+        if (reviewButton) {
+          reviewButton.disabled = false;
+          reviewButton.textContent = 'Retry GEO review';
+        }
         throw Error(payload.failure || 'GEO review failed');
       }
-      const stageText = stages[attempt % stages.length];
-      status.textContent = payload.status === 'running' ? `GEO review running — ${stageText}` : 'GEO review queued — waiting for Cron worker…';
-      reviewButton.textContent = 'Refresh GEO status';
-      await sleep(Math.min(15000, 2000 + attempt * 500));
+      if (status) {
+        status.textContent = payload.status === 'running' ? 'GEO review running…' : 'GEO review queued — waiting for Cron worker…';
+      }
+      if (reviewButton) reviewButton.textContent = 'Refresh GEO status';
+      await sleep(Math.min(10000, 2000 + attempt * 500));
     }
-    reviewButton.disabled = false;
-    reviewButton.textContent = 'Refresh GEO status';
-    status.textContent = 'Review is still queued. You can leave this page and refresh its status later.';
-  };
-
-  reviewButton.onclick = async () => {
-    try {
-      if (reviewButton.textContent === 'Refresh GEO status') {
-        await poll();
-        return;
-      }
-      const payload = await request(`${base}/admin/articles/${slug}/geo/review`);
-      if (payload.queued) {
-        status.textContent = 'Review queued — waiting for Cron worker…';
-        await poll();
-      } else {
-        renderProposals(payload.proposals);
-        status.textContent = 'Review complete';
-      }
-    } catch (error) {
-      status.textContent = error.message;
+    if (reviewButton) {
       reviewButton.disabled = false;
+      reviewButton.textContent = 'Refresh GEO status';
     }
   };
 
-  const fillValue = value => {
-    if (typeof value === 'string') return value;
-    if (Array.isArray(value) && value.every(item => typeof item === 'string')) return value.join('\n');
-    return JSON.stringify(value, null, 2);
-  };
-
-  const fillProposal = proposal => {
-    const filled = [];
-    const apply = (key, value) => {
-      const field = document.querySelector(`[data-metadata-input][name="${key}"]`);
-      if (!field) return false;
-      field.value = fillValue(value);
-      field.dispatchEvent(new Event('input', {bubbles: true}));
-      filled.push(key);
-      return true;
-    };
-    if (proposal.type === 'metadata' && isObject(proposal.value)) {
-      for (const [key, value] of Object.entries(proposal.value)) apply(key, value);
-    } else {
-      const key = FIELD_BY_TYPE[proposal.type];
-      if (key) apply(key, proposal.value);
-    }
-    return filled;
-  };
-
-  // Batch actions
-  const acceptAllButton = panel.querySelector('[data-geo-accept-all]');
-  if (acceptAllButton) {
-    acceptAllButton.onclick = async () => {
-      const pendingCards = Array.from(document.querySelectorAll('.geo-proposal-card:not(.is-accepted):not(.is-rejected)'));
-      if (pendingCards.length === 0) return;
-      acceptAllButton.disabled = true;
-      const originalHtml = acceptAllButton.innerHTML;
-      acceptAllButton.textContent = 'Applying…';
-      let anyFilled = false;
+  if (reviewButton) {
+    reviewButton.onclick = async () => {
       try {
-        for (const card of pendingCards) {
-          const proposal = card._geoProposal;
-          if (!proposal || isUntargeted(proposal)) continue;
-          const filled = fillProposal(proposal);
-          if (filled.length > 0) anyFilled = true;
+        if (reviewButton.textContent === 'Refresh GEO status') {
+          await poll();
+          return;
         }
-        if (anyFilled) await geoApi.flushSave();
-        for (const card of pendingCards) {
-          const proposal = card._geoProposal;
-          if (!proposal) continue;
-          await request(`${base}/admin/geo/proposals/${proposal.id}/accept`, {expected_checksum: geoApi.checksum()});
-          card.classList.add('is-accepted');
-          const header = card.querySelector('.geo-card-header');
-          if (header && !header.querySelector('.geo-status-pill.accepted')) {
-            const pill = document.createElement('span');
-            pill.className = 'geo-status-pill accepted';
-            pill.textContent = 'Accepted ✓';
-            header.append(pill);
-          }
-          const actions = card.querySelector('.geo-card-actions');
-          if (actions) actions.remove();
+        reviewButton.disabled = true;
+        if (status) status.textContent = '正在发起分析…';
+        const payload = await request(`${base}/admin/articles/${slug}/geo/review`);
+        if (payload.queued) {
+          await poll();
+        } else if (payload.proposals) {
+          await applyProposalsToInputs(payload.proposals);
+          if (status) status.textContent = '✨ 智能元数据已自动补齐';
+          reviewButton.disabled = false;
         }
-        status.textContent = 'All proposals accepted and applied to metadata.';
-        const summaryBar = panel.querySelector('[data-geo-summary-bar]');
-        if (summaryBar) summaryBar.hidden = true;
       } catch (error) {
-        status.textContent = 'Batch accept failed: ' + (error.message || 'Error');
-      } finally {
-        acceptAllButton.disabled = false;
-        acceptAllButton.innerHTML = originalHtml;
+        if (status) status.textContent = error.message;
+        reviewButton.disabled = false;
       }
     };
   }
-
-  const rejectAllButton = panel.querySelector('[data-geo-reject-all]');
-  if (rejectAllButton) {
-    rejectAllButton.onclick = async () => {
-      const pendingCards = Array.from(document.querySelectorAll('.geo-proposal-card:not(.is-accepted):not(.is-rejected)'));
-      if (pendingCards.length === 0) return;
-      rejectAllButton.disabled = true;
-      try {
-        for (const card of pendingCards) {
-          const proposal = card._geoProposal;
-          if (!proposal) continue;
-          await request(`${base}/admin/geo/proposals/${proposal.id}/reject`);
-          card.classList.add('is-rejected');
-          const header = card.querySelector('.geo-card-header');
-          if (header && !header.querySelector('.geo-status-pill.rejected')) {
-            const pill = document.createElement('span');
-            pill.className = 'geo-status-pill rejected';
-            pill.textContent = 'Rejected';
-            header.append(pill);
-          }
-          const actions = card.querySelector('.geo-card-actions');
-          if (actions) actions.remove();
-        }
-        status.textContent = 'All proposals rejected.';
-        const summaryBar = panel.querySelector('[data-geo-summary-bar]');
-        if (summaryBar) summaryBar.hidden = true;
-      } catch (error) {
-        status.textContent = 'Batch reject failed: ' + (error.message || 'Error');
-      } finally {
-        rejectAllButton.disabled = false;
-      }
-    };
-  }
-
-  document.addEventListener('click', async event => {
-    const button = event.target.closest('.geo-proposal-card button[data-action]');
-    if (!button) return;
-    const item = button.closest('[data-proposal-id]');
-    if (!item) return;
-    const id = item.dataset.proposalId;
-    const action = button.dataset.action;
-
-    if (action === 'edit') {
-      const editor = document.createElement('div');
-      editor.className = 'geo-edit-box';
-      const textarea = document.createElement('textarea');
-      textarea.className = 'geo-edit-input';
-      textarea.value = item.dataset.proposalValue;
-      const saveButton = document.createElement('button');
-      saveButton.type = 'button';
-      saveButton.className = 'btn-geo-edit';
-      saveButton.textContent = 'Save';
-      const cancelButton = document.createElement('button');
-      cancelButton.type = 'button';
-      cancelButton.className = 'btn-geo-reject';
-      cancelButton.textContent = 'Cancel';
-      editor.append(textarea, saveButton, cancelButton);
-      item.append(editor);
-      cancelButton.onclick = () => editor.remove();
-      saveButton.onclick = async () => {
-        try {
-          const result = await request(`${base}/admin/geo/proposals/${id}/edit`, {value: textarea.value});
-          item.dataset.proposalValue = typeof result.value === 'string' ? result.value : JSON.stringify(result.value, null, 2);
-          item._geoProposal = {...item._geoProposal, value: result.value};
-          const cardBody = item.querySelector('.geo-card-body');
-          if (cardBody) cardBody.textContent = typeof result.value === 'string' ? result.value : JSON.stringify(result.value, null, 2);
-          editor.remove();
-          status.textContent = 'Proposal updated successfully.';
-        } catch (error) {
-          status.textContent = error.message;
-        }
-      };
-      return;
-    }
-
-    if (action === 'accept') {
-      const proposal = item._geoProposal;
-      const filled = proposal ? fillProposal(proposal) : [];
-      if (proposal && proposal.type === 'metadata' && filled.length === 0) {
-        status.textContent = 'No editable metadata fields match this proposal.';
-        return;
-      }
-      try {
-        if (filled.length > 0) await geoApi.flushSave();
-        await request(`${base}/admin/geo/proposals/${id}/accept`, {expected_checksum: geoApi.checksum()});
-      } catch (error) {
-        status.textContent = 'Proposal was not accepted: ' + (error.message || 'Save failed');
-        return;
-      }
-      item.classList.add('is-accepted');
-      const header = item.querySelector('.geo-card-header');
-      if (header && !header.querySelector('.geo-status-pill')) {
-        const pill = document.createElement('span');
-        pill.className = 'geo-status-pill accepted';
-        pill.textContent = 'Accepted ✓';
-        header.append(pill);
-      }
-      const actions = item.querySelector('.geo-card-actions');
-      if (actions) actions.remove();
-      status.textContent = 'Proposal accepted and applied to article metadata.';
-      const pendingCards = document.querySelectorAll('.geo-proposal-card:not(.is-accepted):not(.is-rejected)');
-      if (pendingCards.length === 0) {
-        const summaryBar = panel.querySelector('[data-geo-summary-bar]');
-        if (summaryBar) summaryBar.hidden = true;
-      }
-      return;
-    }
-
-    if (action === 'reject') {
-      try {
-        await request(`${base}/admin/geo/proposals/${id}/reject`);
-      } catch (error) {
-        status.textContent = error.message;
-        return;
-      }
-      item.classList.add('is-rejected');
-      const header = item.querySelector('.geo-card-header');
-      if (header && !header.querySelector('.geo-status-pill')) {
-        const pill = document.createElement('span');
-        pill.className = 'geo-status-pill rejected';
-        pill.textContent = 'Rejected';
-        header.append(pill);
-      }
-      const actions = item.querySelector('.geo-card-actions');
-      if (actions) actions.remove();
-      status.textContent = 'Proposal rejected.';
-      const pendingCards = document.querySelectorAll('.geo-proposal-card:not(.is-accepted):not(.is-rejected)');
-      if (pendingCards.length === 0) {
-        const summaryBar = panel.querySelector('[data-geo-summary-bar]');
-        if (summaryBar) summaryBar.hidden = true;
-      }
-    }
-  });
 
   const resumeStatus = async () => {
     try {
       const response = await fetch(`${base}/admin/articles/${slug}/geo/review`);
       const payload = await response.json();
       if (!response.ok) return;
-      if (payload.status === 'completed') {
-        renderProposals(payload.proposals);
-        status.textContent = 'Review complete';
-        return;
-      }
-      if (payload.status === 'failed') {
-        status.textContent = payload.failure || 'GEO review failed';
-        reviewButton.textContent = 'Retry GEO review';
-        return;
-      }
-      if (payload.status === 'queued' || payload.status === 'running') {
-        status.textContent = payload.status === 'running' ? 'GEO review running…' : 'GEO review queued — waiting for Cron worker…';
+      if (payload.status === 'completed' && Array.isArray(payload.proposals)) {
+        await applyProposalsToInputs(payload.proposals);
+        if (status) status.textContent = '✨ 智能元数据已就绪';
+      } else if (payload.status === 'queued' || payload.status === 'running') {
         await poll();
       }
     } catch {
-      status.textContent = 'GEO status can be refreshed later.';
+      // Ignore background check failure
     }
   };
+
   resumeStatus();
 })();
