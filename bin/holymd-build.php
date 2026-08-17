@@ -8,8 +8,9 @@ use HolyMD\Content\ArticleRepository;
 use HolyMD\Admin\VersionId;
 use HolyMD\Admin\VersionService;
 use HolyMD\Config\PublicationSettings;
-use HolyMD\Publish\AtomicPublicTree;
-use HolyMD\Publish\PublishService;
+use HolyMD\Publish\BuildPublisherFactory;
+use HolyMD\Database\Connection;
+use HolyMD\Config\Settings;
 use HolyMD\Render\StaticBuilder;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
@@ -49,7 +50,13 @@ if ($dryRun) {
 }
 
 $versions = new VersionService($root . '/content/versions');
-$service = new PublishService($articles, new StaticBuilder(), new AtomicPublicTree(), (string) (\HolyMD\Config\Env::get('HOLYMD_PUBLIC_TREE') ?: $root . '/public/.holymd-current'), $publication, $root . '/content/audit', null, $root . '/content/holymd-publish.lock', $versions, $pages);
+$pdo = (new Connection(Settings::fromEnvironment($root)))->pdo();
+$service = (new BuildPublisherFactory($pdo, $publication, $root))->create(
+    $articles,
+    $pages,
+    $versions,
+    (string) (\HolyMD\Config\Env::get('HOLYMD_PUBLIC_TREE') ?: $root . '/public/.holymd-current'),
+);
 
 if ($rebuild) {
     $result = $service->rebuild();

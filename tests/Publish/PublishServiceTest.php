@@ -13,6 +13,7 @@ use HolyMD\Render\StaticBuilder;
 use HolyMD\Render\TemplateRenderer;
 use PHPUnit\Framework\TestCase;
 use RuntimeException;
+use PDO;
 
 final class PublishServiceTest extends TestCase
 {
@@ -120,6 +121,46 @@ final class PublishServiceTest extends TestCase
         $saved = $repository->read('first-note');
         self::assertSame("Newer working body\n", $saved->bodyMarkdown);
         self::assertSame($selected, $saved->frontMatter->get('published_version'));
+    }
+
+    public function test_geo_score_uses_the_selected_publication_snapshot_not_newer_working_copy(): void
+    {
+        $versions = new VersionService($this->root . '/versions');
+        $repository = new ArticleRepository($this->root . '/articles');
+        $selectedDocument = $repository->read('first-note')->withFrontMatter(
+            $repository->read('first-note')->frontMatter->with('summary', str_repeat('Detailed summary ', 5))
+        );
+        $repository->write($selectedDocument);
+        $selected = $versions->capturePublicationInput($selectedDocument);
+        $repository->write($selectedDocument->withFrontMatter($selectedDocument->frontMatter->without('summary')));
+        $pdo = new PDO('sqlite::memory:');
+        $pdo->exec('CREATE TABLE geo_scores (slug TEXT, score INTEGER, breakdown TEXT, snapshot_trigger TEXT)');
+        $service = new PublishService(
+            $repository, new StaticBuilder(), new AtomicPublicTree(), $this->root . '/public/.holymd-current',
+            $this->publication(), $this->root . '/audit', versions: $versions, pdo: $pdo,
+        );
+
+        $service->publish('first-note', $selected);
+
+        self::assertSame(25, (int) $pdo->query('SELECT score FROM geo_scores')->fetchColumn());
+    }
+
+    public function test_geo_score_storage_failure_is_audited_without_reversing_publication(): void
+    {
+        $pdo = new PDO('sqlite::memory:');
+        $service = new PublishService(
+            new ArticleRepository($this->root . '/articles'), new StaticBuilder(), new AtomicPublicTree(),
+            $this->root . '/public/.holymd-current', $this->publication(), $this->root . '/audit', pdo: $pdo,
+        );
+
+        $service->publish('first-note');
+
+        self::assertStringContainsString('Body', (string) file_get_contents($this->released() . '/articles/first-note/index.html'));
+        $events = array_map(static fn (string $line): array => json_decode($line, true, flags: JSON_THROW_ON_ERROR), file($this->root . '/audit/publish.jsonl', FILE_IGNORE_NEW_LINES));
+        self::assertSame('published', $events[0]['status']);
+        self::assertSame('geo-score', $events[1]['action']);
+        self::assertSame('failed', $events[1]['status']);
+        self::assertStringContainsString('geo_scores', $events[1]['error']);
     }
 
     private function released(): string

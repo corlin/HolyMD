@@ -83,6 +83,7 @@ final readonly class PublishService
         $originals = [];
         $persisted = [];
         $versionsToConfirm = [];
+        $scoreDocument = null;
         try {
             $working = $this->articles->read($slug);
             $documents = [];
@@ -93,6 +94,7 @@ final readonly class PublishService
                         $version = $this->versions === null ? null : ($selectedVersion ?? $this->versions->capturePublicationInput($working));
                         $publicDocument = $version === null ? $working : $this->publicationInput($version, $slug);
                         if (!$publicDocument instanceof ArticleDocument) throw new RuntimeException('The selected publication version could not be restored.');
+                        $scoreDocument = $publicDocument;
                         $documents[] = $publicDocument->withFrontMatter($publicDocument->frontMatter->with('status', 'published'));
                         $frontMatter = $working->frontMatter->with('status', 'published');
                         if ($version !== null) {
@@ -130,8 +132,8 @@ final readonly class PublishService
             $this->publicTree->swap($temporaryRoot, $this->liveRoot);
             if ($this->versions !== null) foreach ($versionsToConfirm as $articleSlug => $version) $this->versions->confirmPublished($articleSlug, $version);
             $this->audit($slug, $nextStatus, 'published');
-            if ($nextStatus === 'published') {
-                $this->recordGeoScore($working);
+            if ($nextStatus === 'published' && $scoreDocument instanceof ArticleDocument) {
+                $this->recordGeoScore($scoreDocument);
             }
             return $result;
         } catch (Throwable $exception) {
@@ -268,9 +270,10 @@ final readonly class PublishService
                 ':score' => $score->total,
                 ':breakdown' => json_encode($score->breakdown, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
             ]);
-        } catch (Throwable) {
-            // Non-blocking: snapshot recording failure should not abort publish
+        } catch (Throwable $exception) {
+            // The public tree is already live, so this secondary failure is
+            // observable and repairable without pretending publication rolled back.
+            $this->audit($article->slug, 'geo-score', 'failed', $exception->getMessage());
         }
     }
 }
-
