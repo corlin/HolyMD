@@ -1,5 +1,7 @@
 # HolyMD Public Reading Experience — Design QA
 
+**Status:** delivered and regression-verified; historical comparison record, not an open task list
+
 ## Comparison target
 
 - Source visual truth: `.gstack/ui-audit/2026-08-13/selected-reading-workspace.png`
@@ -7,7 +9,7 @@
 - Final mobile implementation: `.gstack/ui-audit/2026-08-13/10-article-implementation-mobile-final.png`
 - Full-view comparison: `.gstack/ui-audit/2026-08-13/compare-desktop-final.png`
 - Focused comparison: `.gstack/ui-audit/2026-08-13/compare-focused-final.png`
-- Route: `http://127.0.0.1:8790/articles/test/`
+- Historical comparison route: `http://127.0.0.1:8790/articles/test/`（当前 README 的默认本地端口为 `8789`）
 - State: light theme, top of the published article, desktop table of contents visible.
 
 ## Normalization
@@ -49,7 +51,7 @@ Fixes applied:
 - The title remains on one line at the desktop comparison viewport.
 - The contents rail, article masthead, divider, drop cap, and prose now align with the selected direction.
 - The longer real summary creates extra height versus the mock; this is an accepted content constraint, not visual drift.
-- The three-state theme control is intentionally retained because it is an existing product feature and remains visually subordinate.
+- The desktop three-state theme control is intentionally retained because it is an existing product feature and remains visually subordinate. A later 375 px regression fix replaced it with a compact cycle control only on narrow screens.
 - Evidence: `.gstack/ui-audit/2026-08-13/compare-desktop-final.png` and `.gstack/ui-audit/2026-08-13/compare-focused-final.png`.
 
 ## Browser verification
@@ -61,7 +63,16 @@ Fixes applied:
 - Checked browser console warnings and errors: none.
 - Checked desktop and mobile rendered screenshots after the final build.
 
-## Follow-up polish
+### 2026-08-17 regression closeout
+
+- Rechecked the public article at `375 x 812`: document width and scroll width both measured 375 px.
+- Verified the compact theme control cycles system → light → dark → system and updates its accessible label.
+- Verified mobile search stays within the viewport, returns results, and closes normally.
+- Verified the native dialog image viewer opens the published image and closes with `Esc`.
+- Verified the editor keeps View Public, Update Public, and Withdraw visible without horizontal overflow.
+- Browser console contained no errors after correcting Chromium-compatible slug patterns.
+
+## Optional future polish（not committed backlog）
 
 - P3: an optional dedicated `subtitle` front-matter field could reproduce the mock's short deck while keeping the longer summary for metadata and feeds.
 - P3: very long tables of contents could later group lower-level headings, but the current rail scrolls safely and all article sections remain reachable.

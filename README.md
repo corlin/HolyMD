@@ -1,6 +1,6 @@
 # HolyMD
 
-HolyMD 是一款面向个人品牌的**静态优先** Markdown 博客管理工具。作者在 PHP 后台沉浸式编辑文件系统中的 Markdown 文章与单页，发布时原子生成可直接由 Apache/Nginx 提供服务的极速静态 HTML、CSS、RSS、Atom、JSON Feed、Sitemap、`llms.txt`、`llms-full.txt`、OpenGraph 与结构化数据；MySQL 仅保存账号、任务队列、构建快照、审计日志和 GEO AI 建议等运行状态，不保存文章正文。
+HolyMD 是一款面向个人品牌的**静态优先** Markdown 博客管理工具。作者在 PHP 后台沉浸式编辑文件系统中的 Markdown 文章与单页，发布时原子生成 HTML、CSS、RSS、Atom、JSON Feed、Sitemap、`llms.txt`、`llms-full.txt`、OpenGraph 与结构化数据。标准共享主机部署由轻量 PHP 指针解析器读取这些预生成文件，支持直接静态映射的服务器也可绕过该解析层；MySQL 仅保存账号、任务队列、构建快照、审计日志和 GEO AI 建议等运行状态，不保存文章正文。
 
 ---
 
@@ -15,7 +15,7 @@ HolyMD 是一款面向个人品牌的**静态优先** Markdown 博客管理工�
 - **全站不可变版本快照与一键回滚 (Version Control & Restore)**：文章（Articles）与自定义单页（Pages）在每次正式发布时自动生成不可变快照，支持在右侧栏随时查看历史发布列表并一键回退。
 - **统一克制的危险操作区 (Danger Zone) 与级联彻底清理**：
   - 彻底移除粗暴的原生 `prompt()` 弹窗与突兀大红按钮，统一收纳为折叠式 `<details class="danger-zone">`；
-  - 严格两阶段生命周期保护（已发布内容需先 Withdraw 撤回为草稿方可删除，防止线上误删）；
+  - 严格两阶段生命周期保护（已发布内容需先 Withdraw 进入 `withdrawn` 状态，之后才允许删除，防止线上误删）；
   - 确认删除时自动级联清除对应 Slug 在 `content/versions/` 下关联的所有历史快照文件与索引记录，不留孤立垃圾数据。
 - **自定义单页管理 (Pages)**：支持关于页、条款页等独立单页的撰写、导航权重排序、多版本回滚及静态构建。
 
@@ -106,6 +106,27 @@ HOLYMD_GEO_PLAINTEXT_KEY='sk-your-provider-key' php bin/holymd-admin.php encrypt
 php bin/holymd-check.php
 ```
 
+### 发布工作流
+
+1. 编辑器自动保存 Markdown 草稿，但不创建公开版本。
+2. 点击 Publish / Update Public 后，服务端对当前候选内容执行只读预检，列出字段变化、阻断项、建议项与 GEO 分数变化。
+3. 阻断项必须修复；仅有建议项时需要显式确认。确认值与候选内容 SHA-256 绑定，内容变化后旧确认自动失效。
+4. 发布请求捕获不可变 `publish-inputs/` 快照；异步部署由 Worker 处理，同步部署在当前请求内处理。
+5. 只有静态构建成功并完成原子指针切换后，才登记可恢复版本、推进 `published_version` 并记录 GEO 分数。
+6. Withdraw 会从公开树移除内容；处于 `draft` 或 `withdrawn` 状态的文章才允许永久删除。
+
+预检中的 GEO 建议只用于编辑决策，不保证搜索收录、排名或 AI 引用。
+
+### 常用环境变量
+
+| 变量 | 作用 | 默认值 |
+| --- | --- | --- |
+| `HOLYMD_TIMEZONE` | 后台时间显示时区；数据库和机器输出仍为 UTC | `Asia/Singapore` |
+| `HOLYMD_BASE_PATH` | 子目录部署路径，例如 `/holymd` | 空 |
+| `HOLYMD_SYNC_PUBLISH` | 无 Cron/进程能力的主机设为 `1`，在请求内执行发布与 GEO 审核 | `0` |
+| `HOLYMD_PUBLIC_TREE` | 自定义发布指针路径；未设置时使用 `public/.holymd-current` | 项目默认路径 |
+| `HOLYMD_LLMS_TXT` | 是否生成 `llms.txt` 与 `llms-full.txt` | `1` |
+
 ---
 
 ## 🧪 测试与质量验证
@@ -138,14 +159,15 @@ HolyMD/
 │   ├── articles/           # 文章唯一正文来源 (*.md)
 │   ├── pages/              # 独立自定义单页 (*.md)
 │   ├── media/              # 上传并经图片解码验证的媒体文件
-│   └── versions/           # 发布后的不可变快照及审核暂存
+│   └── versions/           # 已发布版本索引，以及隐藏的 review-inputs / publish-inputs 快照
 ├── database/
 │   ├── schema.sql          # 基础数据库表结构
 │   └── migrations/         # 增量 SQL 迁移脚本
 ├── public/                 # Web 根目录与静态资产
 │   ├── assets/             # 后台 CSS / JS 与字体资产
-│   ├── .holymd-current     # 指向当前不可变静态版本的原子符号链接/指针
-│   └── site/               # 静态构建产物 (可直接分发至 CDN/对象存储)
+│   ├── .holymd-current     # 当前不可变 release 的原子指针文件
+│   ├── ..holymd-current-releases/  # 不可变 release 目录（运行时生成）
+│   └── site/               # 首次迁移前保留的兼容/引导静态树
 ├── src/                    # 核心业务逻辑 (PSR-4 HolyMD\)
 └── templates/              # 前后台 PHP 视图组件与 Partials
 ```
@@ -155,3 +177,8 @@ HolyMD/
 ## 📖 相关文档
 - [共享主机部署手册](docs/operations/shared-hosting.md)
 - [备份与恢复手册](docs/operations/backup-and-restore.md)
+- [产品设计规格（已交付）](docs/superpowers/specs/2026-08-12-holymd-design.md)
+- [首版实施计划（已归档）](docs/superpowers/plans/2026-08-12-holymd-implementation.md)
+- [发布预检与回归加固设计（已交付）](docs/superpowers/specs/2026-08-17-publish-preflight-regression-hardening-design.md)
+- [发布预检与回归加固计划（已完成）](docs/superpowers/plans/2026-08-17-publish-preflight-regression-hardening.md)
+- [公开阅读体验设计验收记录](design-qa.md)

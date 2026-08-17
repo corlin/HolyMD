@@ -2,7 +2,7 @@
 
 ## 1. 主机与目录
 
-选择 PHP 8.4、MySQL 8、Apache 2.4 主机。必须支持 `mod_rewrite` 与 `.htaccess`；发布指针使用普通文件，不再依赖符号链接。域名的 DocumentRoot 指向项目的 `public/`，不能指向项目根目录。
+选择 PHP 8.4+、MySQL 8、Apache 2.4 主机。必须支持 `mod_rewrite` 与 `.htaccess`；当前部署预检要求 `pdo_mysql`、`mbstring`、`fileinfo`、`gd`、`exif`、`sodium`、`openssl` 与 `json`，GEO 客户端还需要 `curl`。发布指针使用普通文件，不依赖符号链接。域名的 DocumentRoot 指向项目的 `public/`，不能指向项目根目录。
 
 推荐目录：
 
@@ -18,7 +18,7 @@ cd /home/account/holymd
 composer install --no-dev --classmap-authoritative
 cp .env.example .env
 chmod 600 .env
-mkdir -p content/articles content/versions content/media content/audit public/site
+mkdir -p content/articles content/pages content/versions content/media content/audit public/site
 chmod -R u+rwX,go-rwx content
 chmod u+rwx public public/site
 ```
@@ -32,6 +32,9 @@ chmod u+rwx public public/site
 - `HOLYMD_DSN`、数据库用户和口令指向专用的 UTF-8 MySQL 数据库；该用户只需此数据库权限。
 - `HOLYMD_SITE_NAME`、`HOLYMD_SITE_URL`、`HOLYMD_AUTHOR_NAME`、`HOLYMD_ABOUT` 必须是真实公开身份；占位值会阻止发布。
 - `HOLYMD_SITE_LANGUAGE` 使用 BCP 47 标签，例如 `zh-CN`。
+- `HOLYMD_TIMEZONE` 仅控制后台显示时区，默认 `Asia/Singapore`；数据库、队列和审计机器时间统一使用 UTC。
+- 子目录部署设置 `HOLYMD_BASE_PATH`；仅在无法运行 Cron/CLI Worker 时才设置 `HOLYMD_SYNC_PUBLISH="1"`。
+- 通常不要设置 `HOLYMD_PUBLIC_TREE`；需要把 release 放到自定义位置时再指向受 PHP 写权限保护的指针文件。
 - 需要 GEO 时配置 OpenAI-compatible HTTPS endpoint、模型和加密凭据。endpoint 必须解析为公开全球单播地址，私网、回环、保留和文档地址会被拒绝。
 
 不要把 `.env` 放进 `public/`，不要将 API key 写入文章或数据库。
@@ -78,11 +81,13 @@ php bin/holymd-prepare-release.php
 php bin/holymd-check.php
 ```
 
-`holymd-prepare-release.php` 不移动或隐藏旧站。它会先为尚未迁移的已发布文章建立 `published_version` 不可变快照；后续新建、自动保存、恢复和 GEO 审核都不推进内容版本。发布任务先绑定不可见的待发布输入，只有构建并切换成功后才登记新版本并移动公开版本指针。静态站生成完成后再原子替换 `public/.holymd-current` **指针文件**（内容为 release 目录相对路径，由 `public/index.php` 解析）。指针机制不依赖符号链接，`symlink()` 被禁用的共享主机同样可用。
+`holymd-prepare-release.php` 不移动或隐藏旧站。它会先为尚未迁移的已发布文章建立 `published_version` 不可变快照；后续新建、自动保存、恢复和 GEO 审核都不推进公开版本。发布任务先绑定不可见的 `publish-inputs/` 输入快照，只有构建并切换成功后才登记新版本并移动公开版本指针。静态站生成完成后再原子替换 `public/.holymd-current` **指针文件**（内容为 `public/..holymd-current-releases/` 下某个 release 的相对路径，由 `public/index.php` 解析）。指针机制不依赖符号链接，`symlink()` 被禁用的共享主机同样可用。
+
+每次升级代码后先运行 `php bin/holymd-migrate.php`。`20260817_normalize_legacy_timestamps.sql` 会幂等修正旧版由数据库默认时区生成的时间列；不要手工重复平移显式 UTC 的锁定、完成、决策或爬虫访问时间。
 
 ## 5. Apache 与路由验收
 
-保留仓库的 `public/.htaccess`。所有请求统一进入 `public/index.php`，由它解析指针文件并从 release 树提供页面与资源；`assets/admin.css|admin.js|fonts/*.woff2` 与真实文件直通 Apache，`.env` 与项目内部路径被显式拒绝。
+保留仓库的 `public/.htaccess`。后台请求与不存在的真实文件进入 `public/index.php`；公开页面由该轻量解析器跟随指针并读取预生成 release 文件，不会重新渲染 Markdown。`assets/admin.css|admin.js|fonts/*.woff2` 等真实文件由 Apache 直接提供，`.env` 与项目内部路径被显式拒绝。AI 爬虫访问可能写入匿名可观测性记录，因此“静态优先”不等于所有公开请求都绝不触发 PHP/MySQL。
 
 部署后检查：
 
@@ -94,7 +99,7 @@ curl -fsS https://your-domain.example/admin/login >/dev/null
 test "$(curl -sS -o /dev/null -w '%{http_code}' https://your-domain.example/not-a-real-page)" = 404
 ```
 
-还应检查一篇无尾斜杠的文章 URL 返回 200，且主机访问日志显示公开静态请求未进入 `index.php`。
+还应检查一篇规范尾斜杠文章 URL 返回 200、无尾斜杠 URL 的行为符合站点链接策略，并确认 HTML、CSS、Feed 与搜索索引来自同一个 release。不要用“是否进入 `index.php`”判断静态构建是否生效；标准指针部署本来就可能由 PHP 读取预生成文件。
 
 历史 slug（`previous_slugs`）的 301 重定向由发布时写入 release 树根的 `.htaccess` 提供，meta-refresh 页面保留为兜底。验收：
 
@@ -112,11 +117,11 @@ release 目录内的 `.htaccess` 依赖宿主对该路径的 `AllowOverride`（�
 * * * * * /usr/local/bin/php /home/account/holymd/cron/holymd.php >> /home/account/holymd/content/cron.log 2>&1
 ```
 
-Cron 内置非阻塞文件锁，单次领取一个任务；GEO 暂时错误最多重试 3 次，永久的认证/配置/响应错误不会重复付费调用。首次配置后，在后台发布一篇测试草稿并确认 `jobs`、`builds` 从 queued/running 进入 succeeded。
+Cron 内置非阻塞文件锁，单次领取一个任务；GEO 暂时错误按任务策略重试，永久的认证、配置或响应错误不会无限重复付费调用。首次配置后，在后台发布一篇测试草稿并确认 `jobs`、`builds` 从 queued/running 进入 succeeded，同时在 GEO 看板看到与成功发布快照对应的新评分记录。失败历史会保留在 Jobs 页面用于审计，不应因队列已恢复就直接删除。
 
 ## 7. 发布与回滚
 
-部署代码前先备份：`php bin/holymd-backup.php`（见备份与恢复手册）。推荐顺序：维护窗口内上传新代码、`composer install`、迁移、测试 dry-run、运行 check，再恢复 Cron。代码回滚时，数据库只向前兼容；不要删除迁移列。
+部署代码前先备份：`php bin/holymd-backup.php`（见备份与恢复手册）。推荐顺序：维护窗口内暂停 Cron，上传新代码，执行 `composer install --no-dev --classmap-authoritative`、迁移、完整测试或发布包测试、dry-run 与 check，再恢复 Cron。代码回滚时，数据库只向前兼容；不要删除迁移列。
 
 静态站回滚可以把 `public/.holymd-current` 指针文件原子改写为 `public/..holymd-current-releases/` 中已验证的旧版本（写入临时文件后 `mv` 替换，禁止先删除当前指针）。完成后重新运行 HTTP 验收。
 
@@ -148,7 +153,7 @@ location ^~ /docs/ { deny all; }
 location ~ ^/(\.env|composer\.(json|lock)|\.holymd|README) { deny all; }
 ```
 
-4. 此类主机通常禁用 `exec`/`proc_open`/`putenv`/`symlink` 且缺少 `ext-sodium`——HolyMD 已适配：环境走内存覆盖表（`src/Config/Env.php`）、凭据加密用 OpenSSL AES-256-GCM（`ext-sodium` 不再要求）、换链用指针文件、队列可选同步。
+4. 此类主机通常禁用 `exec`/`proc_open`/`putenv`/`symlink`。HolyMD 已适配内存环境覆盖、OpenSSL AES-256-GCM 凭据加密、普通指针文件和可选同步队列；但当前 `holymd-check.php` 仍把 `ext-sodium` 列为基线扩展，主机缺失时检查会失败，应先通过主机面板启用，而不是绕过检查。
 5. 无 SSH 时，数据库迁移与管理员创建用一次性 Web 脚本执行后立即删除（`Migrator` + `AccountCommands`）；初始 release 也可本地预构建后上传并改写指针。
 
-验收同 §5，另需确认 `.env`、`/content/`、`/src/` 返回 403，登录与发布全流程可用。
+验收同 §5，另需确认 `.env`、`/content/`、`/src/` 返回 403，登录、发布预检、显式确认、同步发布、撤回与删除全流程可用。发布预检中的建议项不构成收录、排名或 AI 引用保证。

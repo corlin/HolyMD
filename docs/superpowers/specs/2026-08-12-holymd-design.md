@@ -1,7 +1,9 @@
 # HolyMD Design Specification
 
-**Status:** user-approved design, awaiting written-spec review
+**Status:** implemented, verified, and archived as the delivered product baseline
 **Target environment:** shared hosting with PHP 8.4, local MySQL, and a web server that can directly serve static files.
+
+**Current evidence:** merged on `main`; the 2026-08-17 release baseline passes 284 tests / 1184 assertions, deployment preflight, static dry-run, real MySQL/Worker publication, and authenticated browser regression.
 
 ## 1. Product Intent
 
@@ -22,7 +24,7 @@ The public site must be easy for readers and machine systems to understand. This
 
 ### Explicitly excluded
 
-- Multi-user collaboration, comments, newsletters, ecommerce, analytics dashboards, and multi-site management.
+- Multi-user collaboration, comments, newsletters, ecommerce, general audience/product analytics beyond GEO observability, and multi-site management.
 - AI drafting, continuation, or rewriting of article prose.
 - Automatic public publishing by AI.
 - Any claim that a generated output guarantees SEO/GEO visibility, indexing, rank, or citation.
@@ -69,7 +71,7 @@ Media lives in a managed filesystem directory. A published site can continue to 
 
 ## 6. Static Generation and Public Output
 
-Publishing transforms Markdown into static assets under a generated `public/` tree. Public article reads do not invoke PHP or MySQL.
+Publishing transforms Markdown into immutable static assets under a generated release tree. A server configured for direct release mapping can serve those files without PHP. The default shared-host pointer deployment routes non-file requests through `public/index.php`, which resolves and streams the already-generated file rather than rendering Markdown; AI-bot observability may write an anonymous MySQL event.
 
 Each article route uses a stable form such as `/articles/<slug>/index.html` and includes:
 
@@ -88,7 +90,7 @@ Before generation, the system validates front matter, duplicate slugs, target co
 
 Builds render into a temporary output directory. Only a fully validated result replaces the live public tree through an atomic switch. If any step fails, the previous static site remains live, the failed build is retained as an audit record, and the backend reports the affected article and field clearly.
 
-Time-consuming GEO reviews and builds use a MySQL queue driven by scheduled Cron invocations; the release has no dependency on a daemon or long-running worker. Failed work supports safe retry without publishing side effects.
+Time-consuming GEO reviews and builds use a MySQL queue driven by scheduled Cron invocations; the release has no dependency on a daemon or long-running worker. Hosts without Cron may opt into request-local synchronous processing. Failed work supports safe retry without publishing side effects.
 
 ## 8. Verification Requirements
 
@@ -99,9 +101,13 @@ Time-consuming GEO reviews and builds use a MySQL queue driven by scheduled Cron
 - AI proposal tests assert that no operation mutates Markdown body text; only an explicit accepted metadata proposal may modify front matter.
 - Authorization tests protect the admin interface, AI configuration, local media, publishing, and rollback actions.
 
-## 9. Deferred Decisions for Implementation Planning
+## 9. Resolved Implementation Decisions
 
-- The supported Markdown parser and front-matter library.
-- The initial compatible AI API provider and the secure storage method for its credentials.
-- The exact static-tree switching mechanism available on the selected host.
-- The first public-site template details, derived from the selected writing-studio direction.
+- Markdown and front matter use League CommonMark 2.7 and Symfony YAML 7.3.
+- GEO uses a configurable OpenAI-compatible HTTPS provider. Credentials are stored as OpenSSL AES-256-GCM encrypted values outside Git.
+- Static publication writes an immutable release under `public/..holymd-current-releases/` and atomically replaces the ordinary-file pointer `public/.holymd-current`; no symlink capability is required.
+- The public reading experience follows the warm-paper/ink-blue editorial direction recorded in [`design-qa.md`](../../../design-qa.md), with responsive search, theme controls, contents navigation, reading progress, and an accessible image viewer.
+
+## 10. Delivery Status
+
+All first-release scope items are implemented. Later hardening added immutable review/publication inputs, server-enforced publish preflight, UTC operational storage, configurable administrator timezone, asynchronous GEO score parity, responsive publication controls, and generated-artifact UTF-8 checks. Those additions are specified in the [2026-08-17 design](2026-08-17-publish-preflight-regression-hardening-design.md).

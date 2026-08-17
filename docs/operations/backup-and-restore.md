@@ -4,7 +4,7 @@
 
 ## 备份
 
-在没有发布任务运行时执行：
+在没有发布任务运行时执行。先用后台 Jobs 页面或 `php bin/holymd-admin.php jobs` 确认没有 queued/running 任务，再暂停 Cron：
 
 ```bash
 stamp=$(date -u +%Y%m%dT%H%M%SZ)
@@ -35,7 +35,8 @@ mysqldump --single-transaction --routines --triggers \
 5. 创建空数据库并导入：`mysql -h DB_HOST -u DB_USER -p DB_NAME < holymd.sql`。
 6. 运行 `php bin/holymd-migrate.php`，让恢复库升级到当前 schema。
 7. 运行 `php bin/holymd-build.php --dry-run`、`php bin/holymd-prepare-release.php` 和 `php bin/holymd-check.php`。
-8. 从后台重新发布一篇已发布文章以生成完整静态树；完成首页、文章、RSS、sitemap、404 和后台登录验收后再恢复 Cron。
+8. 运行 `php bin/holymd-build.php --rebuild` 从已确认的 `published_version` 重建完整公开树；不要通过修改文章或伪造一次发布来完成恢复。
+9. 完成首页、文章、RSS、Atom、JSON Feed、搜索索引、sitemap、`llms.txt`、404 和后台登录验收后再恢复 Cron。
 
 ## 恢复验收
 
@@ -43,5 +44,7 @@ mysqldump --single-transaction --routines --triggers \
 - 管理员能登录，版本历史可见。
 - 已发布文章的 Markdown 正文哈希与备份一致。
 - GEO 建议状态可见；接受元数据建议不会改变正文哈希。
+- 数据库会话为 UTC，后台时间按 `HOLYMD_TIMEZONE` 显示；恢复后不手工平移显式 UTC 字段。
 - 公共 HTML 的 canonical、语言、Person/Article/Breadcrumb JSON-LD、sources、RSS、sitemap 正确。
+- 生成的 HTML、JSON、XML 与 `llms` 文本是有效 UTF-8，不含 Unicode 替换字符。
 - 不存在公开可访问的 `.env`、数据库 dump、备份或 `content/` 路径。

@@ -1,10 +1,12 @@
 # HolyMD Publish Preflight and Regression Hardening Design
 
-**Status:** user-approved design, awaiting written-spec review
+**Status:** implemented, verified, merged to `main`, and archived as delivered
 
 **Selected approach:** repair the verified regressions and add a bounded publish-preflight MVP
 
 **Target environment:** PHP 8.4, MySQL, Cron-driven queue worker, and an atomically switched static public tree
+
+**Delivery evidence:** commits `6054afe` through `c5232f6`; merged by PR #3. Final gate: 284 tests / 1184 assertions, idempotent migration, deployment check, dry-run build, real MySQL Worker publication/GEO scoring, 375 px browser regression, and cleanup of all temporary fixtures.
 
 ## 1. Objective
 
@@ -30,7 +32,7 @@ The work must preserve HolyMD's existing publication contract:
 7. Add a server-enforced publish preflight with blockers, warnings, GEO score comparison, and a bounded change summary.
 8. Rebuild and validate generated public artifacts, including UTF-8 integrity.
 
-### Deferred
+### Deferred future candidates（not current unfinished tasks）
 
 - Automatic internal-link or source generation.
 - AI-authored prose or automatic acceptance of GEO proposals.
@@ -194,3 +196,12 @@ Implementation is divided into independently verifiable checkpoints:
 5. Enhanced browser interaction and full regression.
 
 Each checkpoint must preserve the immutable snapshot and atomic-publication tests. Internal-link/source assistance begins only after this release is stable.
+
+## 12. Acceptance Result
+
+- UTC connection initialization, legacy timestamp normalization, and administrator timezone conversion passed focused and full tests; the migration is idempotent.
+- Synchronous and queued publication record GEO scores from the exact selected immutable snapshot; a score-write failure is audited without pretending an already-live release rolled back.
+- Preflight is server-authoritative, read-only before confirmation, blocker-aware, warning-aware, checksum-bound, and functional without JavaScript.
+- Public header, search, theme cycle, image viewer, editor heading, and all publication controls passed real 375 px browser checks with no horizontal overflow.
+- Fresh HTML, JSON Feed, search, XML, and `llms` artifacts passed UTF-8 and Unicode replacement-character checks.
+- Temporary article, media, job, database, audit, and snapshot fixtures were removed after runtime regression.
