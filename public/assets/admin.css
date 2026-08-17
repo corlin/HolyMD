@@ -73,4 +73,30 @@
 .geo-entity-cloud{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
 .geo-entity-pill{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;background:var(--paper);border:1px solid var(--line);border-radius:12px;font-size:12px;color:var(--ink)}
 .geo-entity-count{display:inline-block;padding:1px 5px;background:var(--line);border-radius:8px;font-size:10px;font-weight:700;color:var(--muted)}
+.geo-ai-stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:16px 0;background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:14px 18px}
+@media(max-width:640px){.geo-ai-stat-row{grid-template-columns:1fr}}
+.geo-ai-stat-item{display:flex;flex-direction:column;align-items:flex-start}
+.geo-ai-stat-num{font-size:24px;font-weight:700;color:var(--ink);line-height:1.2}
+.geo-ai-stat-lbl{font-size:12px;color:var(--muted);margin-top:2px}
+.geo-bot-dist-list{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.geo-bot-dist-row{display:flex;flex-direction:column;gap:4px}
+.geo-bot-name-col{display:flex;justify-content:space-between;font-size:13px}
+.geo-bot-progress-track{height:6px;background:var(--line);border-radius:3px;overflow:hidden}
+.geo-bot-progress-bar{height:100%;background:var(--blue);border-radius:3px}
+.geo-crawled-paths-list{list-style:none;padding:0;margin:8px 0 0;display:flex;flex-direction:column;gap:8px}
+.geo-crawled-paths-list li{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:var(--paper);border:1px solid var(--line);border-radius:6px;font-size:13px}
+.geo-crawled-paths-list code{font-size:12px;color:var(--ink)}
+.geo-badge-count{font-size:11px;font-weight:600;color:var(--muted);background:var(--line);padding:2px 6px;border-radius:4px}
+.geo-stream-list{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.geo-stream-item{display:flex;align-items:center;gap:12px;padding:8px 12px;background:var(--paper);border:1px solid var(--line);border-radius:6px;font-size:13px}
+.geo-stream-path{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.geo-stream-path code{font-size:12px}
+.geo-stream-status{font-size:11px;font-weight:700;padding:2px 6px;border-radius:4px;background:#e6f4ea;color:#137333}
+.geo-stream-status.is-status-404{background:#fce8e6;color:#c5221f}
+.geo-stream-status.is-status-301{background:#fef7e0;color:#b06000}
+.geo-stream-time{font-size:11px;white-space:nowrap}
+.geo-bot-pill{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;background:#e8f0fe;color:#1a73e8;border:1px solid #d2e3fc}
+.geo-bot-pill.is-gptbot{background:#e6f4ea;color:#137333;border-color:#ceead6}
+.geo-bot-pill.is-claudebot{background:#fcefe7;color:#c55c1e;border-color:#fadbd0}
+.geo-bot-pill.is-perplexitybot{background:#e8eaed;color:#202124;border-color:#dadce0}
 

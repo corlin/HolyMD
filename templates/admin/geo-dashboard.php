@@ -115,6 +115,86 @@ $activeNav = 'geo';
     </div>
   </div>
 
+  <!-- AI 爬虫可观测性与访问追踪面板 -->
+  <div class="geo-section-card">
+    <div class="geo-card-header">
+      <div>
+        <h2>🤖 AI 爬虫可观测性 (AI Agent Observability)</h2>
+        <p class="muted">实时追踪全球主流大模型与 AI 搜索引擎（GPTBot, Perplexity, ClaudeBot 等）对站点的抓取频次与内容偏好。</p>
+      </div>
+    </div>
+
+    <div class="geo-ai-stat-row">
+      <div class="geo-ai-stat-item">
+        <span class="geo-ai-stat-num"><?= (int) ($aiBotStats['total7d'] ?? 0) ?></span>
+        <span class="geo-ai-stat-lbl">近 7 天 AI 抓取总计</span>
+      </div>
+      <div class="geo-ai-stat-item">
+        <span class="geo-ai-stat-num"><?= (int) ($aiBotStats['distinctBots7d'] ?? 0) ?></span>
+        <span class="geo-ai-stat-lbl">活跃 AI 爬虫种类</span>
+      </div>
+      <div class="geo-ai-stat-item">
+        <span class="geo-ai-stat-num"><?= (int) ($aiBotStats['llmsTxt7d'] ?? 0) ?></span>
+        <span class="geo-ai-stat-lbl">llms.txt 知识库访问</span>
+      </div>
+    </div>
+
+    <div class="geo-grid-two-col" style="margin-top: 16px; margin-bottom: 0;">
+      <div>
+        <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 8px;">爬虫来源分布 (7 天)</h3>
+        <?php if (empty($aiBotStats['botDistribution'])): ?>
+          <p class="muted" style="font-size: 13px;">暂未捕获到 AI 爬虫访问记录。</p>
+        <?php else: ?>
+          <div class="geo-bot-dist-list">
+            <?php foreach ($aiBotStats['botDistribution'] as $b): ?>
+              <div class="geo-bot-dist-row">
+                <div class="geo-bot-name-col">
+                  <strong><?= $escape($b['bot_name']) ?></strong>
+                  <span class="muted"><?= (int) $b['count'] ?> 次 (<?= (int) $b['percentage'] ?>%)</span>
+                </div>
+                <div class="geo-bot-progress-track">
+                  <div class="geo-bot-progress-bar" style="width: <?= (int) $b['percentage'] ?>%;"></div>
+                </div>
+              </div>
+            <?php endforeach; ?>
+          </div>
+        <?php endif; ?>
+      </div>
+
+      <div>
+        <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 8px;">最受 AI 关注的内容 (Top 5)</h3>
+        <?php if (empty($aiBotStats['topPaths'])): ?>
+          <p class="muted" style="font-size: 13px;">暂无热门被抓取内容。</p>
+        <?php else: ?>
+          <ul class="geo-crawled-paths-list">
+            <?php foreach ($aiBotStats['topPaths'] as $tp): ?>
+              <li>
+                <code><?= $escape($tp['path']) ?></code>
+                <span class="geo-badge-count"><?= (int) $tp['count'] ?> 次抓取</span>
+              </li>
+            <?php endforeach; ?>
+          </ul>
+        <?php endif; ?>
+      </div>
+    </div>
+
+    <?php if (!empty($aiBotStats['recentVisits'])): ?>
+      <div style="margin-top: 20px; border-top: 1px solid var(--line); padding-top: 16px;">
+        <h3 style="font-size: 14px; font-weight: 600; margin-bottom: 10px;">最近 AI 抓取实时流水 (Recent Stream)</h3>
+        <div class="geo-stream-list">
+          <?php foreach ($aiBotStats['recentVisits'] as $v): ?>
+            <div class="geo-stream-item">
+              <span class="geo-bot-pill is-<?= strtolower(preg_replace('/[^a-z0-9]/i', '', $v['bot_name'])) ?>"><?= $escape($v['bot_name']) ?></span>
+              <span class="geo-stream-path"><code><?= $escape($v['request_path']) ?></code></span>
+              <span class="geo-stream-status is-status-<?= $v['http_status'] ?>"><?= (int) $v['http_status'] ?></span>
+              <span class="geo-stream-time muted"><?= $escape($v['created_at']) ?></span>
+            </div>
+          <?php endforeach; ?>
+        </div>
+      </div>
+    <?php endif; ?>
+  </div>
+
   <div class="geo-section-card">
     <div class="geo-card-header">
       <div>

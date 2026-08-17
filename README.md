@@ -26,15 +26,19 @@ HolyMD 是一款面向个人品牌的**静态优先** Markdown 博客管理工�
 - **LLM / AI 智能体发现生态**：全站自动生成 `/llms.txt` 与包含全站公开文章正文的 `/llms-full.txt` 全文知识库。
 - **页脚品牌与开源连接**：内联优雅展示 `Powered by HolyMD` 并直连 GitHub 开源仓库。
 
-### 3. AI GEO 边界、智能静默自动补全与全站健康看板 (GEO Scorecard)
+### 3. AI GEO 边界、E-E-A-T 品牌资产与全站可观测性看板 (GEO Intelligence)
 - **严格安全边界**：AI 的边界严格限定为 **GEO（Generative Engine Optimization）优化**：它可针对当前文章提取摘要、命名实体、FAQ 候选、元数据、内链与图片 Alt，但**绝不自动篡改 Markdown 正文**。
-- **极简无感自动化**：保存或发布文章时，系统在后台异步调用 GEO 模型，对未填写的空元数据字段进行自动补齐，已手动填写的内容则绝对保留不被覆盖。
-- **多模型智能容错**：原生兼容各类 OpenAI 规范接口（包括 DeepSeek、Claude、Gemini 等），自动适配并智能规整不同格式的字段输出。
-- **全站 GEO 评分与效果追踪体系 (GEO Scorecard)**：
-  - **加权百分制评分模型 (0-100)**：综合评判 `summary`(20分)、`structured_data`(20分)、`faq`(15分)、`entities`(10分)、`topics`(10分)、`sources`(10分)、`internal_links`(10分) 与 `alt_text`(5分，无图自动豁免) 8 大维度；
-  - **三处 UI 联动感知**：文章列表页展示红/橙/绿分级评分标签，写作工作室右侧栏展示总分及各维度得分明细表；
-  - **独立 GEO 仪表盘 (`/admin/geo`)**：可视化展示全站平均 GEO 分、优秀文章占比、纯 CSS 历史发布走势柱状图以及待优化文章排行（标明失分字段，一键直达编辑）；
-  - **发布快照时序归档**：发布文章时自动持久化评分快照到数据库 `geo_scores` 表，形成效果追踪闭环。
+- **极简 Lazy 模式（零 Token 浪费）**：草稿编辑和自动保存 0 LLM 消耗；仅在作者显式点击「一键分析」时按需调用大模型，且原生兼容 DeepSeek、Claude、Gemini 等各类 OpenAI 规范接口。
+- **全站 E-E-A-T 结构化图谱与 Schema.org 严格校验**：
+  - **首页 / 文章页 / 单页全覆盖**：首页自动挂载 `WebSite` 与 `Person`（含作者 URL 与 Bio）；文章页规范输出 `BlogPosting`、`author`、`publisher`（Organization）、`inLanguage` 及 `FAQPage`；自定义单页精准生成 `WebPage` / `AboutPage`；
+  - **本地纯代码校验**：在保存时本地校验 `structured_data` 的 `@type` 与合法结构，杜绝错误数据发布。
+- **加权百分制 GEO 评分体系 (GEO Scorecard)**：
+  - 综合评判 8 大核心维度（0-100分），在文章列表、写作工作室右侧栏、GEO 看板实现三处联动感知，并在文章正式发布时自动记录不可变历史趋势快照。
+- **品牌主题与知识图谱实体矩阵 (Topic & Entity Cluster)**：
+  - 在 GEO 看板直观展现全站话题分类（Topics）的内容积淀度与均分，以及高频命名实体（Entities）词频词云，秒级呈现品牌在各专业领域的权威深度。
+- **AI 爬虫可观测性与访问追踪 (AI Bot Observability)**：
+  - 入口层轻量识别全球主流 AI 爬虫（GPTBot, PerplexityBot, ClaudeBot, Google-AI, Bytespider 等）；
+  - 单向哈希匿名脱敏记录入库，在 GEO 看板实时可视化呈现：近 7 天抓取总次数、爬虫阵营占比、最受 AI 关注的文章排行与最新抓取流水。
 
 ---
 
@@ -104,7 +108,7 @@ php bin/holymd-check.php
 # 校验 composer 配置
 composer validate --strict
 
-# 运行全量单元测试与端到端测试 (259 tests, 1023 assertions)
+# 运行全量单元测试与端到端测试 (264 tests, 1061 assertions)
 ./vendor/bin/phpunit tests
 
 # 验证静态站点构建

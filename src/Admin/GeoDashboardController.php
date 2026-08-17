@@ -113,10 +113,129 @@ final readonly class GeoDashboardController
         // Fetch recent score snapshots from database for trend chart
         $trends = $this->fetchTrends();
 
+        // Fetch AI bot observability metrics
+        $aiBotStats = $this->fetchAiBotStats();
+
         $csrfToken = $this->csrf->token();
         ob_start();
         require dirname(__DIR__, 2) . '/templates/admin/geo-dashboard.php';
         return new Response(200, (string) ob_get_clean(), ['Content-Type' => 'text/html; charset=utf-8']);
+    }
+
+    /**
+     * @return array{
+     *   total7d: int,
+     *   distinctBots7d: int,
+     *   llmsTxt7d: int,
+     *   botDistribution: list<array{bot_name: string, count: int, percentage: int}>,
+     *   topPaths: list<array{path: string, count: int}>,
+     *   recentVisits: list<array{id: int, bot_name: string, request_path: string, http_status: int, created_at: string}>
+     * }
+     */
+    private function fetchAiBotStats(): array
+    {
+        $default = [
+            'total7d' => 0,
+            'distinctBots7d' => 0,
+            'llmsTxt7d' => 0,
+            'botDistribution' => [],
+            'topPaths' => [],
+            'recentVisits' => [],
+        ];
+
+        if ($this->pdo === null) {
+            return $default;
+        }
+
+        try {
+            $cutoff = gmdate('Y-m-d H:i:s', time() - 7 * 86400);
+
+            // 7d summary
+            $stmt = $this->pdo->prepare(
+                "SELECT 
+                    COUNT(*) as total_7d,
+                    COUNT(DISTINCT bot_name) as distinct_bots_7d,
+                    SUM(CASE WHEN request_path LIKE '%llms%' THEN 1 ELSE 0 END) as llms_7d
+                 FROM ai_bot_visits 
+                 WHERE created_at >= ?"
+            );
+            $stmt->execute([$cutoff]);
+            $summary = $stmt->fetch(PDO::FETCH_ASSOC);
+            $total7d = (int) ($summary['total_7d'] ?? 0);
+            $distinctBots7d = (int) ($summary['distinct_bots_7d'] ?? 0);
+            $llmsTxt7d = (int) ($summary['llms_7d'] ?? 0);
+
+            // Bot distribution
+            $botDist = [];
+            if ($total7d > 0) {
+                $stmt = $this->pdo->prepare(
+                    "SELECT bot_name, COUNT(*) as count 
+                     FROM ai_bot_visits 
+                     WHERE created_at >= ?
+                     GROUP BY bot_name 
+                     ORDER BY count DESC"
+                );
+                $stmt->execute([$cutoff]);
+                $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                foreach ($rows as $r) {
+                    $cnt = (int) $r['count'];
+                    $botDist[] = [
+                        'bot_name' => (string) $r['bot_name'],
+                        'count' => $cnt,
+                        'percentage' => (int) round(($cnt / $total7d) * 100),
+                    ];
+                }
+            }
+
+            // Top crawled paths
+            $topPaths = [];
+            $stmt = $this->pdo->prepare(
+                "SELECT request_path, COUNT(*) as count 
+                 FROM ai_bot_visits 
+                 WHERE created_at >= ?
+                 GROUP BY request_path 
+                 ORDER BY count DESC 
+                 LIMIT 5"
+            );
+            $stmt->execute([$cutoff]);
+            $pathRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($pathRows as $pr) {
+                $topPaths[] = [
+                    'path' => (string) $pr['request_path'],
+                    'count' => (int) $pr['count'],
+                ];
+            }
+
+            // Recent visits
+            $recentVisits = [];
+            $stmt = $this->pdo->query(
+                "SELECT id, bot_name, request_path, http_status, created_at 
+                 FROM ai_bot_visits 
+                 ORDER BY id DESC 
+                 LIMIT 10"
+            );
+            $recentRows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
+            foreach ($recentRows as $rr) {
+                $recentVisits[] = [
+                    'id' => (int) $rr['id'],
+                    'bot_name' => (string) $rr['bot_name'],
+                    'request_path' => (string) $rr['request_path'],
+                    'http_status' => (int) $rr['http_status'],
+                    'created_at' => (string) $rr['created_at'],
+                ];
+            }
+
+            return [
+                'total7d' => $total7d,
+                'distinctBots7d' => $distinctBots7d,
+                'llmsTxt7d' => $llmsTxt7d,
+                'botDistribution' => $botDist,
+                'topPaths' => $topPaths,
+                'recentVisits' => $recentVisits,
+            ];
+        } catch (\Throwable) {
+            return $default;
+        }
     }
 
     /**

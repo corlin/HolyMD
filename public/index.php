@@ -101,6 +101,27 @@ if (!str_starts_with($path, '/admin')) {
             }
         }
     }
+    $maybeLogAiBot = static function (string $reqPath, int $status) use ($root): void {
+        $ua = $_SERVER['HTTP_USER_AGENT'] ?? null;
+        $botName = \HolyMD\Geo\AiBotDetector::detect($ua);
+        if ($botName === null) {
+            return;
+        }
+        try {
+            $settings = \HolyMD\Config\Settings::fromEnvironment($root);
+            $pdo = (new \HolyMD\Database\Connection($settings))->pdo();
+            \HolyMD\Geo\AiBotDetector::recordVisit(
+                $pdo,
+                $botName,
+                $reqPath,
+                $status,
+                (string) ($_SERVER['REMOTE_ADDR'] ?? '127.0.0.1'),
+                (string) ($ua ?? '')
+            );
+        } catch (\Throwable) {
+        }
+    };
+
     $relative = trim($path, '/');
     $sitePath = $relative === ''
         ? 'index.html'
@@ -112,20 +133,24 @@ if (!str_starts_with($path, '/admin')) {
         $redirects = $redirectsPath !== false && is_file($redirectsPath) ? json_decode((string) file_get_contents($redirectsPath), true) : null;
         $redirectTarget = is_array($redirects) && is_string($redirects[rtrim($relative, '/') . '/'] ?? null) ? $redirects[rtrim($relative, '/') . '/'] : null;
         if (is_string($redirectTarget)) {
+            $maybeLogAiBot($path, 301);
             header('Location: ' . $basePath . $redirectTarget, true, 301);
             exit;
         }
         $notFound = $siteRoot === false ? false : $siteRoot . '/404.html';
         if ($notFound !== false && is_file($notFound)) {
+            $maybeLogAiBot($path, 404);
             http_response_code(404);
             header('Content-Type: text/html; charset=utf-8');
             readfile($notFound);
             exit;
         }
+        $maybeLogAiBot($path, 404);
         http_response_code(404); exit;
     }
     $types = ['html' => 'text/html; charset=utf-8', 'xml' => 'application/xml', 'json' => 'application/feed+json', 'txt' => 'text/plain; charset=utf-8', 'css' => 'text/css', 'js' => 'text/javascript'];
     $extension = strtolower(pathinfo($candidate, PATHINFO_EXTENSION));
+    $maybeLogAiBot($path, 200);
     header('Content-Type: ' . ($types[$extension] ?? 'application/octet-stream'));
     readfile($candidate);
     exit;

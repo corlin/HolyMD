@@ -43,6 +43,20 @@ final class GeoDashboardControllerTest extends TestCase
         // Add dummy snapshots
         $this->pdo->exec("INSERT INTO geo_scores (slug, score, breakdown, snapshot_trigger, created_at) VALUES ('guide', 85, '[]', 'publish', '2026-08-10 10:00:00')");
         $this->pdo->exec("INSERT INTO geo_scores (slug, score, breakdown, snapshot_trigger, created_at) VALUES ('guide', 90, '[]', 'publish', '2026-08-15 10:00:00')");
+
+        $this->pdo->exec('CREATE TABLE ai_bot_visits (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            bot_name TEXT NOT NULL,
+            request_path TEXT NOT NULL,
+            http_status INTEGER NOT NULL,
+            ip_hash TEXT NOT NULL,
+            user_agent TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )');
+
+        $now = gmdate('Y-m-d H:i:s');
+        $this->pdo->exec("INSERT INTO ai_bot_visits (bot_name, request_path, http_status, ip_hash, user_agent, created_at) VALUES ('GPTBot', '/llms.txt', 200, 'hash1', 'GPTBot/1.0', '{$now}')");
+        $this->pdo->exec("INSERT INTO ai_bot_visits (bot_name, request_path, http_status, ip_hash, user_agent, created_at) VALUES ('PerplexityBot', '/articles/demo/', 200, 'hash2', 'PerplexityBot/1.0', '{$now}')");
     }
 
     protected function tearDown(): void
@@ -87,6 +101,10 @@ final class GeoDashboardControllerTest extends TestCase
         self::assertStringContainsString('核心知识图谱实体', $response->body);
         self::assertStringContainsString('DeepSeek', $response->body);
         self::assertStringContainsString('Architecture', $response->body);
+        self::assertStringContainsString('AI 爬虫可观测性', $response->body);
+        self::assertStringContainsString('GPTBot', $response->body);
+        self::assertStringContainsString('PerplexityBot', $response->body);
+        self::assertStringContainsString('/llms.txt', $response->body);
     }
 
     private function router(): Router
