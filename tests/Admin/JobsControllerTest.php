@@ -46,6 +46,8 @@ final class JobsControllerTest extends TestCase
         self::assertStringContainsString('build failed: 1', $response->body);
         self::assertStringContainsString('build succeeded: 1', $response->body);
         self::assertStringContainsString('heart-health', $response->body);
+        self::assertStringContainsString('2026-08-13 08:00', $response->body);
+        self::assertStringNotContainsString('2026-08-13 00:00:00.000000', $response->body);
         self::assertStringContainsString('&lt;script&gt;alert(1)&lt;/script&gt;', $response->body);
         self::assertStringNotContainsString('<script>alert(1)</script>', $response->body);
         self::assertStringContainsString('href="/admin/jobs"', $response->body);

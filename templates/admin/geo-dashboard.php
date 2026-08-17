@@ -181,7 +181,7 @@ $activeNav = 'geo';
                 <span class="geo-bot-pill is-<?= strtolower(preg_replace('/[^a-z0-9]/i', '', $v['bot_name'])) ?>"><?= $escape($v['bot_name']) ?></span>
                 <span class="geo-stream-path"><code><?= $escape($v['request_path']) ?></code></span>
                 <span class="geo-stream-status is-status-<?= $v['http_status'] ?>"><?= (int) $v['http_status'] ?></span>
-                <span class="geo-stream-time muted"><?= $escape(substr($v['created_at'], 5, 11)) ?></span>
+                <span class="geo-stream-time muted"><?= $escape($v['created_at_display']) ?></span>
               </div>
             <?php endforeach; ?>
           </div>
@@ -245,4 +245,3 @@ $content = (string) ob_get_clean();
 $title = 'GEO 仪表盘';
 require __DIR__ . '/layout.php';
 ?>
-

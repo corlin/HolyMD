@@ -106,6 +106,18 @@ final class GeoDashboardControllerTest extends TestCase
         self::assertStringContainsString('/llms.txt', $response->body);
     }
 
+    public function test_dashboard_displays_utc_visit_time_in_the_site_timezone(): void
+    {
+        $this->session = ['admin_user_id' => 1, 'csrf_token' => 'test-token'];
+        $this->pdo->exec("DELETE FROM ai_bot_visits");
+        $this->pdo->exec("INSERT INTO ai_bot_visits (bot_name, request_path, http_status, ip_hash, user_agent, created_at) VALUES ('GPTBot', '/llms.txt', 200, 'hash1', 'GPTBot/1.0', '2026-08-17 12:34:56')");
+
+        $response = $this->router()->dispatch(new ServerRequest('GET', '/admin/geo'));
+
+        self::assertStringContainsString('08-17 20:34', $response->body);
+        self::assertStringNotContainsString('08-17 12:34', $response->body);
+    }
+
     private function router(): Router
     {
         $calc = new GeoScoreCalculator();

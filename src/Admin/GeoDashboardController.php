@@ -13,17 +13,22 @@ use HolyMD\Geo\GeoScoreCalculator;
 use HolyMD\Http\Csrf;
 use HolyMD\Http\Response;
 use HolyMD\Http\ServerRequest;
+use HolyMD\Config\SiteTimezone;
 use PDO;
 
 final readonly class GeoDashboardController
 {
+    private AdminTimeFormatter $timeFormatter;
+
     public function __construct(
         private ArticleRepository $articles,
         private GeoScoreCalculator $calculator,
         private AdminGuard $guard,
         private Csrf $csrf,
         private ?PDO $pdo = null,
+        ?AdminTimeFormatter $timeFormatter = null,
     ) {
+        $this->timeFormatter = $timeFormatter ?? new AdminTimeFormatter(SiteTimezone::fromEnvironment());
     }
 
     public function index(ServerRequest $request): Response
@@ -217,6 +222,7 @@ final readonly class GeoDashboardController
                     'request_path' => (string) $rr['request_path'],
                     'http_status' => (int) $rr['http_status'],
                     'created_at' => (string) $rr['created_at'],
+                    'created_at_display' => $this->timeFormatter->format((string) $rr['created_at'], 'm-d H:i'),
                 ];
             }
 

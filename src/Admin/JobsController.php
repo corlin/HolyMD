@@ -10,11 +10,15 @@ use HolyMD\Http\Csrf;
 use HolyMD\Http\Response;
 use HolyMD\Http\ServerRequest;
 use HolyMD\Queue\JobStatusRepository;
+use HolyMD\Config\SiteTimezone;
 
 final readonly class JobsController
 {
-    public function __construct(private JobStatusRepository $jobs, private AdminGuard $guard, private Csrf $csrf)
+    private AdminTimeFormatter $timeFormatter;
+
+    public function __construct(private JobStatusRepository $jobs, private AdminGuard $guard, private Csrf $csrf, ?AdminTimeFormatter $timeFormatter = null)
     {
+        $this->timeFormatter = $timeFormatter ?? new AdminTimeFormatter(SiteTimezone::fromEnvironment());
     }
 
     public function index(ServerRequest $request): Response
@@ -26,6 +30,10 @@ final readonly class JobsController
         }
         $summary = $this->jobs->summary();
         $recent = $this->jobs->recent();
+        foreach ($recent as &$job) {
+            $job['created_at_display'] = $this->timeFormatter->format(is_string($job['created_at'] ?? null) ? $job['created_at'] : null);
+        }
+        unset($job);
         $csrfToken = $this->csrf->token();
         ob_start();
         require dirname(__DIR__, 2) . '/templates/admin/jobs.php';

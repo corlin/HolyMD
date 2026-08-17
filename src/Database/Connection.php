@@ -15,7 +15,7 @@ final readonly class Connection
 
     public function pdo(): PDO
     {
-        return new PDO(
+        $pdo = new PDO(
             $this->settings->dsn,
             $this->settings->username,
             $this->settings->password,
@@ -25,5 +25,11 @@ final readonly class Connection
                 PDO::ATTR_EMULATE_PREPARES => false,
             ],
         );
+        if ($pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql') {
+            $pdo->exec('SET @holymd_legacy_offset_seconds = TIMESTAMPDIFF(SECOND, UTC_TIMESTAMP(), NOW())');
+            $pdo->exec("SET time_zone = '+00:00'");
+        }
+
+        return $pdo;
     }
 }

@@ -23,7 +23,7 @@
             <span class="status status-<?= $escape((string) $job['status']) ?>"><span class="icon" aria-hidden="true"><?= $jobIcons[$job['status']] ?? 'circle' ?></span><?= $escape((string) $job['status']) ?></span>
           </div>
           <div class="article-row-meta">
-            <span><?= $escape((string) ($job['slug'] ?? '')) ?><?= $job['action'] === null ? '' : ' · ' . $escape((string) $job['action']) ?> · <?= (int) $job['attempts'] ?> attempt(s) · <?= $escape((string) $job['created_at']) ?></span>
+            <span><?= $escape((string) ($job['slug'] ?? '')) ?><?= $job['action'] === null ? '' : ' · ' . $escape((string) $job['action']) ?> · <?= (int) $job['attempts'] ?> attempt(s) · <?= $escape((string) $job['created_at_display']) ?></span>
           </div>
           <?php if (is_string($job['last_error']) && $job['last_error'] !== ''): ?>
             <p class="job-error"><span class="icon" aria-hidden="true">error</span><?= $escape(substr($job['last_error'], 0, 300)) ?></p>
