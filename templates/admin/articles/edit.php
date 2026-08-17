@@ -41,7 +41,7 @@ $activeNav = 'articles';
         <?php if ($status === 'published'): ?>
           <a href="<?= $path('/articles/' . rawurlencode($article->slug) . '/') ?>"><span class="icon" aria-hidden="true">open_in_new</span>View public</a>
         <?php endif; ?>
-        <form id="<?= $publicationFormId ?>" data-publication-form method="post" action="<?= $path('/admin/articles/' . rawurlencode($article->slug) . '/publish') ?>">
+        <form id="<?= $publicationFormId ?>" data-publication-form method="post" action="<?= $path('/admin/articles/' . rawurlencode($article->slug) . '/preflight') ?>">
           <input type="hidden" name="csrf_token" value="<?= $escape($csrfToken) ?>">
           <input data-publication-checksum type="hidden" name="expected_checksum" value="<?= $escape($articleChecksum) ?>">
           <button id="publish-button" type="submit"><span class="icon" aria-hidden="true">publish</span><?= $status === 'published' ? 'Update public' : 'Publish' ?></button>

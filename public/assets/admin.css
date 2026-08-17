@@ -79,6 +79,7 @@
 @media(max-width:640px){.geo-ai-stat-row{grid-template-columns:1fr}}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 @media(max-width:650px){.publication-actions{flex-wrap:wrap;justify-content:flex-start;max-width:100%}.publication-actions form{flex:0 1 auto}.preview-heading{align-items:flex-start;flex-direction:column}}
+.preflight-page{max-width:780px}.preflight-score-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:24px 0}.preflight-score-grid>div{display:grid;gap:4px;padding:16px;border:1px solid var(--line);background:#fffdf9}.preflight-score-grid strong{font:30px Georgia,serif;color:var(--blue)}.preflight-page section{margin:20px 0}.preflight-blockers{border-left:4px solid #8b2f2f;padding-left:16px}.preflight-warnings{border-left:4px solid #a56a17;padding-left:16px}.preflight-actions{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:28px}.preflight-actions form{margin:0}@media(max-width:650px){.preflight-score-grid{grid-template-columns:1fr}.preflight-actions{align-items:stretch;flex-direction:column}.preflight-actions button{width:100%}}
 .geo-ai-stat-item{display:flex;flex-direction:column;align-items:flex-start}
 .geo-ai-stat-num{font-size:22px;font-weight:700;color:var(--ink);line-height:1.2}
 .geo-ai-stat-lbl{font-size:11.5px;color:var(--muted);margin-top:2px}

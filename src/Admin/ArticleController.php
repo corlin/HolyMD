@@ -17,6 +17,7 @@ use HolyMD\Http\Csrf;
 use HolyMD\Http\Response;
 use HolyMD\Http\ServerRequest;
 use HolyMD\Publish\PublishService;
+use HolyMD\Publish\PublishPreflightResult;
 use HolyMD\Queue\MySqlJobQueue;
 use HolyMD\Render\MarkdownRenderer;
 use InvalidArgumentException;
@@ -147,7 +148,7 @@ final readonly class ArticleController
             return Response::json(['error' => 'Article not found.'], 404);
         }
         $versions = $this->versions->list($article->slug);
-        $articleChecksum = hash('sha256', $article->serialize());
+        $articleChecksum = $this->sourceChecksum($article);
         $calculator = $this->geoCalculator ?? new GeoScoreCalculator();
         $geoScore = $calculator->calculate($article);
         $csrfToken = $this->csrf->token();
@@ -174,6 +175,33 @@ final readonly class ArticleController
         }
     }
 
+    public function preflight(ServerRequest $request): Response
+    {
+        if (($response = $this->authorizeMutation($request)) !== null) {
+            return $this->publicationError('Publication preflight was rejected.', $response->status);
+        }
+        if (preg_match('#^/admin/articles/([a-z0-9]+(?:-[a-z0-9]+)*)/preflight$#', $request->path, $matches) !== 1) {
+            return $this->publicationError('Invalid publication preflight route.', 422);
+        }
+        if ($this->publisher === null) {
+            return $this->publicationError('Publishing is not configured.', 503, $matches[1]);
+        }
+
+        try {
+            $article = $this->articles->read($matches[1]);
+            $expectedChecksum = $request->input('expected_checksum');
+            if (!is_string($expectedChecksum) || !hash_equals($this->sourceChecksum($article), $expectedChecksum)) {
+                return $this->publicationError('The article changed in another editor session. Reload before publishing.', 409, $matches[1]);
+            }
+            $candidate = $this->submittedArticle($request, $article);
+            return $this->preflightResponse($candidate, $this->publisher->preflight($candidate), $expectedChecksum);
+        } catch (InvalidArgumentException $exception) {
+            return $this->publicationError($exception->getMessage(), 422, $matches[1]);
+        } catch (\RuntimeException $exception) {
+            return $this->publicationError($exception->getMessage(), 500, $matches[1]);
+        }
+    }
+
     public function publish(ServerRequest $request): Response
     {
         if (($response = $this->authorizeMutation($request)) !== null) {
@@ -189,14 +217,27 @@ final readonly class ArticleController
         try {
             $article = $this->articles->read($matches[1]);
             $selectedVersion = null;
-            if ($matches[2] === 'publish' && $request->input('body') !== null) {
-                $updated = $this->submittedArticle($request, $article);
+            if ($matches[2] === 'publish') {
+                $hasSubmittedBody = $request->input('body') !== null;
+                $updated = $hasSubmittedBody ? $this->submittedArticle($request, $article) : $article;
                 $expectedChecksum = $request->input('expected_checksum');
-                if (!is_string($expectedChecksum) || !$this->articles->writeIfUnchanged($updated, $expectedChecksum)) {
+                if ($hasSubmittedBody && (!is_string($expectedChecksum) || !hash_equals($this->sourceChecksum($article), $expectedChecksum))) {
                     return $this->publicationError('The article changed in another editor session. Reload before publishing.', 409, $matches[1]);
                 }
-                $selectedVersion = $this->versions->capturePublicationInput($updated);
-                $article = $updated;
+                $preflight = $this->publisher->preflight($updated);
+                if (!$preflight->canPublish()) {
+                    return $this->publicationError(implode("\n", $preflight->blockers), 422, $matches[1]);
+                }
+                if ($preflight->requiresAcknowledgement() && !hash_equals($preflight->checksum, (string) $request->input('preflight_acknowledgement', ''))) {
+                    return $this->publicationError('A preflight acknowledgement bound to the current article is required.', 409, $matches[1]);
+                }
+                if ($hasSubmittedBody) {
+                    if (!$this->articles->writeIfUnchanged($updated, (string) $expectedChecksum)) {
+                        return $this->publicationError('The article changed in another editor session. Reload before publishing.', 409, $matches[1]);
+                    }
+                    $selectedVersion = $this->versions->capturePublicationInput($updated);
+                    $article = $updated;
+                }
             }
             if ($matches[2] === 'publish' && $selectedVersion === null) $selectedVersion = $this->versions->capturePublicationInput($article);
             if ($this->queue !== null) {
@@ -210,6 +251,47 @@ final readonly class ArticleController
         } catch (\RuntimeException $exception) {
             return $this->publicationError($exception->getMessage(), 500, $matches[1]);
         }
+    }
+
+    private function preflightResponse(ArticleDocument $candidate, PublishPreflightResult $preflight, string $expectedChecksum): Response
+    {
+        $csrfToken = $this->csrf->token();
+        $fields = $this->publicationFields($candidate);
+        ob_start();
+        require dirname(__DIR__, 2) . '/templates/admin/articles/preflight.php';
+        return new Response($preflight->canPublish() ? 200 : 422, (string) ob_get_clean(), ['Content-Type' => 'text/html; charset=utf-8']);
+    }
+
+    /** @return array<string, string> */
+    private function publicationFields(ArticleDocument $document): array
+    {
+        $fields = [
+            'title' => $document->title,
+            'date' => (string) $document->frontMatter->get('date'),
+            'body' => $document->bodyMarkdown,
+        ];
+        foreach (['summary', 'topics', 'entities', 'faq', 'sources', 'alt_text', 'hierarchy', 'internal_links', 'previous_slugs', 'structured_data'] as $key) {
+            $value = $document->frontMatter->get($key);
+            if ($value === null) {
+                $fields[$key] = '';
+            } elseif (is_array($value) && array_is_list($value) && array_reduce($value, static fn (bool $ok, mixed $item): bool => $ok && is_string($item), true)) {
+                $fields[$key] = implode("\n", $value);
+            } elseif (is_array($value)) {
+                $fields[$key] = json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+            } else {
+                $fields[$key] = (string) $value;
+            }
+        }
+        return $fields;
+    }
+
+    private function sourceChecksum(ArticleDocument $document): string
+    {
+        $checksum = hash_file('sha256', $document->sourcePath);
+        if (!is_string($checksum)) {
+            throw new \RuntimeException('Unable to checksum the current article source.');
+        }
+        return $checksum;
     }
 
     private function publicationError(string $message, int $status, ?string $slug = null): Response

@@ -140,6 +140,60 @@ final class ArticleControllerTest extends TestCase
         self::assertStringContainsString('data-geo-catchall', $response->body);
         self::assertStringContainsString('<h1 class="sr-only">Edit First note</h1>', $response->body);
         self::assertSame(1, substr_count($response->body, '<h1'));
+        self::assertStringContainsString('action="/admin/articles/first-note/preflight"', $response->body);
+        self::assertStringContainsString('value="' . hash_file('sha256', $this->root . '/articles/first-note.md') . '"', $response->body);
+    }
+
+    public function test_preflight_renders_scores_changes_and_confirmation_without_saving(): void
+    {
+        $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);
+        $before = (string) file_get_contents($this->root . '/articles/first-note.md');
+        $payload = [
+            'title' => 'First note', 'date' => '2026-08-12', 'body' => "Changed body\n",
+            'summary' => str_repeat('Detailed summary ', 5),
+            'expected_checksum' => hash_file('sha256', $this->root . '/articles/first-note.md'), 'csrf_token' => 'expected-token',
+        ];
+
+        $response = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/preflight', [], $payload));
+
+        self::assertSame(200, $response->status);
+        self::assertStringContainsString('Publish preflight', $response->body);
+        self::assertStringContainsString('Candidate GEO score', $response->body);
+        self::assertStringContainsString('25', $response->body);
+        self::assertStringContainsString('New Publication', $response->body);
+        self::assertStringContainsString('name="preflight_acknowledgement"', $response->body);
+        self::assertStringContainsString('action="/admin/articles/first-note/publish"', $response->body);
+        self::assertSame($before, file_get_contents($this->root . '/articles/first-note.md'));
+        self::assertSame([], (new VersionService($this->root . '/versions'))->list('first-note'));
+    }
+
+    public function test_publish_requires_an_acknowledgement_bound_to_the_exact_candidate(): void
+    {
+        $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);
+        $source = (string) file_get_contents($this->root . '/articles/first-note.md');
+        $payload = [
+            'title' => 'First note', 'date' => '2026-08-12', 'body' => "Candidate body\n",
+            'expected_checksum' => hash_file('sha256', $this->root . '/articles/first-note.md'), 'csrf_token' => 'expected-token',
+        ];
+
+        $missing = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/publish', [], $payload));
+        self::assertSame(409, $missing->status);
+        self::assertStringContainsString('preflight acknowledgement', strtolower($missing->body));
+        self::assertSame($source, file_get_contents($this->root . '/articles/first-note.md'));
+
+        $preflight = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/preflight', [], $payload));
+        self::assertMatchesRegularExpression('/name="preflight_acknowledgement" value="([a-f0-9]{64})"/', $preflight->body);
+        preg_match('/name="preflight_acknowledgement" value="([a-f0-9]{64})"/', $preflight->body, $matches);
+        $acknowledgement = $matches[1];
+
+        $stale = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/publish', [], [...$payload, 'body' => "Changed after preflight\n", 'preflight_acknowledgement' => $acknowledgement]));
+        self::assertSame(409, $stale->status);
+        self::assertSame($source, file_get_contents($this->root . '/articles/first-note.md'));
+        self::assertSame($payload['expected_checksum'], hash_file('sha256', $this->root . '/articles/first-note.md'));
+
+        $published = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/publish', [], [...$payload, 'preflight_acknowledgement' => $acknowledgement]));
+        self::assertSame(200, $published->status, $published->body);
+        self::assertStringContainsString('Candidate body', (string) file_get_contents($this->publishedRoot() . '/articles/first-note/index.html'));
     }
 
     public function test_draft_save_round_trips_metadata_fields(): void
@@ -370,7 +424,7 @@ final class ArticleControllerTest extends TestCase
     {
         $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);
 
-        $response = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/publish', [], ['csrf_token' => 'expected-token']));
+        $response = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/publish', [], $this->confirmedPublishPayload($router)));
 
         self::assertSame(200, $response->status);
         self::assertStringContainsString('Article published', $response->body);
@@ -384,7 +438,7 @@ final class ArticleControllerTest extends TestCase
     public function test_only_a_successful_publish_advances_content_version_history(): void
     {
         $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);
-        self::assertSame(200, $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/publish', [], ['csrf_token' => 'expected-token']))->status);
+        self::assertSame(200, $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/publish', [], $this->confirmedPublishPayload($router)))->status);
 
         $repository = new ArticleRepository($this->root . '/articles');
         $versions = new VersionService($this->root . '/versions');
@@ -400,7 +454,7 @@ final class ArticleControllerTest extends TestCase
         self::assertCount(1, $versions->list('first-note'));
         self::assertSame($firstPublishedVersion, $repository->read('first-note')->frontMatter->get('published_version'));
 
-        self::assertSame(200, $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/publish', [], ['csrf_token' => 'expected-token']))->status);
+        self::assertSame(200, $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/publish', [], $this->confirmedPublishPayload($router)))->status);
         self::assertCount(2, $versions->list('first-note'));
         self::assertNotSame($firstPublishedVersion, $repository->read('first-note')->frontMatter->get('published_version'));
     }
@@ -416,13 +470,16 @@ final class ArticleControllerTest extends TestCase
         self::assertStringContainsString('name="body"', $editor->body);
 
         $checksum = hash('sha256', (string) file_get_contents($this->root . '/articles/first-note.md'));
-        $response = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/publish', [], [
+        $payload = [
             'title' => 'Updated public note',
             'date' => '2026-08-13',
             'body' => "Latest submitted **Markdown**.\n",
             'expected_checksum' => $checksum,
             'csrf_token' => 'expected-token',
-        ]));
+        ];
+        $preflight = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/preflight', [], $payload));
+        preg_match('/name="preflight_acknowledgement" value="([a-f0-9]{64})"/', $preflight->body, $matches);
+        $response = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/publish', [], [...$payload, 'preflight_acknowledgement' => $matches[1]]));
 
         self::assertSame(200, $response->status);
         $saved = (new ArticleRepository($this->root . '/articles'))->read('first-note');
@@ -650,6 +707,24 @@ final class ArticleControllerTest extends TestCase
         $publisher = new PublishService($repository, new StaticBuilder(), new AtomicPublicTree(), $this->root . '/public/.holymd-current', $publication, versions: $versions);
         $controller = new ArticleController($repository, $versions, new AdminGuard($session), new Csrf($session), $publisher, null, $this->root . '/media', $publication->adminValues());
         return new Router($controller);
+    }
+
+    /** @param array<string, string> $overrides @return array<string, string> */
+    private function confirmedPublishPayload(Router $router, array $overrides = []): array
+    {
+        $document = (new ArticleRepository($this->root . '/articles'))->read('first-note');
+        $payload = [...[
+            'title' => $document->title,
+            'date' => (string) $document->frontMatter->get('date'),
+            'body' => $document->bodyMarkdown,
+            'expected_checksum' => hash_file('sha256', $this->root . '/articles/first-note.md'),
+            'csrf_token' => 'expected-token',
+        ], ...$overrides];
+        $preflight = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/preflight', [], $payload));
+        self::assertSame(200, $preflight->status, $preflight->body);
+        self::assertMatchesRegularExpression('/name="preflight_acknowledgement" value="([a-f0-9]{64})"/', $preflight->body);
+        preg_match('/name="preflight_acknowledgement" value="([a-f0-9]{64})"/', $preflight->body, $matches);
+        return [...$payload, 'preflight_acknowledgement' => $matches[1]];
     }
 
     private function publishedRoot(): string
