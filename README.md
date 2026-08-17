@@ -36,12 +36,12 @@ HolyMD 是一款面向个人品牌的**静态优先** Markdown 博客管理工�
   - **8 大多维加权评判 (0-100)**：综合评判 `summary`(20分)、`structured_data`(20分)、`faq`(15分)、`entities`(10分)、`topics`(10分)、`sources`(10分)、`internal_links`(10分) 与 `alt_text`(5分，无图自动豁免)；
   - **正文链接无感自动感知**：自动识别 Markdown 正文中自然书写的权威外链 `[xxx](https://...)` 与站内互链 `[xxx](/articles/...)`，免去在元数据表单中重复录入；
   - **多行实体智能拆分**：支持多行文本与逗号分割的多命名实体自动精确提取；
-  - **三处联动与时序归档**：在文章列表、写作工作室右侧栏、GEO 看板实现三处联动感知，并在文章正式发布时自动记录不可变历史趋势快照。
+  - **三处联动与时序归档**：在文章列表、写作工作室右侧栏统一「GEO 智能引擎」卡片与 GEO 看板实现三处联动感知，并在文章正式发布时自动记录不可变历史趋势快照。
 - **品牌主题与知识图谱实体矩阵 (Topic & Entity Cluster)**：
   - 在 GEO 看板直观展现全站话题分类（Topics）的内容积淀度与均分，以及高频命名实体（Entities）词频词云，秒级呈现品牌在各专业领域的权威深度。
 - **AI 爬虫可观测性与访问追踪 (AI Bot Observability)**：
   - 入口层轻量识别全球主流 AI 爬虫（GPTBot, PerplexityBot, ClaudeBot, Google-AI, Bytespider 等）；
-  - 单向哈希匿名脱敏记录入库，在 GEO 看板实时可视化呈现：近 7 天抓取总次数、爬虫阵营占比、最受 AI 关注的文章排行与最新抓取流水。
+  - 单向哈希匿名脱敏记录入库，在 GEO 看板紧凑呈现：近 7 天抓取总次数、爬虫阵营占比、最受 AI 关注的内容与最新抓取微流水。
 
 ---
 
@@ -111,7 +111,7 @@ php bin/holymd-check.php
 # 校验 composer 配置
 composer validate --strict
 
-# 运行全量单元测试与端到端测试 (266 tests, 1067 assertions)
+# 运行全量单元测试与端到端测试 (266 tests, 1066 assertions)
 ./vendor/bin/phpunit tests
 
 # 验证静态站点构建
