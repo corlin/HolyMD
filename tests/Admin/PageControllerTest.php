@@ -60,6 +60,10 @@ final class PageControllerTest extends TestCase
         $this->session = ['admin_user_id' => 9, 'csrf_token' => 'test-csrf'];
         $router = $this->router();
 
+        $newResponse = $router->dispatch(new ServerRequest('GET', '/admin/pages/new'));
+        self::assertSame(200, $newResponse->status);
+        self::assertStringContainsString('pattern="[A-Za-z0-9 _\\-]+"', $newResponse->body);
+
         // 1. Create page
         $createResponse = $router->dispatch(new ServerRequest('POST', '/admin/pages/new', [], [
             'csrf_token' => 'test-csrf',

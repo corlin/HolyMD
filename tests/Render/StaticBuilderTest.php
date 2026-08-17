@@ -277,6 +277,31 @@ final class StaticBuilderTest extends TestCase
         self::assertStringContainsString('.theme-switcher { display: none;', $styles);
     }
 
+    public function test_multilingual_generated_artifacts_are_valid_and_never_introduce_replacement_characters(): void
+    {
+        $article = new ArticleDocument(
+            'utf8-integrity',
+            '中文、emoji 与 UTF-8 ✅',
+            "## 标题\n\n正文包含弯引号“”、破折号——和图片。\n\n![清晰替代文本](/media/example.png)\n",
+            new FrontMatter([
+                'title' => '中文、emoji 与 UTF-8 ✅', 'slug' => 'utf8-integrity', 'date' => '2026-08-17',
+                'summary' => '这是一段用于验证多语言静态产物字符完整性的详细摘要。', 'topics' => ['测试'],
+            ]),
+            '/utf8-integrity',
+        );
+        (new StaticBuilder())->build($this->input([$article], '中文站点', 'https://example.test', '作者', '关于作者', true), $this->outputRoot);
+
+        foreach (['index.html', 'articles/utf8-integrity/index.html', 'feed.json', 'search-index.json', 'llms.txt', 'llms-full.txt'] as $path) {
+            $contents = (string) file_get_contents($this->outputRoot . '/' . $path);
+            self::assertTrue(mb_check_encoding($contents, 'UTF-8'), $path);
+            self::assertStringNotContainsString("\u{FFFD}", $contents, $path);
+        }
+        json_decode((string) file_get_contents($this->outputRoot . '/feed.json'), true, flags: JSON_THROW_ON_ERROR);
+        json_decode((string) file_get_contents($this->outputRoot . '/search-index.json'), true, flags: JSON_THROW_ON_ERROR);
+        self::assertInstanceOf(\SimpleXMLElement::class, simplexml_load_string((string) file_get_contents($this->outputRoot . '/rss.xml')));
+        self::assertInstanceOf(\SimpleXMLElement::class, simplexml_load_string((string) file_get_contents($this->outputRoot . '/atom.xml')));
+    }
+
     public function test_each_article_is_rendered_exactly_once_per_build(): void
     {
         $counter = new class extends \HolyMD\Render\MarkdownRenderer {

@@ -17,7 +17,7 @@ $activeNav = 'pages';
       <input name="title" required>
     </label>
     <label>Slug <span class="muted">(optional)</span>
-      <input name="slug" pattern="[A-Za-z0-9 _-]+" aria-describedby="slug-help">
+      <input name="slug" pattern="[A-Za-z0-9 _\-]+" aria-describedby="slug-help">
     </label>
     <p id="slug-help" class="muted">A lowercase, URL-safe slug is generated from this value or the title. Page will be routed at /&lt;slug&gt;/.</p>
     <label>Date

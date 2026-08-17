@@ -63,6 +63,7 @@ final class ArticleControllerTest extends TestCase
         self::assertSame(200, $response->status);
         self::assertStringContainsString('action="/admin/articles/new"', $response->body);
         self::assertStringContainsString('value="expected-token"', $response->body);
+        self::assertStringContainsString('pattern="[A-Za-z0-9 _\\-]+"', $response->body);
     }
 
     public function test_new_article_creates_safe_markdown_without_a_published_version_then_redirects_to_edit(): void
@@ -522,6 +523,13 @@ final class ArticleControllerTest extends TestCase
         $response = $router->dispatch(new ServerRequest('POST', '/admin/articles/public/delete', [], ['csrf_token' => 'expected-token', 'confirm_slug' => 'public']));
         self::assertSame(422, $response->status);
         self::assertTrue((new ArticleRepository($this->root . '/articles'))->exists('public'));
+
+        file_put_contents($this->root . '/articles/withdrawn.md', "---\ntitle: Withdrawn\nslug: withdrawn\ndate: 2026-08-12\nstatus: withdrawn\n---\nBody\n");
+        $editor = $router->dispatch(new ServerRequest('GET', '/admin/articles/withdrawn/edit'));
+        self::assertStringContainsString('/admin/articles/withdrawn/delete', $editor->body);
+        $response = $router->dispatch(new ServerRequest('POST', '/admin/articles/withdrawn/delete', [], ['csrf_token' => 'expected-token', 'confirm_slug' => 'withdrawn']));
+        self::assertSame(303, $response->status);
+        self::assertFalse((new ArticleRepository($this->root . '/articles'))->exists('withdrawn'));
     }
 
     public function test_media_library_accepts_valid_images_and_rejects_unsafe_uploads(): void

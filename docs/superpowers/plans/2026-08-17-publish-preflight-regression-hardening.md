@@ -314,19 +314,19 @@ Commit: `git commit -m "feat: enforce publish preflight confirmation"`
 **Interfaces:**
 - Produces: regression assertions for valid UTF-8 without U+FFFD in HTML, JSON Feed, search index, and `llms` artifacts.
 
-- [ ] **Step 1: Write a failing artifact-integrity test using multilingual content**
+- [x] **Step 1: Write a failing artifact-integrity test using multilingual content**
 
 The fixture contains Chinese, punctuation, emoji, and an image. Assert `mb_check_encoding`, absence of `"\u{FFFD}"`, successful `json_decode(..., JSON_THROW_ON_ERROR)`, and successful XML parsing for every generated discovery artifact.
 
-- [ ] **Step 2: Run and verify the test proves the stale artifact failure**
+- [x] **Step 2: Run and verify the test proves the stale artifact failure**
 
 Run the assertion against the old generated fixture first and observe U+FFFD; then run it against a fresh builder output. If the fresh build already passes, retain the regression test and treat controlled rebuild as the production repair rather than changing the renderer.
 
-- [ ] **Step 3: Document timezone and preflight behavior**
+- [x] **Step 3: Document timezone and preflight behavior**
 
 Add `HOLYMD_TIMEZONE=Asia/Singapore` to `.env.example` and describe UTC storage, warning acknowledgement, queued publish scoring, and no-GEO-guarantee semantics in README.
 
-- [ ] **Step 4: Run the complete automated gate**
+- [x] **Step 4: Run the complete automated gate**
 
 Run: `composer validate --strict`
 
@@ -342,11 +342,11 @@ Run: `php bin/holymd-build.php --dry-run`
 
 Run: `git diff --check`
 
-- [ ] **Step 5: Exercise MySQL, Worker, and browser flows**
+- [x] **Step 5: Exercise MySQL, Worker, and browser flows**
 
 Migrate the local database; log in without recording credentials; use a temporary article/image to exercise edit, preflight, acknowledgement, queue, worker, score history, public rendering, image viewer, 375 px public header, and 375 px editor actions. Withdraw/delete the temporary article and media, drain its jobs, and rebuild the normal public tree.
 
-- [ ] **Step 6: Audit cleanup and commit**
+- [x] **Step 6: Audit cleanup and commit**
 
 Assert no temporary slug/media, queued/running job, replacement character, secret, or unrelated working-tree change remains.
 

@@ -316,7 +316,8 @@ final readonly class ArticleController
         if (preg_match('#^/admin/articles/([a-z0-9]+(?:-[a-z0-9]+)*)/delete$#', $request->path, $matches) !== 1) return Response::json(['error' => 'Invalid delete route.'], 422);
         try {
             $article = $this->articles->read($matches[1]);
-            if ($article->frontMatter->get('status', 'draft') !== 'draft') throw new InvalidArgumentException('Only draft articles can be deleted. Withdraw a published article first.');
+            $status = $article->frontMatter->get('status', 'draft');
+            if (!in_array($status, ['draft', 'withdrawn'], true)) throw new InvalidArgumentException('Only draft or withdrawn articles can be deleted. Withdraw a published article first.');
             if ($request->input('confirm_slug') !== $article->slug) throw new InvalidArgumentException('Type the article slug to confirm deletion.');
             $this->articles->delete($article->slug);
             $this->versions->purge($article->slug);

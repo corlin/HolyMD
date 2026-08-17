@@ -11,6 +11,7 @@ HolyMD 是一款面向个人品牌的**静态优先** Markdown 博客管理工�
 - **60fps 视口比例联动滚动 (Synchronized Scrolling)**：编辑区与预览区滚动位置毫秒级比例同步，双栏独立等高视口，无回环死锁。
 - **智能光标对齐 (Smart Cursor Centering)**：光标在编辑器内上下移动或输入时，自动识别最近标题或段落，将预览区对应小节平滑居中显示（内置 150ms 防抖）。
 - **无感自动保存**：编辑时后台安全自动保存草稿，保留当前编辑版本校验和（Checksum），多端并发编辑冲突保护。
+- **发布前检查 (Publish Preflight)**：正式发布前由服务端对精确候选内容重新执行元数据、静态构建和 GEO 检查，显示字段变化与评分变化；阻断错误必须修复，建议项需显式确认且确认值与候选内容校验和绑定。
 - **全站不可变版本快照与一键回滚 (Version Control & Restore)**：文章（Articles）与自定义单页（Pages）在每次正式发布时自动生成不可变快照，支持在右侧栏随时查看历史发布列表并一键回退。
 - **统一克制的危险操作区 (Danger Zone) 与级联彻底清理**：
   - 彻底移除粗暴的原生 `prompt()` 弹窗与突兀大红按钮，统一收纳为折叠式 `<details class="danger-zone">`；
@@ -36,7 +37,8 @@ HolyMD 是一款面向个人品牌的**静态优先** Markdown 博客管理工�
   - **8 大多维加权评判 (0-100)**：综合评判 `summary`(20分)、`structured_data`(20分)、`faq`(15分)、`entities`(10分)、`topics`(10分)、`sources`(10分)、`internal_links`(10分) 与 `alt_text`(5分，无图自动豁免)；
   - **正文链接无感自动感知**：自动识别 Markdown 正文中自然书写的权威外链 `[xxx](https://...)` 与站内互链 `[xxx](/articles/...)`，免去在元数据表单中重复录入；
   - **多行实体智能拆分**：支持多行文本与逗号分割的多命名实体自动精确提取；
-  - **三处联动与时序归档**：在文章列表、写作工作室右侧栏统一「GEO 智能引擎」卡片与 GEO 看板实现三处联动感知，并在文章正式发布时自动记录不可变历史趋势快照。
+- **三处联动与时序归档**：在文章列表、写作工作室右侧栏统一「GEO 智能引擎」卡片与 GEO 看板实现三处联动感知，并在文章正式发布时自动记录不可变历史趋势快照。
+- **同步/异步一致归档**：浏览器内同步发布与 Cron Worker 异步发布均在公开树成功切换后记录同一发布快照的 GEO 得分；评分记录失败会进入补偿审计，不会伪装成公开内容回滚。
 - **品牌主题与知识图谱实体矩阵 (Topic & Entity Cluster)**：
   - 在 GEO 看板直观展现全站话题分类（Topics）的内容积淀度与均分，以及高频命名实体（Entities）词频词云，秒级呈现品牌在各专业领域的权威深度。
 - **AI 爬虫可观测性与访问追踪 (AI Bot Observability)**：
@@ -52,6 +54,7 @@ HolyMD 是一款面向个人品牌的**静态优先** Markdown 博客管理工�
 - **Web 服务器**：Apache 2.4（需启用 `mod_rewrite`、允许 `.htaccess`，支持符号链接）或 Nginx
 - **包管理器**：Composer 2
 - **文件权限**：Web 根目录指向 `public/`；PHP 用户对 `content/`、`content/media/`、`public/` 具备写权限
+- **时间模型**：MySQL 运行状态统一按 UTC 保存；后台按 `HOLYMD_TIMEZONE` 展示，默认 `Asia/Singapore`
 
 ---
 
@@ -111,7 +114,7 @@ php bin/holymd-check.php
 # 校验 composer 配置
 composer validate --strict
 
-# 运行全量单元测试与端到端测试 (266 tests, 1066 assertions)
+# 运行全量单元测试与端到端测试 (284 tests, 1184 assertions)
 ./vendor/bin/phpunit tests
 
 # 验证静态站点构建

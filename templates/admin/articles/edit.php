@@ -112,7 +112,7 @@ $activeNav = 'articles';
         <?php endforeach; ?>
       </ul>
     </details>
-    <?php if ($status === 'draft'): ?>
+    <?php if (in_array($status, ['draft', 'withdrawn'], true)): ?>
       <details class="danger-zone">
         <summary>Delete draft</summary>
         <p>This permanently removes the Markdown file and all its published snapshots. Type <strong><?= $escape($article->slug) ?></strong> to confirm.</p>
