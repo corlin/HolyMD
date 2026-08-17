@@ -82,4 +82,32 @@ final class AiBotDetector
             // Silently ignore logging errors so public file serving is never interrupted
         }
     }
+
+    public static function trackIfBot(
+        ?string $root,
+        string $path,
+        int $httpStatus,
+        ?string $userAgent = null,
+        ?string $ip = null
+    ): void {
+        $ua = $userAgent ?? ($_SERVER['HTTP_USER_AGENT'] ?? null);
+        $botName = self::detect($ua);
+        if ($botName === null) {
+            return;
+        }
+
+        try {
+            $settings = \HolyMD\Config\Settings::fromEnvironment($root);
+            $pdo = (new \HolyMD\Database\Connection($settings))->pdo();
+            self::recordVisit(
+                $pdo,
+                $botName,
+                $path,
+                $httpStatus,
+                $ip ?? (string) ($_SERVER['REMOTE_ADDR'] ?? '127.0.0.1'),
+                (string) ($ua ?? '')
+            );
+        } catch (Throwable) {
+        }
+    }
 }

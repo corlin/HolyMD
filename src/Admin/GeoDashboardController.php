@@ -78,12 +78,7 @@ final readonly class GeoDashboardController
 
             // Aggregate entities
             $entities = $article->frontMatter->get('entities');
-            $entityList = [];
-            if (is_string($entities)) {
-                $entityList = preg_split('/[\r\n]+/', $entities) ?: [];
-            } elseif (is_array($entities)) {
-                $entityList = $entities;
-            }
+            $entityList = is_array($entities) ? $entities : (is_string($entities) ? (preg_split('/[\r\n,]+/', $entities) ?: []) : []);
             foreach ($entityList as $ent) {
                 if (is_string($ent) && trim($ent) !== '') {
                     $normalized = trim($ent);

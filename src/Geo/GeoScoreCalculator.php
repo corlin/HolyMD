@@ -168,26 +168,12 @@ final class GeoScoreCalculator
         if ($value === null) {
             return [];
         }
-        if (is_string($value)) {
-            $lines = preg_split('/[\r\n,]+/', $value) ?: [];
-            $result = [];
-            foreach ($lines as $line) {
-                $trimmed = trim($line);
-                if ($trimmed !== '') {
-                    $result[] = $trimmed;
-                }
-            }
-            return $result;
-        }
-        if (!is_array($value)) {
-            return [];
-        }
+        $items = is_array($value) ? $value : (is_string($value) ? [$value] : []);
         $result = [];
-        foreach ($value as $item) {
+        foreach ($items as $item) {
             if (is_string($item)) {
-                $subLines = preg_split('/[\r\n,]+/', $item) ?: [];
-                foreach ($subLines as $sl) {
-                    $trimmed = trim($sl);
+                foreach (preg_split('/[\r\n,]+/', $item) ?: [] as $line) {
+                    $trimmed = trim($line);
                     if ($trimmed !== '') {
                         $result[] = $trimmed;
                     }
@@ -200,11 +186,18 @@ final class GeoScoreCalculator
     /**
      * @return list<string>
      */
+    private function extractMarkdownLinks(string $markdown, string $schemePattern): array
+    {
+        preg_match_all('/(?<!\!)\[(?:[^\]]+)\]\((' . $schemePattern . '[^\s)"]+)\)/i', $markdown, $matches);
+        return array_values(array_unique(array_filter(array_map('trim', $matches[1] ?? []))));
+    }
+
+    /**
+     * @return list<string>
+     */
     private function extractBodyExternalUrls(string $markdown): array
     {
-        preg_match_all('/(?<!\!)\[(?:[^\]]+)\]\((https?:\/\/[^\s)"]+)\)/i', $markdown, $matches);
-        $urls = $matches[1] ?? [];
-        return array_values(array_unique(array_filter(array_map('trim', $urls))));
+        return $this->extractMarkdownLinks($markdown, 'https?:\/\/');
     }
 
     /**
@@ -212,9 +205,7 @@ final class GeoScoreCalculator
      */
     private function extractBodyInternalLinks(string $markdown): array
     {
-        preg_match_all('/(?<!\!)\[(?:[^\]]+)\]\((\/[^\s)"]+)\)/i', $markdown, $matches);
-        $links = $matches[1] ?? [];
-        return array_values(array_unique(array_filter(array_map('trim', $links))));
+        return $this->extractMarkdownLinks($markdown, '\/');
     }
 }
 
