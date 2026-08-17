@@ -212,7 +212,7 @@ final readonly class GeoDashboardController
                 "SELECT id, bot_name, request_path, http_status, created_at 
                  FROM ai_bot_visits 
                  ORDER BY id DESC 
-                 LIMIT 10"
+                 LIMIT 5"
             );
             $recentRows = $stmt ? $stmt->fetchAll(PDO::FETCH_ASSOC) : [];
             foreach ($recentRows as $rr) {

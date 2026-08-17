@@ -72,26 +72,6 @@ $activeNav = 'articles';
     ?>
     <?php require dirname(__DIR__) . '/geo-panel.php'; ?>
 
-    <?php if (isset($geoScore)): ?>
-      <details class="geo-scorecard-block" <?= $geoScore->total < 80 ? 'open' : '' ?>>
-        <summary class="eyebrow-summary">
-          <span>🎯 GEO 评分：<strong><?= $geoScore->total ?></strong>/100 (<?= $geoScore->gradeLabel() ?>)</span>
-          <span class="geo-score-pill is-<?= $geoScore->grade() ?>"><?= $geoScore->total ?>分</span>
-        </summary>
-        <div class="geo-score-breakdown">
-          <?php foreach ($geoScore->breakdown as $item): ?>
-            <div class="geo-score-row <?= $item['earned'] === $item['weight'] ? 'is-full' : ($item['earned'] > 0 ? 'is-half' : 'is-zero') ?>">
-              <div class="geo-score-row-info">
-                <span class="geo-score-row-label"><?= $escape($item['label']) ?></span>
-                <span class="geo-score-row-reason"><?= $escape($item['reason']) ?></span>
-              </div>
-              <span class="geo-score-row-points"><?= $item['earned'] ?> / <?= $item['weight'] ?></span>
-            </div>
-          <?php endforeach; ?>
-        </div>
-      </details>
-    <?php endif; ?>
-
     <div class="core-metadata-block">
       <div class="meta-field geo-field" data-geo-field="summary" data-meta-field="summary">
         <label>Summary <span class="muted">(摘要，用于 RSS、llms.txt 及分享描述)</span>
@@ -110,7 +90,7 @@ $activeNav = 'articles';
         <span>⚙️ 高级 / GEO 结构化数据</span>
         <span class="advanced-geo-badge" data-advanced-geo-badge hidden>0 项已配置</span>
       </summary>
-      <p class="muted">保存或发布时，缺失的字段将由 GEO 模型自动静默填充。你也可以在此直接手工微调。</p>
+      <p class="muted">正文外链与内链已自动识别感知。如需特殊微调或补充 FAQ 与 Schema，可在此填写。</p>
       <?= $metaField('entities', 'Entities（命名实体/关键词）', '每行一个关键词，用于搜索引擎结构化理解。') ?>
       <?= $metaField('faq', 'FAQ（常见问答候选）', 'JSON 格式问答对。') ?>
       <?= $metaField('sources', 'Sources（引用来源）', '每行一条 URL。') ?>

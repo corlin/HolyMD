@@ -96,9 +96,8 @@ final class GeoDashboardControllerTest extends TestCase
         self::assertStringContainsString('GEO 健康度看板', $response->body);
         self::assertStringContainsString('Demo Article', $response->body);
         self::assertStringContainsString('全站平均 GEO 得分', $response->body);
-        self::assertStringContainsString('历史发布健康度趋势', $response->body);
-        self::assertStringContainsString('品牌主题权威分布', $response->body);
-        self::assertStringContainsString('核心知识图谱实体', $response->body);
+        self::assertStringContainsString('发布健康度历史快照', $response->body);
+        self::assertStringContainsString('品牌主题与实体矩阵', $response->body);
         self::assertStringContainsString('DeepSeek', $response->body);
         self::assertStringContainsString('Architecture', $response->body);
         self::assertStringContainsString('AI 爬虫可观测性', $response->body);
