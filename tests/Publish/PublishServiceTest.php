@@ -163,6 +163,85 @@ final class PublishServiceTest extends TestCase
         self::assertStringContainsString('geo_scores', $events[1]['error']);
     }
 
+    public function test_preflight_reports_changes_and_warnings_without_mutating_any_publication_state(): void
+    {
+        $service = $this->versionedService();
+        $service->publish('first-note');
+        $repository = new ArticleRepository($this->root . '/articles');
+        $beforeSource = (string) file_get_contents($this->root . '/articles/first-note.md');
+        $beforePublic = hash_file('sha256', $this->released() . '/articles/first-note/index.html');
+        $beforeVersions = (new VersionService($this->root . '/versions'))->list('first-note');
+        $current = $repository->read('first-note');
+        $candidate = new \HolyMD\Content\ArticleDocument(
+            $current->slug,
+            $current->title,
+            "Changed body\n",
+            $current->frontMatter->with('summary', str_repeat('Detailed summary ', 5)),
+            $current->sourcePath,
+        );
+
+        $result = $service->preflight($candidate);
+
+        self::assertSame(hash('sha256', $candidate->serialize()), $result->checksum);
+        self::assertSame(5, $result->currentScore);
+        self::assertSame(25, $result->candidateScore);
+        self::assertContains('body', $result->changes);
+        self::assertContains('summary', $result->changes);
+        self::assertSame([], $result->blockers);
+        self::assertNotEmpty($result->warnings);
+        self::assertTrue($result->canPublish());
+        self::assertTrue($result->requiresAcknowledgement());
+        self::assertSame($beforeSource, file_get_contents($this->root . '/articles/first-note.md'));
+        self::assertSame($beforePublic, hash_file('sha256', $this->released() . '/articles/first-note/index.html'));
+        self::assertSame($beforeVersions, (new VersionService($this->root . '/versions'))->list('first-note'));
+    }
+
+    public function test_preflight_collects_metadata_and_route_collision_blockers(): void
+    {
+        file_put_contents($this->root . '/articles/other.md', "---\ntitle: Other\nslug: other\ndate: 2026-08-11\nstatus: published\n---\nOther\n");
+        $repository = new ArticleRepository($this->root . '/articles');
+        $current = $repository->read('first-note');
+        $candidate = $current->withFrontMatter(
+            $current->frontMatter
+                ->with('structured_data', ['headline' => 'Missing type'])
+                ->with('previous_slugs', ['other'])
+        );
+
+        $result = $this->versionedService()->preflight($candidate);
+
+        self::assertFalse($result->canPublish());
+        self::assertStringContainsString('structured data', implode("\n", $result->blockers));
+        self::assertStringContainsString('collides', implode("\n", $result->blockers));
+    }
+
+    public function test_preflight_warns_when_candidate_geo_score_decreases_from_published_snapshot(): void
+    {
+        $repository = new ArticleRepository($this->root . '/articles');
+        $document = $repository->read('first-note');
+        $rich = $document->frontMatter
+            ->with('summary', str_repeat('Detailed summary ', 5))
+            ->with('structured_data', ['@type' => 'Article'])
+            ->with('faq', [['question' => 'Q1', 'answer' => 'A1'], ['question' => 'Q2', 'answer' => 'A2']])
+            ->with('entities', ['One', 'Two', 'Three'])
+            ->with('topics', ['Notes'])
+            ->with('sources', ['https://one.test', 'https://two.test'])
+            ->with('internal_links', ['/articles/one/', '/articles/two/']);
+        $repository->write($document->withFrontMatter($rich));
+        $service = $this->versionedService();
+        $service->publish('first-note');
+        $published = $repository->read('first-note');
+        $weak = $published->frontMatter;
+        foreach (['summary', 'structured_data', 'faq', 'entities', 'topics', 'sources', 'internal_links'] as $field) {
+            $weak = $weak->without($field);
+        }
+
+        $result = $service->preflight($published->withFrontMatter($weak));
+
+        self::assertSame(100, $result->currentScore);
+        self::assertSame(5, $result->candidateScore);
+        self::assertContains('Candidate GEO score decreases from 100 to 5.', $result->warnings);
+    }
+
     private function released(): string
     {
         $pointer = $this->root . '/public/.holymd-current';

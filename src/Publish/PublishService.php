@@ -76,6 +76,63 @@ final readonly class PublishService
         return $this->build($slug, 'withdrawn');
     }
 
+    public function preflight(ArticleDocument $candidate): PublishPreflightResult
+    {
+        $documents = [];
+        $currentPublic = null;
+        foreach ($this->articles->all() as $document) {
+            if ($document->slug === $candidate->slug) {
+                if ($document->frontMatter->get('status') === 'published') {
+                    $currentPublic = $this->publishedDocument($document);
+                }
+                $documents[] = $candidate->withFrontMatter($candidate->frontMatter->with('status', 'published'));
+                continue;
+            }
+            if ($document->frontMatter->get('status') !== 'published') {
+                continue;
+            }
+            $publishedDocument = $this->publishedDocument($document);
+            $documents[] = $publishedDocument->withFrontMatter($publishedDocument->frontMatter->with('status', 'published'));
+        }
+
+        $validation = $this->validate($documents);
+        $blockers = $validation->errors;
+        $temporaryRoot = dirname($this->liveRoot) . '/.holymd-preflight-' . bin2hex(random_bytes(6));
+        if ($blockers === []) {
+            try {
+                $this->renderSite($documents, $temporaryRoot);
+            } catch (InvalidArgumentException | RuntimeException $exception) {
+                $blockers[] = $exception->getMessage();
+            } finally {
+                if (is_dir($temporaryRoot)) {
+                    $this->remove($temporaryRoot);
+                }
+            }
+        }
+
+        $calculator = $this->geoCalculator ?? new GeoScoreCalculator();
+        $candidateScore = $calculator->calculate($candidate);
+        $currentScore = $currentPublic instanceof ArticleDocument ? $calculator->calculate($currentPublic)->total : null;
+        $warnings = [];
+        if ($currentScore !== null && $candidateScore->total < $currentScore) {
+            $warnings[] = sprintf('Candidate GEO score decreases from %d to %d.', $currentScore, $candidateScore->total);
+        }
+        foreach ($candidateScore->breakdown as $item) {
+            if ($item['earned'] < $item['weight']) {
+                $warnings[] = $item['reason'];
+            }
+        }
+
+        return new PublishPreflightResult(
+            hash('sha256', $candidate->serialize()),
+            $currentScore,
+            $candidateScore->total,
+            $this->changedFields($currentPublic, $candidate),
+            array_values(array_unique($blockers)),
+            array_values(array_unique($warnings)),
+        );
+    }
+
     private function build(string $slug, string $nextStatus, ?string $selectedVersion = null): PublishResult
     {
         $lock = $this->lock();
@@ -157,6 +214,36 @@ final readonly class PublishService
         } catch (InvalidArgumentException) {
             return $this->versions->restore($version, $slug);
         }
+    }
+
+    private function publishedDocument(ArticleDocument $document): ArticleDocument
+    {
+        if ($this->versions === null) {
+            return $document;
+        }
+        $pointer = $document->frontMatter->get('published_version');
+        if (!is_string($pointer) || preg_match('/^[a-f0-9]{32}$/', $pointer) !== 1) {
+            return $document;
+        }
+        return $this->versions->restore($pointer, $document->slug);
+    }
+
+    /** @return list<string> */
+    private function changedFields(?ArticleDocument $current, ArticleDocument $candidate): array
+    {
+        if ($current === null) {
+            return ['new publication'];
+        }
+        $changes = [];
+        if ($current->title !== $candidate->title) $changes[] = 'title';
+        if ((string) $current->frontMatter->get('date') !== (string) $candidate->frontMatter->get('date')) $changes[] = 'date';
+        if ($current->bodyMarkdown !== $candidate->bodyMarkdown) $changes[] = 'body';
+        foreach (['summary', 'topics', 'entities', 'faq', 'sources', 'alt_text', 'hierarchy', 'internal_links', 'previous_slugs', 'structured_data'] as $field) {
+            if ($current->frontMatter->get($field) !== $candidate->frontMatter->get($field)) {
+                $changes[] = $field;
+            }
+        }
+        return $changes;
     }
 
     /** @param list<ArticleDocument> $published */
