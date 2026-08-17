@@ -10,10 +10,12 @@ use HolyMD\Content\ArticleDocument;
 use HolyMD\Content\ArticleMetadataValidator;
 use HolyMD\Content\ArticleRepository;
 use HolyMD\Config\PublicationSettings;
+use HolyMD\Geo\GeoScoreCalculator;
 use HolyMD\Render\BuildInput;
 use HolyMD\Render\BuildManifest;
 use HolyMD\Render\StaticBuilder;
 use InvalidArgumentException;
+use PDO;
 use RuntimeException;
 use Throwable;
 use Closure;
@@ -31,6 +33,8 @@ final readonly class PublishService
         private ?string $lockPath = null,
         private ?VersionService $versions = null,
         private ?ArticleRepository $pages = null,
+        private ?PDO $pdo = null,
+        private ?GeoScoreCalculator $geoCalculator = null,
     ) {
     }
 
@@ -126,6 +130,9 @@ final readonly class PublishService
             $this->publicTree->swap($temporaryRoot, $this->liveRoot);
             if ($this->versions !== null) foreach ($versionsToConfirm as $articleSlug => $version) $this->versions->confirmPublished($articleSlug, $version);
             $this->audit($slug, $nextStatus, 'published');
+            if ($nextStatus === 'published') {
+                $this->recordGeoScore($working);
+            }
             return $result;
         } catch (Throwable $exception) {
             foreach (array_reverse($persisted) as $itemSlug) {
@@ -246,4 +253,24 @@ final readonly class PublishService
         if ($handle === false || !flock($handle, LOCK_EX | LOCK_NB)) throw new RuntimeException('A publication is already running.');
         return $handle;
     }
+
+    private function recordGeoScore(ArticleDocument $article): void
+    {
+        if ($this->pdo === null) {
+            return;
+        }
+        try {
+            $calculator = $this->geoCalculator ?? new GeoScoreCalculator();
+            $score = $calculator->calculate($article);
+            $stmt = $this->pdo->prepare("INSERT INTO geo_scores (slug, score, breakdown, snapshot_trigger) VALUES (:slug, :score, :breakdown, 'publish')");
+            $stmt->execute([
+                ':slug' => $article->slug,
+                ':score' => $score->total,
+                ':breakdown' => json_encode($score->breakdown, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+            ]);
+        } catch (Throwable) {
+            // Non-blocking: snapshot recording failure should not abort publish
+        }
+    }
 }
+

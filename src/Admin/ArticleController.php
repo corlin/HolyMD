@@ -12,6 +12,7 @@ use HolyMD\Content\ArticleRepository;
 use HolyMD\Content\FrontMatter;
 use HolyMD\Geo\GeoAutoMerge;
 use HolyMD\Geo\GeoConfiguration;
+use HolyMD\Geo\GeoScoreCalculator;
 use HolyMD\Http\Csrf;
 use HolyMD\Http\Response;
 use HolyMD\Http\ServerRequest;
@@ -35,6 +36,7 @@ final readonly class ArticleController
         /** @var array<string, string> */
         private array $siteSettings = [],
         private ?MarkdownRenderer $markdownRenderer = null,
+        private ?GeoScoreCalculator $geoCalculator = null,
     ) {
     }
 
@@ -79,6 +81,11 @@ final readonly class ArticleController
             return Response::json(['error' => 'Administrator authentication is required.'], 401);
         }
         $articles = $this->articles->all();
+        $calculator = $this->geoCalculator ?? new GeoScoreCalculator();
+        $geoScores = [];
+        foreach ($articles as $article) {
+            $geoScores[$article->slug] = $calculator->calculate($article);
+        }
         $csrfToken = $this->csrf->token();
         ob_start();
         require dirname(__DIR__, 2) . '/templates/admin/articles/index.php';
@@ -143,6 +150,8 @@ final readonly class ArticleController
         }
         $versions = $this->versions->list($article->slug);
         $articleChecksum = hash('sha256', $article->serialize());
+        $calculator = $this->geoCalculator ?? new GeoScoreCalculator();
+        $geoScore = $calculator->calculate($article);
         $csrfToken = $this->csrf->token();
         ob_start();
         require dirname(__DIR__, 2) . '/templates/admin/articles/edit.php';

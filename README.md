@@ -26,10 +26,15 @@ HolyMD 是一款面向个人品牌的**静态优先** Markdown 博客管理工�
 - **LLM / AI 智能体发现生态**：全站自动生成 `/llms.txt` 与包含全站公开文章正文的 `/llms-full.txt` 全文知识库。
 - **页脚品牌与开源连接**：内联优雅展示 `Powered by HolyMD` 并直连 GitHub 开源仓库。
 
-### 3. AI GEO 边界与智能静默自动补全
-- AI 的边界严格限定为 **GEO（Generative Engine Optimization）优化**：它可针对当前文章提取摘要、命名实体、FAQ 候选、元数据、内链与图片 Alt，但**绝不自动篡改 Markdown 正文**。
+### 3. AI GEO 边界、智能静默自动补全与全站健康看板 (GEO Scorecard)
+- **严格安全边界**：AI 的边界严格限定为 **GEO（Generative Engine Optimization）优化**：它可针对当前文章提取摘要、命名实体、FAQ 候选、元数据、内链与图片 Alt，但**绝不自动篡改 Markdown 正文**。
 - **极简无感自动化**：保存或发布文章时，系统在后台异步调用 GEO 模型，对未填写的空元数据字段进行自动补齐，已手动填写的内容则绝对保留不被覆盖。
-- 界面彻底移除繁重的审核卡片与 Diff 比较框，收纳为右侧折叠抽屉，使写作者始终沉浸于创作。
+- **多模型智能容错**：原生兼容各类 OpenAI 规范接口（包括 DeepSeek、Claude、Gemini 等），自动适配并智能规整不同格式的字段输出。
+- **全站 GEO 评分与效果追踪体系 (GEO Scorecard)**：
+  - **加权百分制评分模型 (0-100)**：综合评判 `summary`(20分)、`structured_data`(20分)、`faq`(15分)、`entities`(10分)、`topics`(10分)、`sources`(10分)、`internal_links`(10分) 与 `alt_text`(5分，无图自动豁免) 8 大维度；
+  - **三处 UI 联动感知**：文章列表页展示红/橙/绿分级评分标签，写作工作室右侧栏展示总分及各维度得分明细表；
+  - **独立 GEO 仪表盘 (`/admin/geo`)**：可视化展示全站平均 GEO 分、优秀文章占比、纯 CSS 历史发布走势柱状图以及待优化文章排行（标明失分字段，一键直达编辑）；
+  - **发布快照时序归档**：发布文章时自动持久化评分快照到数据库 `geo_scores` 表，形成效果追踪闭环。
 
 ---
 
@@ -99,7 +104,7 @@ php bin/holymd-check.php
 # 校验 composer 配置
 composer validate --strict
 
-# 运行全量单元测试与端到端测试 (253 tests, 1008 assertions)
+# 运行全量单元测试与端到端测试 (259 tests, 1023 assertions)
 ./vendor/bin/phpunit tests
 
 # 验证静态站点构建

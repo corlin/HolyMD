@@ -70,6 +70,7 @@ final class BootstrapTest extends TestCase
                 'jobs',
                 'admin_users',
                 'audit_events',
+                'geo_scores',
             ],
             $matches[1],
         );

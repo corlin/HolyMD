@@ -40,8 +40,15 @@ if (!hash_equals($expectedChecksum, hash('sha256', $document->serialize()))) {
 }
 use HolyMD\Geo\GeoAutoMerge;
 
-try { $review = (new GeoReviewService($container->get(AiClient::class)))->review($document); }
-catch (\HolyMD\Geo\GeoAiException $error) { fwrite(STDERR, ($error->retryable ? 'RETRYABLE: ' : 'PERMANENT: ') . $error->getMessage() . "\n"); exit($error->retryable ? 75 : 78); }
+try {
+    $review = (new GeoReviewService($container->get(AiClient::class)))->review($document);
+} catch (\HolyMD\Geo\GeoAiException $error) {
+    fwrite(STDERR, ($error->retryable ? 'RETRYABLE: ' : 'PERMANENT: ') . $error->getMessage() . "\n");
+    exit($error->retryable ? 75 : 78);
+} catch (\Throwable $error) {
+    fwrite(STDERR, 'PERMANENT: ' . $error->getMessage() . "\n");
+    exit(78);
+}
 
 $articleRepo = new ArticleRepository($root . '/content/articles');
 try {

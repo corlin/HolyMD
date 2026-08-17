@@ -72,18 +72,52 @@ $activeNav = 'articles';
     ?>
     <?php require dirname(__DIR__) . '/geo-panel.php'; ?>
 
-    <details class="metadata-block">
-      <summary class="eyebrow-summary">✨ 智能元数据（Front Matter）</summary>
+    <?php if (isset($geoScore)): ?>
+      <details class="geo-scorecard-block" <?= $geoScore->total < 80 ? 'open' : '' ?>>
+        <summary class="eyebrow-summary">
+          <span>🎯 GEO 评分：<strong><?= $geoScore->total ?></strong>/100 (<?= $geoScore->gradeLabel() ?>)</span>
+          <span class="geo-score-pill is-<?= $geoScore->grade() ?>"><?= $geoScore->total ?>分</span>
+        </summary>
+        <div class="geo-score-breakdown">
+          <?php foreach ($geoScore->breakdown as $item): ?>
+            <div class="geo-score-row <?= $item['earned'] === $item['weight'] ? 'is-full' : ($item['earned'] > 0 ? 'is-half' : 'is-zero') ?>">
+              <div class="geo-score-row-info">
+                <span class="geo-score-row-label"><?= $escape($item['label']) ?></span>
+                <span class="geo-score-row-reason"><?= $escape($item['reason']) ?></span>
+              </div>
+              <span class="geo-score-row-points"><?= $item['earned'] ?> / <?= $item['weight'] ?></span>
+            </div>
+          <?php endforeach; ?>
+        </div>
+      </details>
+    <?php endif; ?>
+
+    <div class="core-metadata-block">
+      <div class="meta-field geo-field" data-geo-field="summary" data-meta-field="summary">
+        <label>Summary <span class="muted">(摘要，用于 RSS、llms.txt 及分享描述)</span>
+          <textarea name="summary" data-metadata-input form="<?= $publicationFormId ?>" placeholder="文章精简摘要..."><?= $escape($metadataValue('summary')) ?></textarea>
+        </label>
+      </div>
+      <div class="meta-field geo-field" data-geo-field="topics" data-meta-field="topics">
+        <label>Topics <span class="muted">(话题/分类，每行一个)</span>
+          <textarea name="topics" data-metadata-input form="<?= $publicationFormId ?>" placeholder="例如：Architecture&#10;PHP"><?= $escape($metadataValue('topics')) ?></textarea>
+        </label>
+      </div>
+    </div>
+
+    <details class="advanced-geo-block" data-advanced-geo-block>
+      <summary class="eyebrow-summary">
+        <span>⚙️ 高级 / GEO 结构化数据</span>
+        <span class="advanced-geo-badge" data-advanced-geo-badge hidden>0 项已配置</span>
+      </summary>
       <p class="muted">保存或发布时，缺失的字段将由 GEO 模型自动静默填充。你也可以在此直接手工微调。</p>
-      <?= $metaField('summary', 'Summary（文章摘要）', '用于 RSS、llms.txt 和 OpenGraph 描述。') ?>
-      <label>Topics（分类/话题）<textarea name="topics" data-metadata-input form="<?= $publicationFormId ?>"><?= $escape($metadataValue('topics')) ?></textarea></label>
       <?= $metaField('entities', 'Entities（命名实体/关键词）', '每行一个关键词，用于搜索引擎结构化理解。') ?>
       <?= $metaField('faq', 'FAQ（常见问答候选）', 'JSON 格式问答对。') ?>
       <?= $metaField('sources', 'Sources（引用来源）', '每行一条 URL。') ?>
       <?= $metaField('alt_text', 'Alt text（图片描述）', '每行一条图片描述。') ?>
       <?= $metaField('hierarchy', 'Hierarchy（大纲结构）', '大纲结构或 JSON。') ?>
       <?= $metaField('internal_links', 'Internal links（内链推荐）', '每行一条站点内链。') ?>
-      <label>Previous slugs（历史别名跳转）<textarea name="previous_slugs" data-metadata-input form="<?= $publicationFormId ?>"><?= $escape($metadataValue('previous_slugs')) ?></textarea></label>
+      <?= $metaField('previous_slugs', 'Previous slugs（历史别名跳转）', '每行一个历史别名。') ?>
       <?= $metaField('structured_data', 'Structured data（JSON-LD）', '标准结构化数据对象。') ?>
     </details>
 

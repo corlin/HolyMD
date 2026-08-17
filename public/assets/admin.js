@@ -194,14 +194,34 @@
       }
     };
 
+    const advancedBlock = document.querySelector('[data-advanced-geo-block]');
+    const advancedBadge = document.querySelector('[data-advanced-geo-badge]');
+    const updateAdvancedGeoBadge = () => {
+      if (!advancedBlock || !advancedBadge) return;
+      const inputs = advancedBlock.querySelectorAll('[data-metadata-input]');
+      let count = 0;
+      inputs.forEach(input => {
+        if (input.value && input.value.trim() !== '') {
+          count++;
+        }
+      });
+      if (count > 0) {
+        advancedBadge.textContent = `${count} 项已配置`;
+        advancedBadge.hidden = false;
+      } else {
+        advancedBadge.hidden = true;
+      }
+    };
+
     const listen = field => field.addEventListener('input', () => {
       queuePreview();
       dirty = true;
       setState('unsaved', 'Unsaved changes');
       clearTimeout(saveTimer);
       saveTimer = setTimeout(() => void save().catch(() => {}), 800);
+      updateAdvancedGeoBadge();
     });
-    [body, title, date].forEach(listen);
+    [body, title, date].filter(Boolean).forEach(listen);
     document.querySelectorAll('[data-metadata-input]').forEach(listen);
 
     if (publicationForm) publicationForm.addEventListener('submit', async event => {
@@ -222,7 +242,8 @@
       event.returnValue = '';
     });
     renderPreview();
-    geoApi = {save, flushSave, checksum: () => currentChecksum};
+    updateAdvancedGeoBadge();
+    geoApi = {save, flushSave, checksum: () => currentChecksum, updateBadge: updateAdvancedGeoBadge};
   }
 
   document.addEventListener('click', async event => {

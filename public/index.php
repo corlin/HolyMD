@@ -152,6 +152,8 @@ try {
         (string) (Env::get('HOLYMD_PUBLIC_TREE') ?: $root . ($flattened ? '/.holymd-current' : '/public/.holymd-current')), $publication, $root . '/content/audit',
         null, $root . '/content/holymd-publish.lock', new VersionService($root . '/content/versions'),
         $pageRepo,
+        $container->get(\PDO::class),
+        new \HolyMD\Geo\GeoScoreCalculator(),
     );
     $controller = new ArticleController(
         new ArticleRepository($root . '/content/articles'),
@@ -163,13 +165,15 @@ try {
         $root . '/content/media',
         $publication->adminValues(),
         new MarkdownRenderer(),
+        new \HolyMD\Geo\GeoScoreCalculator(),
     );
     $geoStore = new MySqlGeoProposalStore($container->get(\PDO::class));
     $geo = new GeoController(new ArticleRepository($root . '/content/articles'), new GeoReviewService($container->get(\HolyMD\Geo\AiClient::class)), $geoStore, new AdminGuard($_SESSION), new Csrf($_SESSION), $queue, new VersionService($root . '/content/versions'));
     $jobs = new JobsController(new JobStatusRepository($container->get(\PDO::class)), new AdminGuard($_SESSION), new Csrf($_SESSION));
     $profile = new \HolyMD\Admin\ProfileController($container->get(\PDO::class), new AdminGuard($_SESSION), new Csrf($_SESSION));
     $pages = new \HolyMD\Admin\PageController($pageRepo, new AdminGuard($_SESSION), new Csrf($_SESSION), $publisher, new VersionService($root . '/content/versions'));
-    $response = (new Router($controller, $geo, new AuthController($container->get(\PDO::class), $_SESSION, new Csrf($_SESSION)), $jobs, $profile, $pages))->dispatch(new ServerRequest(
+    $geoDashboard = new \HolyMD\Admin\GeoDashboardController(new ArticleRepository($root . '/content/articles'), new \HolyMD\Geo\GeoScoreCalculator(), new AdminGuard($_SESSION), new Csrf($_SESSION), $container->get(\PDO::class));
+    $response = (new Router($controller, $geo, new AuthController($container->get(\PDO::class), $_SESSION, new Csrf($_SESSION)), $jobs, $profile, $pages, $geoDashboard))->dispatch(new ServerRequest(
         (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'HEAD') ? 'GET' : ($_SERVER['REQUEST_METHOD'] ?? 'GET'),
         $path,
         array_change_key_case(function_exists('getallheaders') ? (getallheaders() ?: []) : [], CASE_UPPER),

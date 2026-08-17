@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace HolyMD\Http;
 
 use HolyMD\Admin\ArticleController;
+use HolyMD\Admin\GeoDashboardController;
 use HolyMD\Admin\JobsController;
 use HolyMD\Admin\PageController;
 use HolyMD\Admin\ProfileController;
@@ -13,8 +14,15 @@ use HolyMD\Geo\GeoController;
 
 final readonly class Router
 {
-    public function __construct(private ?ArticleController $articles = null, private ?GeoController $geo = null, private ?AuthController $auth = null, private ?JobsController $jobs = null, private ?ProfileController $profile = null, private ?PageController $pages = null)
-    {
+    public function __construct(
+        private ?ArticleController $articles = null,
+        private ?GeoController $geo = null,
+        private ?AuthController $auth = null,
+        private ?JobsController $jobs = null,
+        private ?ProfileController $profile = null,
+        private ?PageController $pages = null,
+        private ?GeoDashboardController $geoDashboard = null,
+    ) {
     }
 
     public function dispatch(ServerRequest $request): Response
@@ -50,6 +58,7 @@ final readonly class Router
         if ($this->articles !== null && $request->method === 'POST' && $request->path === '/admin/media/delete') return $this->articles->deleteMedia($request);
         if ($this->articles !== null && $request->method === 'GET' && $request->path === '/admin/settings') return $this->articles->settings($request);
         if ($this->jobs !== null && $request->method === 'GET' && $request->path === '/admin/jobs') return $this->jobs->index($request);
+        if ($this->geoDashboard !== null && $request->method === 'GET' && $request->path === '/admin/geo') return $this->geoDashboard->index($request);
         if ($this->profile !== null && $request->path === '/admin/profile' && $request->method === 'GET') return $this->profile->index($request);
         if ($this->profile !== null && $request->path === '/admin/profile' && $request->method === 'POST') return $this->profile->update($request);
         if ($this->pages !== null && $request->method === 'GET' && $request->path === '/admin/pages') return $this->pages->index($request);
