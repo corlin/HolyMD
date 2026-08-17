@@ -108,7 +108,7 @@ php bin/holymd-check.php
 # 校验 composer 配置
 composer validate --strict
 
-# 运行全量单元测试与端到端测试 (264 tests, 1061 assertions)
+# 运行全量单元测试与端到端测试 (266 tests, 1067 assertions)
 ./vendor/bin/phpunit tests
 
 # 验证静态站点构建

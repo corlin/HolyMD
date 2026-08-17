@@ -103,10 +103,12 @@ final class GeoScoreCalculator
         // 6. Sources (10)
         $sources = $fm->get('sources');
         $sourceList = $this->filterNonEmptyStrings($sources);
-        $sourceCount = count($sourceList);
+        $bodySources = $this->extractBodyExternalUrls($article->bodyMarkdown);
+        $allSources = array_values(array_unique([...$sourceList, ...$bodySources]));
+        $sourceCount = count($allSources);
         if ($sourceCount >= 2) {
             $earned = 10;
-            $reason = sprintf('包含权威引用来源（%d条）', $sourceCount);
+            $reason = sprintf('包含权威引用来源（%d条%s）', $sourceCount, $bodySources !== [] ? '，已自动识别正文引用' : '');
         } elseif ($sourceCount === 1) {
             $earned = 5;
             $reason = '仅有 1 条引用来源，建议补充';
@@ -120,10 +122,12 @@ final class GeoScoreCalculator
         // 7. Internal links (10)
         $internalLinks = $fm->get('internal_links');
         $linkList = $this->filterNonEmptyStrings($internalLinks);
-        $linkCount = count($linkList);
+        $bodyLinks = $this->extractBodyInternalLinks($article->bodyMarkdown);
+        $allLinks = array_values(array_unique([...$linkList, ...$bodyLinks]));
+        $linkCount = count($allLinks);
         if ($linkCount >= 2) {
             $earned = 10;
-            $reason = sprintf('包含站内互链（%d条）', $linkCount);
+            $reason = sprintf('包含站内互链（%d条%s）', $linkCount, $bodyLinks !== [] ? '，已自动识别正文内链' : '');
         } elseif ($linkCount === 1) {
             $earned = 5;
             $reason = '仅有 1 条站内内链，建议丰富';
@@ -165,8 +169,15 @@ final class GeoScoreCalculator
             return [];
         }
         if (is_string($value)) {
-            $trimmed = trim($value);
-            return $trimmed === '' ? [] : [$trimmed];
+            $lines = preg_split('/[\r\n,]+/', $value) ?: [];
+            $result = [];
+            foreach ($lines as $line) {
+                $trimmed = trim($line);
+                if ($trimmed !== '') {
+                    $result[] = $trimmed;
+                }
+            }
+            return $result;
         }
         if (!is_array($value)) {
             return [];
@@ -174,12 +185,36 @@ final class GeoScoreCalculator
         $result = [];
         foreach ($value as $item) {
             if (is_string($item)) {
-                $trimmed = trim($item);
-                if ($trimmed !== '') {
-                    $result[] = $trimmed;
+                $subLines = preg_split('/[\r\n,]+/', $item) ?: [];
+                foreach ($subLines as $sl) {
+                    $trimmed = trim($sl);
+                    if ($trimmed !== '') {
+                        $result[] = $trimmed;
+                    }
                 }
             }
         }
         return $result;
     }
+
+    /**
+     * @return list<string>
+     */
+    private function extractBodyExternalUrls(string $markdown): array
+    {
+        preg_match_all('/(?<!\!)\[(?:[^\]]+)\]\((https?:\/\/[^\s)"]+)\)/i', $markdown, $matches);
+        $urls = $matches[1] ?? [];
+        return array_values(array_unique(array_filter(array_map('trim', $urls))));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function extractBodyInternalLinks(string $markdown): array
+    {
+        preg_match_all('/(?<!\!)\[(?:[^\]]+)\]\((\/[^\s)"]+)\)/i', $markdown, $matches);
+        $links = $matches[1] ?? [];
+        return array_values(array_unique(array_filter(array_map('trim', $links))));
+    }
 }
+

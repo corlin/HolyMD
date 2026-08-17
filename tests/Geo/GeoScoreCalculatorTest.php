@@ -107,4 +107,49 @@ final class GeoScoreCalculatorTest extends TestCase
         $score = $this->calculator->calculate($article);
         $this->assertSame(0, $score->total);
     }
+
+    public function testMultilineEntitiesCountCorrectly(): void
+    {
+        $article = new ArticleDocument(
+            'multiline-entities',
+            'Entities Test',
+            'Body text.',
+            new FrontMatter([
+                'date' => '2026-08-17',
+                'entities' => "DeepSeek Harness\nCordis\nIBM JCL\nUNIX Pipe",
+            ]),
+            'multiline.md'
+        );
+
+        $score = $this->calculator->calculate($article);
+        $entitiesField = $score->breakdown[3];
+        $this->assertSame(10, $entitiesField['earned']);
+        $this->assertStringContainsString('4个', $entitiesField['reason']);
+    }
+
+    public function testAutoDetectsMarkdownBodyLinksForSourcesAndInternalLinks(): void
+    {
+        $article = new ArticleDocument(
+            'body-links',
+            'Links Test',
+            "Refer to [IBM Docs](https://ibm.com/jcl) and [Unix Pipe](https://bell-labs.com/pipe).\nAlso check [Workflow Engine](/articles/workflow/) and [Plugin Model](/articles/plugin/).",
+            new FrontMatter([
+                'date' => '2026-08-17',
+                // Front matter has empty sources and internal_links
+                'sources' => [],
+                'internal_links' => [],
+            ]),
+            'links.md'
+        );
+
+        $score = $this->calculator->calculate($article);
+        $sourcesField = $score->breakdown[5];
+        $internalField = $score->breakdown[6];
+
+        $this->assertSame(10, $sourcesField['earned']);
+        $this->assertStringContainsString('自动识别正文引用', $sourcesField['reason']);
+
+        $this->assertSame(10, $internalField['earned']);
+        $this->assertStringContainsString('自动识别正文内链', $internalField['reason']);
+    }
 }
