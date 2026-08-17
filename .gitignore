@@ -9,6 +9,7 @@
 /public/.holymd-publish.lock
 /backups/
 .gstack/
+.worktrees/
 
 # Never commit private keys or certificates.
 *.key
