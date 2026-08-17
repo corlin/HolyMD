@@ -33,7 +33,10 @@ HolyMD 是一款面向个人品牌的**静态优先** Markdown 博客管理工�
   - **首页 / 文章页 / 单页全覆盖**：首页自动挂载 `WebSite` 与 `Person`（含作者 URL 与 Bio）；文章页规范输出 `BlogPosting`、`author`、`publisher`（Organization）、`inLanguage` 及 `FAQPage`；自定义单页精准生成 `WebPage` / `AboutPage`；
   - **本地纯代码校验**：在保存时本地校验 `structured_data` 的 `@type` 与合法结构，杜绝错误数据发布。
 - **加权百分制 GEO 评分体系 (GEO Scorecard)**：
-  - 综合评判 8 大核心维度（0-100分），在文章列表、写作工作室右侧栏、GEO 看板实现三处联动感知，并在文章正式发布时自动记录不可变历史趋势快照。
+  - **8 大多维加权评判 (0-100)**：综合评判 `summary`(20分)、`structured_data`(20分)、`faq`(15分)、`entities`(10分)、`topics`(10分)、`sources`(10分)、`internal_links`(10分) 与 `alt_text`(5分，无图自动豁免)；
+  - **正文链接无感自动感知**：自动识别 Markdown 正文中自然书写的权威外链 `[xxx](https://...)` 与站内互链 `[xxx](/articles/...)`，免去在元数据表单中重复录入；
+  - **多行实体智能拆分**：支持多行文本与逗号分割的多命名实体自动精确提取；
+  - **三处联动与时序归档**：在文章列表、写作工作室右侧栏、GEO 看板实现三处联动感知，并在文章正式发布时自动记录不可变历史趋势快照。
 - **品牌主题与知识图谱实体矩阵 (Topic & Entity Cluster)**：
   - 在 GEO 看板直观展现全站话题分类（Topics）的内容积淀度与均分，以及高频命名实体（Entities）词频词云，秒级呈现品牌在各专业领域的权威深度。
 - **AI 爬虫可观测性与访问追踪 (AI Bot Observability)**：
