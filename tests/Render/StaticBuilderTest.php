@@ -264,6 +264,7 @@ final class StaticBuilderTest extends TestCase
         foreach (['/index.html', '/articles/accessible-controls/index.html', '/topics/notes/index.html'] as $path) {
             $html = (string) file_get_contents($this->outputRoot . $path);
             self::assertStringContainsString('class="theme-switcher" role="group" aria-label="Theme switcher"', $html, $path);
+            self::assertStringContainsString('data-theme-cycle aria-label="Theme: System. Activate to use Light theme."', $html, $path);
             self::assertSame(1, substr_count($html, 'aria-pressed="true"'), $path);
             self::assertSame(2, substr_count($html, 'aria-pressed="false"'), $path);
         }
@@ -272,6 +273,8 @@ final class StaticBuilderTest extends TestCase
         $styles = (string) file_get_contents($this->outputRoot . '/assets/site.' . substr(hash('sha256', $sourceStyles), 0, 10) . '.css');
         self::assertStringContainsString('min-width: 2.75rem', $styles);
         self::assertStringContainsString('min-height: 2.75rem', $styles);
+        self::assertStringContainsString('.theme-cycle { display: none;', $styles);
+        self::assertStringContainsString('.theme-switcher { display: none;', $styles);
     }
 
     public function test_each_article_is_rendered_exactly_once_per_build(): void

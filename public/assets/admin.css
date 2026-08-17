@@ -77,6 +77,8 @@
 .geo-entity-count{display:inline-block;padding:1px 4px;background:var(--line);border-radius:6px;font-size:9.5px;font-weight:700;color:var(--muted)}
 .geo-ai-stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:12px 0;background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:10px 14px}
 @media(max-width:640px){.geo-ai-stat-row{grid-template-columns:1fr}}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+@media(max-width:650px){.publication-actions{flex-wrap:wrap;justify-content:flex-start;max-width:100%}.publication-actions form{flex:0 1 auto}.preview-heading{align-items:flex-start;flex-direction:column}}
 .geo-ai-stat-item{display:flex;flex-direction:column;align-items:flex-start}
 .geo-ai-stat-num{font-size:22px;font-weight:700;color:var(--ink);line-height:1.2}
 .geo-ai-stat-lbl{font-size:11.5px;color:var(--muted);margin-top:2px}
@@ -102,4 +104,3 @@
 .geo-bot-pill.is-gptbot{background:#e6f4ea;color:#137333;border-color:#ceead6}
 .geo-bot-pill.is-claudebot{background:#fcefe7;color:#c55c1e;border-color:#fadbd0}
 .geo-bot-pill.is-perplexitybot{background:#e8eaed;color:#202124;border-color:#dadce0}
-

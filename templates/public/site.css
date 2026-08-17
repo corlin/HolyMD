@@ -51,6 +51,7 @@ nav a[aria-current="page"] { color: var(--accent); font-weight: 700; }
 .theme-switcher button:hover { color: var(--ink); }
 .theme-switcher button.active { background: var(--paper); color: var(--accent); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
 .theme-switcher button .icon { font-size: 1.35rem; display: block; }
+.theme-cycle { display: none; align-items: center; justify-content: center; min-width: 2.75rem; min-height: 2.75rem; padding: .35rem; border: 1px solid var(--rule); border-radius: 999px; background: var(--paper-deep); color: var(--ink-soft); cursor: pointer; }
 .header-reading-progress { display: flex; align-items: center; gap: .75rem; min-width: clamp(9rem, 16vw, 15rem); color: var(--accent); font-size: .78rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .progress-track { width: 100%; height: 2px; overflow: hidden; background: var(--rule); }
 .progress-fill { display: block; width: 100%; height: 100%; background: var(--accent); transform: scaleX(0); transform-origin: left center; }
@@ -199,7 +200,10 @@ h3 { margin: 0; font-size: clamp(1.45rem, 2.5vw, 2rem); }
   .shell, .reading-layout { width: min(100% - 1.5rem, 74rem); }
   .brand-nav nav a:not(:first-child) { display: none; }
   .wordmark { font-size: 1.15rem; }
-  .theme-switcher button { min-width: 2.65rem; padding-inline: .55rem; }
+  .brand-nav, .header-tools { gap: .55rem; min-width: 0; }
+  .theme-switcher { display: none; }
+  .theme-cycle { display: inline-flex; flex: none; }
+  .search-trigger-shortcut { display: none; }
   .hero { padding-top: 4rem; }
   .article-row { gap: 1rem; }
   .article-page { padding-top: 2.35rem; }
@@ -253,6 +257,5 @@ body:has(.image-viewer[open]) { overflow: hidden; }
 .load-more-wrap { margin-top: 2.5rem; text-align: center; }
 .button-load-more { display: inline-flex; align-items: center; justify-content: center; padding: .75rem 1.75rem; background: var(--paper-deep); color: var(--accent); border: 1px solid var(--rule); border-radius: 4px; font-family: var(--sans); font-size: .92rem; font-weight: 600; cursor: pointer; transition: background .15s ease, border-color .15s ease; }
 .button-load-more:hover { background: color-mix(in srgb, var(--paper-deep) 80%, var(--accent) 8%); border-color: var(--accent); }
-
 
 

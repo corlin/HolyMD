@@ -16,6 +16,7 @@ $activeNav = 'articles';
 <?php require dirname(__DIR__) . '/_nav.php'; ?>
 
   <section class="editor-panel">
+    <h1 class="sr-only">Edit <?= $escape($article->title) ?></h1>
     <div class="editor-topline">
       <a href="<?= $path('/admin/articles') ?>"><span class="icon" aria-hidden="true">arrow_back</span>All articles</a>
       <output id="save-state" aria-live="polite" data-state="saved"><span class="icon" aria-hidden="true" data-save-icon>check_circle</span><span data-save-label>Source saved</span></output>

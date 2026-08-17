@@ -138,6 +138,8 @@ final class ArticleControllerTest extends TestCase
         self::assertStringContainsString('name="internal_links"', $response->body);
         self::assertStringContainsString('data-geo-field="summary"', $response->body);
         self::assertStringContainsString('data-geo-catchall', $response->body);
+        self::assertStringContainsString('<h1 class="sr-only">Edit First note</h1>', $response->body);
+        self::assertSame(1, substr_count($response->body, '<h1'));
     }
 
     public function test_draft_save_round_trips_metadata_fields(): void
