@@ -113,6 +113,12 @@ composer validate --strict
 
 # 验证静态站点构建
 php bin/holymd-build.php --dry-run
+
+# 模拟各大主流 AI 爬虫抓取测试 (GPTBot / Perplexity / ClaudeBot / Bytespider)
+curl -s -o /dev/null -H "User-Agent: Mozilla/5.0 (compatible; GPTBot/1.2; +https://openai.com/gptbot)" http://127.0.0.1:8789/llms.txt
+curl -s -o /dev/null -H "User-Agent: Mozilla/5.0 (compatible; PerplexityBot/1.0; +https://docs.perplexity.ai/docs/perplexitybot)" http://127.0.0.1:8789/
+curl -s -o /dev/null -H "User-Agent: ClaudeBot/1.0; +claudebot@anthropic.com" http://127.0.0.1:8789/llms-full.txt
+curl -s -o /dev/null -H "User-Agent: Mozilla/5.0 (compatible; Bytespider; spider-feedback@bytedance.com)" http://127.0.0.1:8789/
 ```
 
 ---
