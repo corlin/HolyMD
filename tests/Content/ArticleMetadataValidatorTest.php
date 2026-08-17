@@ -93,4 +93,11 @@ final class ArticleMetadataValidatorTest extends TestCase
         self::assertContains('Article "article" has invalid faq metadata.', ArticleMetadataValidator::errors($this->document(['faq' => [['question' => 'Q']]])));
         self::assertContains('Article "article" has invalid faq metadata.', ArticleMetadataValidator::errors($this->document(['faq' => ['question' => 'Q', 'answer' => 'A']])));
     }
+
+    public function test_rejects_structured_data_missing_type_or_context(): void
+    {
+        self::assertContains('Article "article" structured data must specify @type or @context.', ArticleMetadataValidator::errors($this->document(['structured_data' => ['name' => 'No Type']])));
+        self::assertSame([], ArticleMetadataValidator::errors($this->document(['structured_data' => ['@context' => 'https://schema.org', 'name' => 'Custom']])));
+        self::assertSame([], ArticleMetadataValidator::errors($this->document(['structured_data' => ['type' => 'CustomType']])));
+    }
 }

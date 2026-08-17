@@ -7,7 +7,7 @@ $ogTitle = $siteName;
 $ogDescription = $description;
 $ogUrl = rtrim($siteUrl, '/') . '/';
 $canonical = $ogUrl;
-$jsonLd = null;
+$jsonLd = $jsonLd ?? null;
 $ogImage = null;
 $showAlternates = true;
 require __DIR__ . '/_head.php';

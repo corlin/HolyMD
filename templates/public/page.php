@@ -7,7 +7,7 @@ $ogTitle = $page->title;
 $ogDescription = $description;
 $ogUrl = rtrim($siteUrl, '/') . '/' . $page->slug . '/';
 $canonical = $ogUrl;
-$jsonLd = null;
+$jsonLd = $jsonLd ?? null;
 $ogImage = null;
 $showAlternates = false;
 require __DIR__ . '/_head.php';

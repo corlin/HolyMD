@@ -67,6 +67,54 @@ $activeNav = 'geo';
     </div>
   <?php endif; ?>
 
+  <div class="geo-grid-two-col">
+    <div class="geo-section-card">
+      <div class="geo-card-header">
+        <div>
+          <h2>品牌主题权威分布 (Topic Silos)</h2>
+          <p class="muted">全站话题分类的内容积累度与该领域文章的平均 GEO 得分。</p>
+        </div>
+      </div>
+      <?php if ($topicStats === []): ?>
+        <p class="muted">全站文章暂未配置任何话题分类 (Topics)。</p>
+      <?php else: ?>
+        <div class="geo-topic-list">
+          <?php foreach ($topicStats as $t): ?>
+            <div class="geo-topic-row">
+              <div class="geo-topic-info">
+                <strong><?= $escape($t['name']) ?></strong>
+                <span class="muted"><?= (int) $t['count'] ?> 篇文章</span>
+              </div>
+              <div class="geo-score-badge is-<?= $t['avgScore'] >= 80 ? 'excellent' : ($t['avgScore'] >= 50 ? 'good' : 'weak') ?>">
+                均分 <strong><?= (int) $t['avgScore'] ?></strong>
+              </div>
+            </div>
+          <?php endforeach; ?>
+        </div>
+      <?php endif; ?>
+    </div>
+
+    <div class="geo-section-card">
+      <div class="geo-card-header">
+        <div>
+          <h2>核心知识图谱实体 (Entity Cluster)</h2>
+          <p class="muted">全站文章提取的高频命名实体与核心概念覆盖度。</p>
+        </div>
+      </div>
+      <?php if ($topEntities === []): ?>
+        <p class="muted">暂无实体数据，可在编辑文章时补充 Entities 字段。</p>
+      <?php else: ?>
+        <div class="geo-entity-cloud">
+          <?php foreach ($topEntities as $entityName => $count): ?>
+            <span class="geo-entity-pill" title="出现在 <?= (int) $count ?> 篇文章中">
+              <?= $escape($entityName) ?><small class="geo-entity-count"><?= (int) $count ?></small>
+            </span>
+          <?php endforeach; ?>
+        </div>
+      <?php endif; ?>
+    </div>
+  </div>
+
   <div class="geo-section-card">
     <div class="geo-card-header">
       <div>

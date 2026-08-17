@@ -48,6 +48,11 @@ final readonly class GeoDashboardController
         $goodCount = 0;
         $weakCount = 0;
 
+        /** @var array<string, array{name: string, count: int, totalScore: int, avgScore: int}> $topicStats */
+        $topicStats = [];
+        /** @var array<string, int> $entityCounts */
+        $entityCounts = [];
+
         foreach ($publishedArticles as $article) {
             $score = $this->calculator->calculate($article);
             $articleScores[$article->slug] = ['article' => $article, 'score' => $score];
@@ -57,7 +62,44 @@ final readonly class GeoDashboardController
                 'good' => $goodCount++,
                 'weak' => $weakCount++,
             };
+
+            // Aggregate topics
+            $topics = (array) $article->frontMatter->get('topics', []);
+            foreach ($topics as $t) {
+                if (is_string($t) && trim($t) !== '') {
+                    $topicName = trim($t);
+                    if (!isset($topicStats[$topicName])) {
+                        $topicStats[$topicName] = ['name' => $topicName, 'count' => 0, 'totalScore' => 0, 'avgScore' => 0];
+                    }
+                    $topicStats[$topicName]['count']++;
+                    $topicStats[$topicName]['totalScore'] += $score->total;
+                }
+            }
+
+            // Aggregate entities
+            $entities = $article->frontMatter->get('entities');
+            $entityList = [];
+            if (is_string($entities)) {
+                $entityList = preg_split('/[\r\n]+/', $entities) ?: [];
+            } elseif (is_array($entities)) {
+                $entityList = $entities;
+            }
+            foreach ($entityList as $ent) {
+                if (is_string($ent) && trim($ent) !== '') {
+                    $normalized = trim($ent);
+                    $entityCounts[$normalized] = ($entityCounts[$normalized] ?? 0) + 1;
+                }
+            }
         }
+
+        foreach ($topicStats as $name => &$stat) {
+            $stat['avgScore'] = (int) round($stat['totalScore'] / $stat['count']);
+        }
+        unset($stat);
+        uasort($topicStats, static fn ($a, $b): int => $b['count'] <=> $a['count'] ?: $b['avgScore'] <=> $a['avgScore']);
+
+        arsort($entityCounts);
+        $topEntities = array_slice($entityCounts, 0, 30, true);
 
         $publishedCount = count($publishedArticles);
         $averageScore = $publishedCount > 0 ? (int) round($totalScoreSum / $publishedCount) : 0;
@@ -87,11 +129,13 @@ final readonly class GeoDashboardController
         }
         try {
             $stmt = $this->pdo->query(
-                "SELECT DATE(created_at) as snapshot_date, ROUND(AVG(score)) as avg_score 
-                 FROM geo_scores 
-                 GROUP BY DATE(created_at) 
-                 ORDER BY snapshot_date ASC 
-                 LIMIT 30"
+                "SELECT snapshot_date, avg_score FROM (
+                     SELECT DATE(created_at) as snapshot_date, ROUND(AVG(score)) as avg_score 
+                     FROM geo_scores 
+                     GROUP BY DATE(created_at) 
+                     ORDER BY snapshot_date DESC 
+                     LIMIT 30
+                 ) AS sub ORDER BY snapshot_date ASC"
             );
             if ($stmt === false) {
                 return [];

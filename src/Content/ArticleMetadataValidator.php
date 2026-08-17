@@ -34,8 +34,12 @@ final readonly class ArticleMetadataValidator
             }
         }
         $structured = $document->frontMatter->get('structured_data');
-        if ($structured !== null && (!is_array($structured) || array_is_list($structured) || $structured === [] || self::containsForbiddenKey($structured))) {
-            $errors[] = sprintf('Article "%s" has invalid structured data.', $slug);
+        if ($structured !== null) {
+            if (!is_array($structured) || array_is_list($structured) || $structured === [] || self::containsForbiddenKey($structured)) {
+                $errors[] = sprintf('Article "%s" has invalid structured data.', $slug);
+            } elseif (empty($structured['@type']) && empty($structured['type']) && empty($structured['@context'])) {
+                $errors[] = sprintf('Article "%s" structured data must specify @type or @context.', $slug);
+            }
         }
         foreach (['entities', 'faq', 'hierarchy', 'alt_text', 'internal_links'] as $freeKey) {
             $value = $document->frontMatter->get($freeKey);

@@ -71,6 +71,8 @@ final class GeoDashboardControllerTest extends TestCase
                 'date' => '2026-08-17',
                 'status' => 'published',
                 'summary' => 'Detailed summary of article with more than fifty characters to test.',
+                'topics' => ['AI', 'Architecture'],
+                'entities' => "DeepSeek\nLLMs",
             ]),
             $this->contentDir . '/demo.md'
         ));
@@ -81,6 +83,10 @@ final class GeoDashboardControllerTest extends TestCase
         self::assertStringContainsString('Demo Article', $response->body);
         self::assertStringContainsString('全站平均 GEO 得分', $response->body);
         self::assertStringContainsString('历史发布健康度趋势', $response->body);
+        self::assertStringContainsString('品牌主题权威分布', $response->body);
+        self::assertStringContainsString('核心知识图谱实体', $response->body);
+        self::assertStringContainsString('DeepSeek', $response->body);
+        self::assertStringContainsString('Architecture', $response->body);
     }
 
     private function router(): Router

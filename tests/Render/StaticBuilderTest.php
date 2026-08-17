@@ -52,8 +52,13 @@ final class StaticBuilderTest extends TestCase
         self::assertStringContainsString('xmlns="http://www.w3.org/2005/Atom"', (string) file_get_contents($this->outputRoot . '/atom.xml'));
         $article = (string) file_get_contents($this->outputRoot . '/articles/first-post/index.html');
         self::assertStringContainsString('<article>', $article);
-        self::assertStringContainsString('"@type":"Article"', $article);
+        self::assertStringContainsString('"@type":"BlogPosting"', $article);
+        self::assertStringContainsString('"publisher":{"@type":"Organization","name":"HolyMD Notes"', $article);
+        self::assertStringContainsString('"inLanguage":"zh-CN"', $article);
         self::assertStringContainsString('https://example.test/articles/first-post/', $article);
+        $indexHtml = (string) file_get_contents($this->outputRoot . '/index.html');
+        self::assertStringContainsString('"@type":"WebSite"', $indexHtml);
+        self::assertStringContainsString('"@type":"Person"', $indexHtml);
         self::assertStringContainsString('Ada Author', (string) file_get_contents($this->outputRoot . '/feed.json'));
         self::assertStringContainsString('/articles/second-post/', (string) file_get_contents($this->outputRoot . '/sitemap.xml'));
         self::assertStringContainsString('/topics/notes/', (string) file_get_contents($this->outputRoot . '/sitemap.xml'));

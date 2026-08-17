@@ -81,19 +81,59 @@ final class StaticBuilder
             $files[] = $route . 'index.html';
             $rendered[] = $data;
         }
+        $siteUrl = rtrim($input->siteUrl, '/') . '/';
+        $authorSchema = ['@type' => 'Person', 'name' => $input->authorName, 'url' => $siteUrl];
+        if (trim($input->about) !== '') {
+            $authorSchema['description'] = $input->about;
+        }
+
         foreach ($publishedPages as $page) {
             $route = '/' . $page->slug . '/';
             $path = $temporaryRoot . $route . 'index.html';
+            $pageUrl = $this->url($input, $route);
             $contentHtml = $this->applyImageAltText($this->markdownRenderer->render($page->bodyMarkdown), $this->stringList($page->frontMatter->get('alt_text')));
+            $pageType = $page->slug === 'about' ? 'AboutPage' : 'WebPage';
+            $pageJsonLd = json_encode([
+                '@context' => 'https://schema.org',
+                '@graph' => [
+                    [
+                        '@type' => $pageType,
+                        'name' => $page->title,
+                        'url' => $pageUrl,
+                        'inLanguage' => $input->siteLanguage,
+                        'isPartOf' => ['@type' => 'WebSite', 'name' => $input->siteName, 'url' => $siteUrl],
+                        'author' => $authorSchema,
+                    ],
+                    $authorSchema,
+                ],
+            ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR);
+
             $this->write($path, $this->renderer->render('page', [
                 'siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'siteLanguage' => $input->siteLanguage,
                 'page' => $page, 'contentHtml' => $contentHtml, 'generateLlmsTxt' => $input->generateLlmsTxt,
                 'assetCss' => $assetCss, 'assetSearch' => $assetSearch, 'basePath' => $input->basePath, 'navPages' => $navPages,
+                'jsonLd' => $pageJsonLd,
             ]));
             $files[] = substr($route, 1) . 'index.html';
         }
+
+        $homeJsonLd = json_encode([
+            '@context' => 'https://schema.org',
+            '@graph' => [
+                [
+                    '@type' => 'WebSite',
+                    'name' => $input->siteName,
+                    'url' => $siteUrl,
+                    'description' => $input->about !== '' ? $input->about : 'Writing by ' . $input->authorName,
+                    'inLanguage' => $input->siteLanguage,
+                    'publisher' => $authorSchema,
+                ],
+                $authorSchema,
+            ],
+        ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_THROW_ON_ERROR);
+
         $this->write($temporaryRoot . '/index.html', $this->renderer->render('index', [
-            'siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'about' => $input->about, 'siteLanguage' => $input->siteLanguage, 'articles' => $articles, 'topics' => $topics, 'topicSlugs' => $topicSlugs, 'generateLlmsTxt' => $input->generateLlmsTxt, 'assetCss' => $assetCss, 'assetSearch' => $assetSearch, 'basePath' => $input->basePath, 'navPages' => $navPages,
+            'siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'about' => $input->about, 'siteLanguage' => $input->siteLanguage, 'articles' => $articles, 'topics' => $topics, 'topicSlugs' => $topicSlugs, 'generateLlmsTxt' => $input->generateLlmsTxt, 'assetCss' => $assetCss, 'assetSearch' => $assetSearch, 'basePath' => $input->basePath, 'navPages' => $navPages, 'jsonLd' => $homeJsonLd,
         ]));
         $this->write($temporaryRoot . '/404.html', $this->renderer->render('404', ['siteName' => $input->siteName, 'siteUrl' => $input->siteUrl, 'authorName' => $input->authorName, 'siteLanguage' => $input->siteLanguage, 'generateLlmsTxt' => $input->generateLlmsTxt, 'assetCss' => $assetCss, 'assetSearch' => $assetSearch, 'basePath' => $input->basePath, 'navPages' => $navPages]));
         $this->write($temporaryRoot . $assetCss, $styles);
@@ -170,15 +210,43 @@ final class StaticBuilder
         $structured = $article->frontMatter->get('structured_data');
         $contentHtml = $this->applyImageAltText($this->markdownRenderer->render($article->bodyMarkdown), $this->stringList($article->frontMatter->get('alt_text')));
         $ogImage = $this->resolveOgImage($article, $contentHtml, $input);
-        $articleSchema = ['@type' => 'Article', 'headline' => $article->title, 'datePublished' => $date, 'dateModified' => $modified, 'author' => ['@type' => 'Person', 'name' => $input->authorName], 'mainEntityOfPage' => $url, 'description' => $summary, 'citation' => $sources, 'about' => array_map(static fn (string $name): array => ['@type' => 'Thing', 'name' => $name], $entities)];
+        $siteUrl = rtrim($input->siteUrl, '/') . '/';
+        $authorSchema = [
+            '@type' => 'Person',
+            'name' => $input->authorName,
+            'url' => $siteUrl,
+        ];
+        if (trim($input->about) !== '') {
+            $authorSchema['description'] = $input->about;
+        }
+
+        $publisherSchema = [
+            '@type' => 'Organization',
+            'name' => $input->siteName,
+            'url' => $siteUrl,
+        ];
+
+        $articleSchema = [
+            '@type' => 'BlogPosting',
+            'headline' => $article->title,
+            'datePublished' => $date,
+            'dateModified' => $modified,
+            'author' => $authorSchema,
+            'publisher' => $publisherSchema,
+            'mainEntityOfPage' => $url,
+            'description' => $summary,
+            'inLanguage' => $input->siteLanguage,
+            'citation' => $sources,
+            'about' => array_map(static fn (string $name): array => ['@type' => 'Thing', 'name' => $name], $entities),
+        ];
         if ($ogImage !== null) {
             $articleSchema['image'] = $ogImage;
         }
         $graph = [
-                $articleSchema,
-                ['@type' => 'Person', 'name' => $input->authorName],
-                ['@type' => 'WebSite', 'name' => $input->siteName, 'url' => rtrim($input->siteUrl, '/') . '/'],
-                ['@type' => 'BreadcrumbList', 'itemListElement' => [['@type' => 'ListItem', 'position' => 1, 'name' => 'Home', 'item' => $this->url($input, '/')], ['@type' => 'ListItem', 'position' => 2, 'name' => $article->title, 'item' => $url]]],
+            $articleSchema,
+            $authorSchema,
+            ['@type' => 'WebSite', 'name' => $input->siteName, 'url' => $siteUrl, 'inLanguage' => $input->siteLanguage],
+            ['@type' => 'BreadcrumbList', 'itemListElement' => [['@type' => 'ListItem', 'position' => 1, 'name' => 'Home', 'item' => $this->url($input, '/')], ['@type' => 'ListItem', 'position' => 2, 'name' => $article->title, 'item' => $url]]],
         ];
         if ($faq !== []) $graph[] = ['@type' => 'FAQPage', 'mainEntity' => array_map(static fn (array $entry): array => ['@type' => 'Question', 'name' => $entry['question'], 'acceptedAnswer' => ['@type' => 'Answer', 'text' => $entry['answer']]], $faq)];
         if (is_array($structured)) $graph[] = $structured;
