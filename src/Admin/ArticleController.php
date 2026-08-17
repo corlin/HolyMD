@@ -66,7 +66,6 @@ final readonly class ArticleController
             if (!is_string($expectedChecksum) || !$this->articles->writeIfUnchanged($document, $expectedChecksum)) {
                 return Response::json(['error' => 'The article changed in another editor session. Reload before saving again.'], 409);
             }
-            $this->maybeEnqueueGeoReview($document);
             return Response::json(['saved' => true, 'checksum' => hash('sha256', $document->serialize())]);
         } catch (InvalidArgumentException $exception) {
             return Response::json(['error' => $exception->getMessage()], 422);
@@ -128,7 +127,6 @@ final readonly class ArticleController
             $document = new ArticleDocument($slug, $title, $body, $frontMatter, $slug . '.md');
             $this->assertValidMetadata($document);
             $this->articles->write($document);
-            $this->maybeEnqueueGeoReview($document);
             return Response::redirect('/admin/articles/' . rawurlencode($slug) . '/edit');
         } catch (InvalidArgumentException $exception) {
             return Response::json(['error' => $exception->getMessage()], 422);
