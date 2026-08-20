@@ -21,6 +21,14 @@ HolyMD 是一款面向个人品牌的**静态优先** Markdown 博客管理工�
 
 公开页面采用统一的暖纸色、深墨文字与克制墨蓝强调色。System、Light、Dark 只作为读者显示模式，不改变站点品牌、排版层级或内容结构。
 
+### 后台管理与写作工作室
+
+![HolyMD 三栏写作工作室，包含 Markdown 编辑、实时预览与 GEO 建议](docs/assets/screenshots/admin-writing-studio-desktop.jpg)
+
+| 文章管理 | GEO 健康度与 AI 爬虫看板 |
+| --- | --- |
+| ![HolyMD 后台文章管理列表](docs/assets/screenshots/admin-articles-desktop.jpg) | ![HolyMD GEO 健康度与 AI 爬虫可观测性看板](docs/assets/screenshots/admin-geo-dashboard-desktop.jpg) |
+
 ---
 
 ## 🌟 核心特性
