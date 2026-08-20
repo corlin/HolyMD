@@ -16,7 +16,4 @@ interface GeoProposalStore
 
     /** @return array{reviewId:int,status:string,failure:?string,proposals:list<array<string,mixed>>}|null */
     public function latestReview(string $articleSlug): ?array;
-
-    public function saveReview(GeoReview $review): void;
-    public function enqueueRetry(string $articleSlug, string $bodyHash, string $reason): void;
 }

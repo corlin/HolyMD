@@ -40,14 +40,19 @@ final class PublicationSettingsTest extends TestCase
         self::assertStringContainsString('language', $settings->validationErrors()[3]);
     }
 
-    public function test_build_input_accepts_one_publication_settings_module(): void
+    public function test_build_input_exposes_only_its_content_and_settings_inputs(): void
     {
         $settings = new PublicationSettings('Notes', 'https://example.test', 'Ada', 'About Ada', true, 'en-US', '/journal');
 
         $input = new BuildInput([], $settings);
 
         self::assertSame($settings, $input->settings);
-        self::assertSame('Notes', $input->siteName);
-        self::assertSame('/journal', $input->basePath);
+        $publicProperties = array_map(
+            static fn (\ReflectionProperty $property): string => $property->getName(),
+            (new \ReflectionClass($input))->getProperties(\ReflectionProperty::IS_PUBLIC),
+        );
+        sort($publicProperties);
+
+        self::assertSame(['articles', 'builtAt', 'pages', 'settings'], $publicProperties);
     }
 }

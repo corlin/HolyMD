@@ -4,6 +4,25 @@ HolyMD 是一款面向个人品牌的**静态优先** Markdown 博客管理工�
 
 ---
 
+## 🖼️ 界面预览
+
+### 公开首页与长文阅读
+
+| 首页 | 文章页 |
+| --- | --- |
+| ![HolyMD 暖纸色与墨蓝设计系统的桌面首页](docs/assets/screenshots/public-home-desktop.jpg) | ![HolyMD 带桌面目录栏的长文阅读页](docs/assets/screenshots/public-article-desktop.jpg) |
+
+### 移动端
+
+<p align="center">
+  <img src="docs/assets/screenshots/public-home-mobile.jpg" width="320" alt="HolyMD 移动端首页">
+  <img src="docs/assets/screenshots/public-article-mobile.jpg" width="320" alt="HolyMD 移动端文章阅读页">
+</p>
+
+公开页面采用统一的暖纸色、深墨文字与克制墨蓝强调色。System、Light、Dark 只作为读者显示模式，不改变站点品牌、排版层级或内容结构。
+
+---
+
 ## 🌟 核心特性
 
 ### 1. 沉浸式写作工作室 (Writing Studio)
@@ -21,7 +40,7 @@ HolyMD 是一款面向个人品牌的**静态优先** Markdown 博客管理工�
 
 ### 2. 前台体验与现代发现体系
 - **统一刊物流首页 (Unified Editorial Stream)**：去除冗余的重复 Hero 大标题，呈现高质感的“极简简介 $\to$ 精致置顶 Featured 文章卡片 $\to$ 最新文章流 $\to$ 底部话题胶囊”。
-- **暗黑模式无闪烁切换**：原生 CSS 自定义属性驱动，支持系统跟随、浅色、深色三种模式，页面加载零闪烁。
+- **显示模式无闪烁切换**：原生 CSS 自定义属性驱动，支持 System、Light、Dark 三种读者显示模式，页面加载零闪烁。
 - **画廊式图片弹窗预览 (Image Viewer)**：支持键盘快捷键导航（左右切换、`+`/`-` 缩放、`0` 还原、`Esc` 关闭）。
 - **全站全局毫秒级搜索**：置于全站顶部导航栏的悬浮微弹窗，支持 `⌘K` / `Ctrl+K` / `/` 快速激活与 `Esc` 关闭，毫秒级即时过滤，全站任意页面均可即时检索。
 - **LLM / AI 智能体发现生态**：全站自动生成 `/llms.txt` 与包含全站公开文章正文的 `/llms-full.txt` 全文知识库。
@@ -131,11 +150,13 @@ php bin/holymd-check.php
 
 ## 🧪 测试与质量验证
 
+响应式生成页回归需要 Node.js 22+ 和 Chrome/Chromium。浏览器会先读取 `HOLYMD_CHROME_BIN`，再检查 PATH 与常见安装路径；Node 可通过 `HOLYMD_NODE_BIN` 指定。CI 中缺少前置条件会明确失败，本地则会以 `REDUCED COVERAGE` 标记跳过。可用 `HOLYMD_BROWSER_REQUIRED=1` 在本地强制执行浏览器门禁，或用 `HOLYMD_BROWSER_TIMEOUT_MS` 调整每个浏览器阶段的毫秒超时。仅在隔离容器确有需要时设置 `HOLYMD_CHROME_NO_SANDBOX=1`。
+
 ```bash
 # 校验 composer 配置
 composer validate --strict
 
-# 运行全量单元测试与端到端测试 (284 tests, 1184 assertions)
+# 运行当前全量单元测试与端到端测试
 ./vendor/bin/phpunit tests
 
 # 验证静态站点构建
@@ -181,4 +202,6 @@ HolyMD/
 - [首版实施计划（已归档）](docs/superpowers/plans/2026-08-12-holymd-implementation.md)
 - [发布预检与回归加固设计（已交付）](docs/superpowers/specs/2026-08-17-publish-preflight-regression-hardening-design.md)
 - [发布预检与回归加固计划（已完成）](docs/superpowers/plans/2026-08-17-publish-preflight-regression-hardening.md)
+- [公开设计系统精修规格（已交付）](docs/superpowers/specs/2026-08-19-public-design-system-refinement-design.md)
+- [公开设计系统精修计划（已完成）](docs/superpowers/plans/2026-08-19-public-design-system-refinement.md)
 - [公开阅读体验设计验收记录](design-qa.md)

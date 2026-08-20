@@ -4,6 +4,22 @@ namespace HolyMD\Tests\Publish;
 use PHPUnit\Framework\TestCase;
 final class PublicEntrypointTest extends TestCase
 {
+    public function test_entrypoint_assembles_its_publisher_through_the_shared_factory(): void
+    {
+        $source = (string) file_get_contents(__DIR__ . '/../../public/index.php');
+        $normalized = preg_replace('/\s+/', ' ', $source);
+
+        self::assertStringContainsString('use HolyMD\\Publish\\BuildPublisherFactory;', $source);
+        self::assertStringContainsString('(new BuildPublisherFactory(', $source);
+        self::assertIsString($normalized);
+        self::assertMatchesRegularExpression(
+            '~->create\( \$articles, \$pageRepo, \$versions, \(string\) \(Env::get\(\'HOLYMD_PUBLIC_TREE\'\) \?: \$root \. \(\$flattened \? \'/\.holymd-current\' : \'/public/\.holymd-current\'\)\), \);~',
+            $normalized,
+            'the shared publisher factory must retain the standard and flattened live-root contract',
+        );
+        self::assertStringNotContainsString('new PublishService(', $source);
+    }
+
     public function test_entrypoint_routes_public_requests_to_dedicated_generated_tree(): void
     {
         $source = (string) file_get_contents(__DIR__ . '/../../public/index.php');

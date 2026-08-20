@@ -15,7 +15,6 @@ use HolyMD\Geo\AiClient;
 use HolyMD\Geo\AiResponse;
 use HolyMD\Geo\GeoPrompt;
 use HolyMD\Geo\GeoReviewService;
-use HolyMD\Geo\InMemoryGeoProposalStore;
 use HolyMD\Http\Csrf;
 use HolyMD\Http\Router;
 use HolyMD\Http\ServerRequest;
@@ -158,8 +157,7 @@ final class GeoBoundaryTest extends TestCase
                 'proposals' => [['type' => 'summary', 'value' => 'A deep dive article.']],
                 'findings' => [],
             ], JSON_THROW_ON_ERROR);
-            $store = new InMemoryGeoProposalStore();
-            $review = (new GeoReviewService(new BoundaryAiClient($aiJson), $store))->review($original);
+            $review = (new GeoReviewService(new BoundaryAiClient($aiJson)))->review($original);
             self::assertSame($bodyHashOriginal, $review->bodyHash, 'Review must record the original body hash.');
 
             // Step 2: Apply the proposal through the editor save path (fill + autosave)

@@ -10,7 +10,7 @@ use JsonException;
 
 final readonly class GeoReviewService
 {
-    public function __construct(private AiClient $client, private ?GeoProposalStore $store = null)
+    public function __construct(private AiClient $client)
     {
     }
 
@@ -20,11 +20,8 @@ final readonly class GeoReviewService
         try {
             $rawJson = $this->client->analyze(GeoPrompt::system(), $document->serialize())->json;
             $payload = json_decode($rawJson, true, 512, JSON_THROW_ON_ERROR);
-            $review = $this->validatedReview($payload, $document->slug, $hash);
-            $this->store?->saveReview($review);
-            return $review;
+            return $this->validatedReview($payload, $document->slug, $hash);
         } catch (JsonException|InvalidArgumentException $exception) {
-            $this->store?->enqueueRetry($document->slug, $hash, $exception->getMessage());
             throw new InvalidArgumentException('GEO AI response is malformed or unsafe: ' . $exception->getMessage(), previous: $exception);
         }
     }

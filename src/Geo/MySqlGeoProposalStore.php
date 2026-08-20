@@ -102,9 +102,6 @@ final readonly class MySqlGeoProposalStore implements GeoProposalStore
         return $persisted;
     }
 
-    public function saveReview(GeoReview $review): void {}
-    public function enqueueRetry(string $articleSlug, string $bodyHash, string $reason): void {}
-
     private function mark(string $id, string $status, ?int $administratorId = null): void { $statement = $this->pdo->prepare("UPDATE geo_proposals SET status = ?, decision_by_admin_user_id = ?, decided_at = UTC_TIMESTAMP(6) WHERE id = ? AND status = 'pending'"); $statement->execute([$status, $administratorId, $id]); if ($statement->rowCount() !== 1) throw new InvalidArgumentException('Only a pending GEO proposal can be decided.'); }
     private function auditDecision(string $id, string $status, ?int $administratorId): void
     {

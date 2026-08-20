@@ -17,9 +17,7 @@ use HolyMD\Http\ServerRequest;
 use HolyMD\Geo\GeoController;
 use HolyMD\Geo\GeoReviewService;
 use HolyMD\Geo\MySqlGeoProposalStore;
-use HolyMD\Publish\AtomicPublicTree;
-use HolyMD\Publish\PublishService;
-use HolyMD\Render\StaticBuilder;
+use HolyMD\Publish\BuildPublisherFactory;
 use HolyMD\Render\MarkdownRenderer;
 use HolyMD\Queue\JobStatusRepository;
 use HolyMD\Queue\MySqlJobQueue;
@@ -149,19 +147,23 @@ try {
     // HOLYMD_SYNC_PUBLISH=1 publishes and GEO reviews run in-request instead.
     $syncPublish = Env::get('HOLYMD_SYNC_PUBLISH') === '1';
     $queue = $syncPublish ? null : new MySqlJobQueue($container->get(\PDO::class));
+    $articles = new ArticleRepository($root . '/content/articles');
     $pageRepo = new ArticleRepository($root . '/content/pages', ArticleRepository::RESERVED_PAGE_SLUGS);
+    $versions = new VersionService($root . '/content/versions');
     $publication = PublicationSettings::fromEnvironment();
-    $publisher = new PublishService(
-        new ArticleRepository($root . '/content/articles'), new StaticBuilder(), new AtomicPublicTree(),
-        (string) (Env::get('HOLYMD_PUBLIC_TREE') ?: $root . ($flattened ? '/.holymd-current' : '/public/.holymd-current')), $publication, $root . '/content/audit',
-        null, $root . '/content/holymd-publish.lock', new VersionService($root . '/content/versions'),
-        $pageRepo,
+    $publisher = (new BuildPublisherFactory(
         $container->get(\PDO::class),
-        new \HolyMD\Geo\GeoScoreCalculator(),
+        $publication,
+        $root,
+    ))->create(
+        $articles,
+        $pageRepo,
+        $versions,
+        (string) (Env::get('HOLYMD_PUBLIC_TREE') ?: $root . ($flattened ? '/.holymd-current' : '/public/.holymd-current')),
     );
     $controller = new ArticleController(
-        new ArticleRepository($root . '/content/articles'),
-        new VersionService($root . '/content/versions'),
+        $articles,
+        $versions,
         new AdminGuard($_SESSION),
         new Csrf($_SESSION),
         $publisher,

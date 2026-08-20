@@ -220,6 +220,4 @@ final class RecordingGeoProposalStore implements GeoProposalStore
         return [$proposal];
     }
     public function latestReview(string $articleSlug): ?array { return $this->latest; }
-    public function saveReview(GeoReview $review): void {}
-    public function enqueueRetry(string $articleSlug, string $bodyHash, string $reason): void {}
 }

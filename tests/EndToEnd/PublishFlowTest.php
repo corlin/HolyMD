@@ -11,7 +11,6 @@ use HolyMD\Content\FrontMatter;
 use HolyMD\Geo\AiClient;
 use HolyMD\Geo\AiResponse;
 use HolyMD\Geo\GeoReviewService;
-use HolyMD\Geo\InMemoryGeoProposalStore;
 use HolyMD\Publish\AtomicPublicTree;
 use HolyMD\Publish\PublishService;
 use HolyMD\Render\StaticBuilder;
@@ -58,8 +57,7 @@ final class PublishFlowTest extends TestCase
             'findings' => ['Consider adding publication date context.'],
         ], JSON_THROW_ON_ERROR);
 
-        $store = new InMemoryGeoProposalStore();
-        $review = (new GeoReviewService(new FakeAiClient($aiJson), $store))->review($original);
+        $review = (new GeoReviewService(new FakeAiClient($aiJson)))->review($original);
 
         self::assertSame($bodyHashBefore, $review->bodyHash);
         self::assertCount(2, $review->proposals);

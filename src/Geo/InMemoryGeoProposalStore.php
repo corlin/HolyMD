@@ -37,13 +37,6 @@ final class InMemoryGeoProposalStore implements GeoProposalStore
         $this->save(new GeoProposal($proposal->id, $proposal->articleSlug, $proposal->inputChecksum, $proposal->type, $proposal->value, 'rejected', $proposal->bodyHash));
     }
 
-    public function saveReview(GeoReview $review): void
-    {
-        $this->storeReview($review, $review->proposals);
-    }
-
-    public function enqueueRetry(string $articleSlug, string $bodyHash, string $reason): void {}
-
     public function recordReview(ArticleDocument $document, ?string $snapshotPath, GeoReview $review): array
     {
         $this->storeReview($review, $review->proposals);
