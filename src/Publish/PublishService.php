@@ -115,7 +115,7 @@ final readonly class PublishService
         $currentScore = $currentPublic instanceof ArticleDocument ? $calculator->calculate($currentPublic)->total : null;
         $warnings = [];
         if ($currentScore !== null && $candidateScore->total < $currentScore) {
-            $warnings[] = sprintf('Candidate GEO score decreases from %d to %d.', $currentScore, $candidateScore->total);
+            $warnings[] = \HolyMD\I18n\Translator::text('Candidate GEO score decreases from {from} to {to}.', ['from' => $currentScore, 'to' => $candidateScore->total]);
         }
         foreach ($candidateScore->breakdown as $item) {
             if ($item['earned'] < $item['weight']) {

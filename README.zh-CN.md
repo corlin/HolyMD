@@ -49,6 +49,7 @@ HolyMD 是一款**GEO 原生**的开源独立站引擎：静态优先、共享�
   - 严格两阶段生命周期保护（已发布内容需先 Withdraw 进入 `withdrawn` 状态，之后才允许删除，防止线上误删）；
   - 确认删除时自动级联清除对应 Slug 在 `content/versions/` 下关联的所有历史快照文件与索引记录，不留孤立垃圾数据。
 - **自定义单页管理 (Pages)**：支持关于页、条款页等独立单页的撰写、导航权重排序、多版本回滚及静态构建。
+- **中英双语后台**：后台界面支持英文与简体中文，可在侧栏随时切换。
 
 ### 2. 前台体验与现代发现体系
 - **统一刊物流首页 (Unified Editorial Stream)**：去除冗余的重复 Hero 大标题，呈现高质感的“极简简介 $\to$ 精致置顶 Featured 文章卡片 $\to$ 最新文章流 $\to$ 底部话题胶囊”。
@@ -174,6 +175,7 @@ php bin/holymd-check.php
 | `HOLYMD_SYNC_PUBLISH` | 无 Cron/进程能力的主机设为 `1`，在请求内执行发布与 GEO 审核 | `0` |
 | `HOLYMD_PUBLIC_TREE` | 自定义发布指针路径；未设置时使用 `public/.holymd-current` | 项目默认路径 |
 | `HOLYMD_LLMS_TXT` | 是否生成 `llms.txt` 与 `llms-full.txt` | `1` |
+| `HOLYMD_ADMIN_LOCALE` | 后台界面语言，`en` 或 `zh-CN`；侧栏语言切换会按浏览器覆盖此设置 | 中文站点默认 `zh-CN`，否则 `en` |
 
 ---
 

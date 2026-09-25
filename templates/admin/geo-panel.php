@@ -11,14 +11,14 @@ $escape = static fn (string $value): string => htmlspecialchars($value, ENT_QUOT
   <div class="geo-compact-header">
     <div class="geo-compact-title">
       <span class="icon" aria-hidden="true"><?= $geoConfigured ? 'auto_awesome' : 'power_off' ?></span>
-      <span class="geo-compact-heading">GEO 智能引擎</span>
+      <span class="geo-compact-heading"><?= __('GEO engine') ?></span>
       <span class="geo-provider-tag <?= $geoConfigured ? 'is-configured' : '' ?>">
-        <?= $geoConfigured ? $escape($geoModel) : '未配置' ?>
+        <?= $geoConfigured ? $escape($geoModel) : __('Not configured') ?>
       </span>
     </div>
     <?php if ($geoConfigured): ?>
-      <button type="button" class="btn-geo-trigger" data-geo-review title="点击立即执行智能分析并补齐缺失元数据">
-        <span class="icon" aria-hidden="true">refresh</span>智能补全
+      <button type="button" class="btn-geo-trigger" data-geo-review title="<?= __('Analyze now and fill in missing metadata') ?>">
+        <span class="icon" aria-hidden="true">refresh</span><?= __('Suggest metadata') ?>
       </button>
     <?php endif; ?>
   </div>
@@ -28,9 +28,9 @@ $escape = static fn (string $value): string => htmlspecialchars($value, ENT_QUOT
       <summary class="geo-score-summary-bar">
         <div class="geo-score-summary-left">
           <span class="icon" aria-hidden="true">insights</span>
-          <span>健康度得分</span>
+          <span><?= __('Health score') ?></span>
         </div>
-        <span class="geo-score-pill is-<?= $geoScore->grade() ?>"><?= $geoScore->total ?>分 · <?= $geoScore->gradeLabel() ?></span>
+        <span class="geo-score-pill is-<?= $geoScore->grade() ?>"><?= $geoScore->total ?> · <?= $escape($geoScore->gradeLabel()) ?></span>
       </summary>
       <div class="geo-score-breakdown">
         <?php foreach ($geoScore->breakdown as $item): ?>
@@ -47,7 +47,7 @@ $escape = static fn (string $value): string => htmlspecialchars($value, ENT_QUOT
   <?php endif; ?>
 
   <div data-geo-review-status class="geo-review-status" aria-live="polite"></div>
-  <div class="geo-catchall" data-geo-catchall hidden><ol data-geo-catchall-list aria-label="Reference suggestions"></ol></div>
+  <div class="geo-catchall" data-geo-catchall hidden><ol data-geo-catchall-list aria-label="<?= __('Reference suggestions') ?>"></ol></div>
   <input type="hidden" data-geo-csrf value="<?= $escape($csrfToken) ?>">
 </section>
 

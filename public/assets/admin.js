@@ -1,4 +1,14 @@
 (() => {
+  // Translations for the active admin language, injected by layout.php; English is the fallback.
+  const i18n = (() => {
+    try {
+      const source = document.getElementById('holymd-i18n');
+      return source ? JSON.parse(source.textContent) : {};
+    } catch {
+      return {};
+    }
+  })();
+  const t = (text, params = {}) => Object.entries(params).reduce((result, [name, value]) => result.split(`{${name}}`).join(String(value)), i18n[text] || text);
   const studio = document.querySelector('.studio');
   const base = (studio ? studio.dataset.basePath : '') || '';
   let geoApi = null;
@@ -127,13 +137,13 @@
           body: new URLSearchParams({body: body.value, csrf_token: token.value}),
         });
         const payload = await response.json();
-        if (!response.ok) throw Error(payload.error || 'Preview failed');
+        if (!response.ok) throw Error(payload.error || t('Preview failed'));
         if (version === previewVersion) {
           preview.innerHTML = payload.html;
           syncPreviewScroll();
         }
       } catch (error) {
-        if (version === previewVersion) preview.textContent = error.message || 'Preview failed';
+        if (version === previewVersion) preview.textContent = error.message || t('Preview failed');
       } finally {
         if (version === previewVersion) preview.removeAttribute('aria-busy');
       }
@@ -157,7 +167,7 @@
       if (!dirty) return true;
       const snapshot = {title: title.value, date: date.value, body: body.value, ...metadataFields()};
       dirty = false;
-      setState('saving', 'Saving…');
+      setState('saving', t('Saving…'));
       saveInFlight = (async () => {
         const response = await fetch(studio.dataset.autosaveUrl, {
           method: 'POST',
@@ -166,19 +176,19 @@
         });
         const payload = await response.json();
         if (!response.ok) {
-          throw Error(payload.error || 'Save failed');
+          throw Error(payload.error || t('Save failed'));
         }
         currentChecksum = payload.checksum;
         studio.dataset.articleChecksum = currentChecksum;
         if (publicationChecksum) publicationChecksum.value = currentChecksum;
-        if (!dirty) setState('saved', 'Source saved');
+        if (!dirty) setState('saved', t('Source saved'));
         return true;
       })();
       try {
         return await saveInFlight;
       } catch (error) {
         dirty = true;
-        setState('error', error.message || 'Save failed');
+        setState('error', error.message || t('Save failed'));
         throw error;
       } finally {
         saveInFlight = null;
@@ -206,7 +216,7 @@
         }
       });
       if (count > 0) {
-        advancedBadge.textContent = `${count} 项已配置`;
+        advancedBadge.textContent = t('{count} configured', {count});
         advancedBadge.hidden = false;
       } else {
         advancedBadge.hidden = true;
@@ -216,7 +226,7 @@
     const listen = field => field.addEventListener('input', () => {
       queuePreview();
       dirty = true;
-      setState('unsaved', 'Unsaved changes');
+      setState('unsaved', t('Unsaved changes'));
       clearTimeout(saveTimer);
       saveTimer = setTimeout(() => void save().catch(() => {}), 800);
       updateAdvancedGeoBadge();
@@ -232,7 +242,7 @@
         publicationForm.dataset.submitting = 'true';
         HTMLFormElement.prototype.submit.call(publicationForm);
       } catch (error) {
-        setState('error', error.message || 'Save failed; publication was cancelled.');
+        setState('error', error.message || t('Save failed; publication was cancelled.'));
       }
     });
 
@@ -253,9 +263,9 @@
     const originalHtml = button.innerHTML;
     try {
       await navigator.clipboard.writeText(button.dataset.copy);
-      button.textContent = 'Copied';
+      button.textContent = t('Copied');
     } catch {
-      button.textContent = 'Copy failed';
+      button.textContent = t('Copy failed');
     }
     setTimeout(() => {
       button.innerHTML = originalHtml;
@@ -329,50 +339,57 @@
     for (let attempt = 0; attempt < 60; attempt++) {
       const response = await fetch(`${base}/admin/articles/${slug}/geo/review`);
       const payload = await response.json();
-      if (!response.ok) throw Error(payload.error || 'GEO status failed');
+      if (!response.ok) throw Error(payload.error || t('GEO status failed'));
       if (payload.status === 'completed') {
         await applyProposalsToInputs(payload.proposals);
-        if (status) status.textContent = '✨ 智能元数据已自动补齐';
+        if (status) status.textContent = t('Metadata suggestions applied');
         if (reviewButton) {
           reviewButton.disabled = false;
-          reviewButton.innerHTML = '<span class="icon" aria-hidden="true">refresh</span>智能补全';
+          reviewButton.dataset.mode = '';
+          reviewButton.innerHTML = '<span class="icon" aria-hidden="true">refresh</span>';
+          reviewButton.append(t('Suggest metadata'));
         }
         return;
       }
       if (payload.status === 'failed') {
         if (reviewButton) {
           reviewButton.disabled = false;
-          reviewButton.textContent = 'Retry GEO review';
+          reviewButton.dataset.mode = '';
+          reviewButton.textContent = t('Retry GEO review');
         }
-        throw Error(payload.failure || 'GEO review failed');
+        throw Error(payload.failure || t('GEO review failed'));
       }
       if (status) {
-        status.textContent = payload.status === 'running' ? 'GEO review running…' : 'GEO review queued — waiting for Cron worker…';
+        status.textContent = payload.status === 'running' ? t('GEO review running…') : t('GEO review queued — waiting for Cron worker…');
       }
-      if (reviewButton) reviewButton.textContent = 'Refresh GEO status';
+      if (reviewButton) {
+        reviewButton.dataset.mode = 'refresh';
+        reviewButton.textContent = t('Refresh GEO status');
+      }
       await sleep(Math.min(10000, 2000 + attempt * 500));
     }
     if (reviewButton) {
       reviewButton.disabled = false;
-      reviewButton.textContent = 'Refresh GEO status';
+      reviewButton.dataset.mode = 'refresh';
+      reviewButton.textContent = t('Refresh GEO status');
     }
   };
 
   if (reviewButton) {
     reviewButton.onclick = async () => {
       try {
-        if (reviewButton.textContent === 'Refresh GEO status') {
+        if (reviewButton.dataset.mode === 'refresh') {
           await poll();
           return;
         }
         reviewButton.disabled = true;
-        if (status) status.textContent = '正在发起分析…';
+        if (status) status.textContent = t('Starting analysis…');
         const payload = await request(`${base}/admin/articles/${slug}/geo/review`);
         if (payload.queued) {
           await poll();
         } else if (payload.proposals) {
           await applyProposalsToInputs(payload.proposals);
-          if (status) status.textContent = '✨ 智能元数据已自动补齐';
+          if (status) status.textContent = t('Metadata suggestions applied');
           reviewButton.disabled = false;
         }
       } catch (error) {
@@ -389,7 +406,7 @@
       if (!response.ok) return;
       if (payload.status === 'completed' && Array.isArray(payload.proposals)) {
         await applyProposalsToInputs(payload.proposals);
-        if (status) status.textContent = '✨ 智能元数据已就绪';
+        if (status) status.textContent = t('Metadata suggestions ready');
       } else if (payload.status === 'queued' || payload.status === 'running') {
         await poll();
       }

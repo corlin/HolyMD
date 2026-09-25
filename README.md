@@ -55,6 +55,7 @@ Article content lives in Markdown files on disk. MySQL holds only operational st
 - **Safe lifecycle** — published content must be withdrawn before it can be deleted; deletion cascades to its version history.
 - **Standalone pages** — About, terms, and other pages with navigation ordering and version history.
 - **Slug redirects** — renamed slugs keep working through generated 301 redirects.
+- **Bilingual admin** — English and Simplified Chinese interface, switchable from the sidebar.
 
 ### Reader experience
 
@@ -142,6 +143,7 @@ php bin/holymd-check.php
 | `HOLYMD_SYNC_PUBLISH` | Set to `1` on hosts without cron to publish and review in-request | `0` |
 | `HOLYMD_PUBLIC_TREE` | Custom release pointer path | `public/.holymd-current` |
 | `HOLYMD_LLMS_TXT` | Generate `llms.txt` and `llms-full.txt` | `1` |
+| `HOLYMD_ADMIN_LOCALE` | Admin interface language, `en` or `zh-CN`; the sidebar switcher overrides it per browser | `zh-CN` for Chinese sites, otherwise `en` |
 
 See [`.env.example`](.env.example) for the full list.
 
