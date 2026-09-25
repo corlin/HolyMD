@@ -1,7 +1,7 @@
 <?php
 declare(strict_types=1);
 $pageTitle = $siteName;
-$description = $about !== '' ? $about : 'Writing by ' . $authorName;
+$description = $about !== '' ? $about : \HolyMD\I18n\Translator::text('Writing by {author}', ['author' => $authorName]);
 $ogType = 'website';
 $ogTitle = $siteName;
 $ogDescription = $description;
@@ -12,7 +12,7 @@ $ogImage = null;
 $showAlternates = true;
 require __DIR__ . '/_head.php';
 $skipTarget = '#main-content';
-$skipLabel = 'Skip to content';
+$skipLabel = \HolyMD\I18n\Translator::text('Skip to content');
 $activeNav = 'writing';
 require __DIR__ . '/_header.php';
 ?>
@@ -27,10 +27,10 @@ require __DIR__ . '/_header.php';
     <?php if ($articles !== []): ?>
       <?php $featured = $articles[0]; ?>
       <section class="editorial-featured" aria-labelledby="featured-heading">
-        <h2 id="featured-heading" class="sr-only">Featured writing</h2>
+        <h2 id="featured-heading" class="sr-only"><?= __('Featured writing') ?></h2>
         <article class="feature-card">
           <div class="feature-card-header">
-            <span class="feature-badge">Featured</span>
+            <span class="feature-badge"><?= __('Featured') ?></span>
             <time class="article-date" datetime="<?= htmlspecialchars((string) $featured->frontMatter->get('date')) ?>"><?= htmlspecialchars((string) $featured->frontMatter->get('date')) ?></time>
           </div>
           <h3><a href="<?= $basePath ?>/articles/<?= htmlspecialchars($featured->slug) ?>/"><?= htmlspecialchars($featured->title) ?></a></h3>
@@ -38,7 +38,7 @@ require __DIR__ . '/_header.php';
             <p class="feature-summary"><?= htmlspecialchars($summary) ?></p>
           <?php endif; ?>
           <a class="text-link" href="<?= $basePath ?>/articles/<?= htmlspecialchars($featured->slug) ?>/">
-            Read the essay <span class="icon" aria-hidden="true">arrow_forward</span>
+            <?= __('Read the essay') ?> <span class="icon" aria-hidden="true">arrow_forward</span>
           </a>
         </article>
       </section>
@@ -47,29 +47,29 @@ require __DIR__ . '/_header.php';
       <?php if ($latestBatch !== []): ?>
         <section class="editorial-latest" aria-labelledby="latest-heading">
           <div class="stream-heading">
-            <h2 id="latest-heading">Latest writing</h2>
+            <h2 id="latest-heading"><?= __('Latest writing') ?></h2>
           </div>
           <div id="latest-articles" class="article-list">
             <?php foreach ($latestBatch as $article): require __DIR__ . '/_article_row.php'; endforeach; ?>
           </div>
           <?php if (count($articles) > 11): ?>
             <div class="load-more-wrap">
-              <button type="button" id="load-more-button" class="button-load-more">Load more writing</button>
+              <button type="button" id="load-more-button" class="button-load-more"><?= __('Load more writing') ?></button>
             </div>
           <?php endif; ?>
         </section>
       <?php endif; ?>
     <?php else: ?>
       <section class="editorial-empty">
-        <h2 id="featured-heading">No published writing yet</h2>
-        <p class="muted">Check back soon for new essays and notes.</p>
+        <h2 id="featured-heading"><?= __('No published writing yet') ?></h2>
+        <p class="muted"><?= __('Check back soon for new essays and notes.') ?></p>
       </section>
     <?php endif; ?>
 
     <?php if ($topics !== []): ?>
       <section class="editorial-topics" aria-labelledby="topics-heading">
         <div class="stream-heading">
-          <h2 id="topics-heading">Topics</h2>
+          <h2 id="topics-heading"><?= __('Topics') ?></h2>
         </div>
         <ul class="topic-list">
           <?php foreach ($topics as $topic => $topicArticles): $slug = (string) ($topicSlugs[$topic] ?? ''); ?>

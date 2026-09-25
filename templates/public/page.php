@@ -12,7 +12,7 @@ $ogImage = null;
 $showAlternates = false;
 require __DIR__ . '/_head.php';
 $skipTarget = '#main-content';
-$skipLabel = 'Skip to content';
+$skipLabel = \HolyMD\I18n\Translator::text('Skip to content');
 $activeNav = $page->slug;
 require __DIR__ . '/_header.php';
 ?>

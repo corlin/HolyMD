@@ -89,6 +89,7 @@ final class TranslatorTest extends TestCase
         $files = [
             ...(glob($root . '/templates/admin/*.php') ?: []),
             ...(glob($root . '/templates/admin/*/*.php') ?: []),
+            ...(glob($root . '/templates/public/*.php') ?: []),
             $root . '/src/Geo/GeoScore.php',
             $root . '/src/Geo/GeoScoreCalculator.php',
             $root . '/src/Publish/PublishService.php',
