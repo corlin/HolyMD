@@ -219,7 +219,7 @@ h3 { margin: 0; font-size: clamp(1.45rem, 2.5vw, 2rem); }
   .brand-nav, .header-tools { gap: .9rem; }
   .brand-nav nav { gap: .85rem; }
   .brand-nav nav a:not(:first-child) { display: none; }
-  .wordmark { max-width: min(12rem, 34vw); overflow: hidden; text-overflow: ellipsis; }
+  .wordmark { display: block; flex: 0 1 auto; min-width: 0; max-width: 100%; line-height: var(--control-size); overflow: hidden; text-overflow: ellipsis; }
   .rss-link { display: none; }
   .header-reading-progress { position: fixed; top: 0; left: 0; z-index: 21; width: 100%; min-width: 0; }
   .header-reading-progress .progress-track { height: 2px; }
@@ -233,7 +233,7 @@ h3 { margin: 0; font-size: clamp(1.45rem, 2.5vw, 2rem); }
   .brand-nav { flex: 1 1 auto; gap: .35rem; min-width: 0; }
   .header-tools { flex: none; gap: .35rem; min-width: 0; }
   .brand-nav nav { flex: none; gap: .35rem; }
-  .wordmark { max-width: min(8rem, 34vw); overflow: hidden; text-overflow: ellipsis; }
+  .wordmark { display: block; flex: 0 1 auto; min-width: 0; max-width: 100%; line-height: var(--control-size); overflow: hidden; text-overflow: ellipsis; }
   .header-search-wrap { flex: none; }
   .header-search-trigger { width: var(--control-size); padding-inline: 0; }
   .theme-switcher { display: none; }
