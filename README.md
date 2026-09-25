@@ -75,6 +75,23 @@ Article content lives in Markdown files on disk. MySQL holds only operational st
 
 ---
 
+## Try it with Docker
+
+The fastest way to see HolyMD is the bundled demo stack. It needs only Docker:
+
+```bash
+git clone https://github.com/corlin/HolyMD.git
+cd HolyMD
+docker compose up --build
+```
+
+When the log prints `HolyMD is ready`, open:
+
+- Public site: `http://localhost:8080/` — three example articles with different GEO scores, plus `/llms.txt` and `/llms-full.txt`
+- Admin: `http://localhost:8080/admin/login` — sign in as `admin@example.com` / `holymd-demo-password`
+
+Set `HOLYMD_DEMO_PORT` to use another port. `docker compose down -v` removes the demo data. The demo uses PHP's built-in server and fixed credentials, so do not expose it to the internet.
+
 ## Quick start
 
 ```bash

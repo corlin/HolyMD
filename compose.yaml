@@ -1,0 +1,52 @@
+# Local demo: docker compose up --build, then open http://localhost:8080/
+# Not a production deployment; see docs/operations/shared-hosting.md for that.
+services:
+  db:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: holymd-demo-root
+      MYSQL_DATABASE: holymd
+      MYSQL_USER: holymd
+      MYSQL_PASSWORD: holymd-demo
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uholymd", "-pholymd-demo"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  app:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${HOLYMD_DEMO_PORT:-8080}:8080"
+    environment:
+      HOLYMD_DSN: "mysql:host=db;dbname=holymd;charset=utf8mb4"
+      HOLYMD_DB_USERNAME: holymd
+      HOLYMD_DB_PASSWORD: holymd-demo
+      HOLYMD_SITE_NAME: "HolyMD Demo"
+      HOLYMD_SITE_URL: "http://localhost:${HOLYMD_DEMO_PORT:-8080}"
+      HOLYMD_AUTHOR_NAME: "HolyMD Demo"
+      HOLYMD_ABOUT: "A demo site showing HolyMD's GEO-native publishing."
+      HOLYMD_SITE_LANGUAGE: "en"
+      HOLYMD_TIMEZONE: "UTC"
+      HOLYMD_LLMS_TXT: "1"
+      HOLYMD_DEMO_PORT: "${HOLYMD_DEMO_PORT:-8080}"
+      HOLYMD_DEMO_ADMIN_EMAIL: "admin@example.com"
+      HOLYMD_DEMO_ADMIN_PASSWORD: "holymd-demo-password"
+      # Optional: enable the AI reviewer with an OpenAI-compatible provider.
+      # HOLYMD_GEO_API_ENDPOINT: "https://api.deepseek.com/v1/chat/completions"
+      # HOLYMD_GEO_MODEL: "deepseek-v4-flash"
+      # HOLYMD_GEO_API_CREDENTIAL: "..."
+      # HOLYMD_GEO_API_KEY: "..."
+    volumes:
+      - content:/app/content
+
+volumes:
+  db-data:
+  content:

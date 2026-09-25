@@ -89,6 +89,23 @@ HolyMD 是一款**GEO 原生**的开源独立站引擎：静态优先、共享�
 
 ---
 
+## 🐳 Docker 一键体验
+
+只需安装 Docker，即可启动自带示例内容的演示环境：
+
+```bash
+git clone https://github.com/corlin/HolyMD.git
+cd HolyMD
+docker compose up --build
+```
+
+日志出现 `HolyMD is ready` 后访问：
+
+- **公开站**：`http://localhost:8080/`（三篇 GEO 评分各不相同的示例文章，以及 `/llms.txt`、`/llms-full.txt`）
+- **管理后台**：`http://localhost:8080/admin/login`（账号 `admin@example.com`，密码 `holymd-demo-password`）
+
+可用 `HOLYMD_DEMO_PORT` 更换端口，`docker compose down -v` 清除演示数据。演示环境使用 PHP 内置服务器和固定密码，请勿暴露到公网。
+
 ## 🚀 本地快速启动
 
 ```bash

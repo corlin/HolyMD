@@ -13,6 +13,34 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  demo:
+    name: Docker demo
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start demo stack
+        run: docker compose up -d --build
+
+      - name: Wait for the published site
+        run: |
+          for i in $(seq 1 60); do
+            curl -fsS -o /dev/null http://localhost:8080/articles/what-is-geo/ && exit 0
+            sleep 3
+          done
+          docker compose logs app
+          exit 1
+
+      - name: Smoke test routes
+        run: |
+          for path in / /articles/geo-checklist-zh/ /about/ /llms.txt /llms-full.txt /sitemap.xml /admin/login; do
+            curl -fsS -o /dev/null "http://localhost:8080$path" || { echo "FAILED: $path"; docker compose logs app; exit 1; }
+          done
+
+      - name: Stop demo stack
+        if: always()
+        run: docker compose down -v
+
   test:
     name: PHP ${{ matrix.php }}
     runs-on: ubuntu-latest
