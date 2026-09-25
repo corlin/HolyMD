@@ -59,7 +59,10 @@ jobs:
       - name: Install dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
 
-      - name: Apply database migrations
+      - name: Install database schema
+        run: php bin/holymd-migrate.php
+
+      - name: Re-run migrations (idempotency)
         run: php bin/holymd-migrate.php
 
       - name: Static analysis
