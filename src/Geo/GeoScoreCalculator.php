@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace HolyMD\Geo;
 
 use HolyMD\Content\ArticleDocument;
+use HolyMD\I18n\Translator;
 
 final class GeoScoreCalculator
 {
@@ -19,15 +20,15 @@ final class GeoScoreCalculator
         $summaryLen = mb_strlen($summary, 'UTF-8');
         if ($summaryLen >= 50) {
             $earned = 20;
-            $reason = '已提供详实摘要（≥50字符）';
+            $reason = Translator::text('Detailed summary provided (50+ characters)');
         } elseif ($summaryLen > 0) {
             $earned = 10;
-            $reason = '摘要偏短（<50字符），建议充实';
+            $reason = Translator::text('Summary is short (under 50 characters); consider expanding it');
         } else {
             $earned = 0;
-            $reason = '缺失摘要，影响 AI/RSS 索引';
+            $reason = Translator::text('Missing summary; AI and RSS indexing will suffer');
         }
-        $breakdown[] = ['field' => 'summary', 'label' => '文章摘要 (Summary)', 'weight' => 20, 'earned' => $earned, 'reason' => $reason];
+        $breakdown[] = ['field' => 'summary', 'label' => Translator::text('Summary'), 'weight' => 20, 'earned' => $earned, 'reason' => $reason];
         $total += $earned;
 
         // 2. Structured Data (20)
@@ -35,16 +36,16 @@ final class GeoScoreCalculator
         if (is_array($structured) && $structured !== []) {
             if (!empty($structured['@type']) || !empty($structured['type'])) {
                 $earned = 20;
-                $reason = '已配置标准 Schema.org 结构化数据';
+                $reason = Translator::text('Schema.org structured data configured');
             } else {
                 $earned = 10;
-                $reason = '已配置 JSON-LD 但缺少 @type 属性';
+                $reason = Translator::text('JSON-LD present but missing @type');
             }
         } else {
             $earned = 0;
-            $reason = '缺失 JSON-LD 结构化数据';
+            $reason = Translator::text('Missing JSON-LD structured data');
         }
-        $breakdown[] = ['field' => 'structured_data', 'label' => '结构化数据 (JSON-LD)', 'weight' => 20, 'earned' => $earned, 'reason' => $reason];
+        $breakdown[] = ['field' => 'structured_data', 'label' => Translator::text('Structured data (JSON-LD)'), 'weight' => 20, 'earned' => $earned, 'reason' => $reason];
         $total += $earned;
 
         // 3. FAQ (15)
@@ -59,15 +60,15 @@ final class GeoScoreCalculator
         }
         if ($faqCount >= 2) {
             $earned = 15;
-            $reason = sprintf('包含多组问答对（%d组）', $faqCount);
+            $reason = Translator::text('{count} FAQ pairs', ['count' => $faqCount]);
         } elseif ($faqCount === 1) {
             $earned = 8;
-            $reason = '仅有 1 组问答，建议至少 2 组';
+            $reason = Translator::text('Only 1 FAQ pair; add at least 2');
         } else {
             $earned = 0;
-            $reason = '缺失 FAQ 问答候选';
+            $reason = Translator::text('Missing FAQ pairs');
         }
-        $breakdown[] = ['field' => 'faq', 'label' => 'FAQ 问答对', 'weight' => 15, 'earned' => $earned, 'reason' => $reason];
+        $breakdown[] = ['field' => 'faq', 'label' => Translator::text('FAQ'), 'weight' => 15, 'earned' => $earned, 'reason' => $reason];
         $total += $earned;
 
         // 4. Entities (10)
@@ -76,15 +77,15 @@ final class GeoScoreCalculator
         $entityCount = count($entityList);
         if ($entityCount >= 3) {
             $earned = 10;
-            $reason = sprintf('实体关键词充分（%d个）', $entityCount);
+            $reason = Translator::text('{count} entities identified', ['count' => $entityCount]);
         } elseif ($entityCount > 0) {
             $earned = 5;
-            $reason = sprintf('实体数量较少（%d个，建议≥3个）', $entityCount);
+            $reason = Translator::text('Only {count} entities; aim for 3 or more', ['count' => $entityCount]);
         } else {
             $earned = 0;
-            $reason = '缺失命名实体/关键词';
+            $reason = Translator::text('Missing named entities');
         }
-        $breakdown[] = ['field' => 'entities', 'label' => '命名实体 (Entities)', 'weight' => 10, 'earned' => $earned, 'reason' => $reason];
+        $breakdown[] = ['field' => 'entities', 'label' => Translator::text('Entities'), 'weight' => 10, 'earned' => $earned, 'reason' => $reason];
         $total += $earned;
 
         // 5. Topics (10)
@@ -92,12 +93,12 @@ final class GeoScoreCalculator
         $topicList = $this->filterNonEmptyStrings($topics);
         if (count($topicList) >= 1) {
             $earned = 10;
-            $reason = sprintf('已关联话题分类（%s）', implode('、', $topicList));
+            $reason = Translator::text('Topics: {topics}', ['topics' => implode(', ', $topicList)]);
         } else {
             $earned = 0;
-            $reason = '未归类任何话题分类';
+            $reason = Translator::text('No topics assigned');
         }
-        $breakdown[] = ['field' => 'topics', 'label' => '话题分类 (Topics)', 'weight' => 10, 'earned' => $earned, 'reason' => $reason];
+        $breakdown[] = ['field' => 'topics', 'label' => Translator::text('Topics'), 'weight' => 10, 'earned' => $earned, 'reason' => $reason];
         $total += $earned;
 
         // 6. Sources (10)
@@ -108,15 +109,17 @@ final class GeoScoreCalculator
         $sourceCount = count($allSources);
         if ($sourceCount >= 2) {
             $earned = 10;
-            $reason = sprintf('包含权威引用来源（%d条%s）', $sourceCount, $bodySources !== [] ? '，已自动识别正文引用' : '');
+            $reason = $bodySources !== []
+                ? Translator::text('{count} sources, including links detected in the body', ['count' => $sourceCount])
+                : Translator::text('{count} sources', ['count' => $sourceCount]);
         } elseif ($sourceCount === 1) {
             $earned = 5;
-            $reason = '仅有 1 条引用来源，建议补充';
+            $reason = Translator::text('Only 1 source; consider adding more');
         } else {
             $earned = 0;
-            $reason = '缺失引用来源（E-E-A-T 信号不足）';
+            $reason = Translator::text('Missing sources (weak E-E-A-T signal)');
         }
-        $breakdown[] = ['field' => 'sources', 'label' => '引用来源 (Sources)', 'weight' => 10, 'earned' => $earned, 'reason' => $reason];
+        $breakdown[] = ['field' => 'sources', 'label' => Translator::text('Sources'), 'weight' => 10, 'earned' => $earned, 'reason' => $reason];
         $total += $earned;
 
         // 7. Internal links (10)
@@ -127,34 +130,36 @@ final class GeoScoreCalculator
         $linkCount = count($allLinks);
         if ($linkCount >= 2) {
             $earned = 10;
-            $reason = sprintf('包含站内互链（%d条%s）', $linkCount, $bodyLinks !== [] ? '，已自动识别正文内链' : '');
+            $reason = $bodyLinks !== []
+                ? Translator::text('{count} internal links, including links detected in the body', ['count' => $linkCount])
+                : Translator::text('{count} internal links', ['count' => $linkCount]);
         } elseif ($linkCount === 1) {
             $earned = 5;
-            $reason = '仅有 1 条站内内链，建议丰富';
+            $reason = Translator::text('Only 1 internal link; consider adding more');
         } else {
             $earned = 0;
-            $reason = '缺失站内互链推荐';
+            $reason = Translator::text('Missing internal links');
         }
-        $breakdown[] = ['field' => 'internal_links', 'label' => '站内互链 (Internal Links)', 'weight' => 10, 'earned' => $earned, 'reason' => $reason];
+        $breakdown[] = ['field' => 'internal_links', 'label' => Translator::text('Internal links'), 'weight' => 10, 'earned' => $earned, 'reason' => $reason];
         $total += $earned;
 
         // 8. Alt text (5)
         $hasImages = (bool) preg_match('/!\[.*?\]\(.*?\)/', $article->bodyMarkdown);
         if (!$hasImages) {
             $earned = 5;
-            $reason = '文章无配图，自动豁免满分';
+            $reason = Translator::text('No images; full marks by default');
         } else {
             $altText = $fm->get('alt_text');
             $altList = $this->filterNonEmptyStrings($altText);
             if (count($altList) >= 1) {
                 $earned = 5;
-                $reason = sprintf('已配置配图描述（%d条）', count($altList));
+                $reason = Translator::text('{count} image descriptions', ['count' => count($altList)]);
             } else {
                 $earned = 0;
-                $reason = '文章包含配图但未提供 Alt text 描述';
+                $reason = Translator::text('Images present but no alt text provided');
             }
         }
-        $breakdown[] = ['field' => 'alt_text', 'label' => '图片描述 (Alt Text)', 'weight' => 5, 'earned' => $earned, 'reason' => $reason];
+        $breakdown[] = ['field' => 'alt_text', 'label' => Translator::text('Alt text'), 'weight' => 5, 'earned' => $earned, 'reason' => $reason];
         $total += $earned;
 
         return new GeoScore(min(100, max(0, $total)), $breakdown);

@@ -14,6 +14,7 @@ use HolyMD\Content\ArticleRepository;
 use HolyMD\Http\Csrf;
 use HolyMD\Http\Router;
 use HolyMD\Http\ServerRequest;
+use HolyMD\I18n\Translator;
 use HolyMD\Geo\GeoController;
 use HolyMD\Geo\GeoReviewService;
 use HolyMD\Geo\MySqlGeoProposalStore;
@@ -151,6 +152,14 @@ try {
     $pageRepo = new ArticleRepository($root . '/content/pages', ArticleRepository::RESERVED_PAGE_SLUGS);
     $versions = new VersionService($root . '/content/versions');
     $publication = PublicationSettings::fromEnvironment();
+    // Admin language: ?lang= switches and is remembered in a cookie; otherwise
+    // HOLYMD_ADMIN_LOCALE, then the public site language, decides.
+    $requestedLocale = is_string($_GET['lang'] ?? null) ? $_GET['lang'] : null;
+    $savedLocale = is_string($_COOKIE[Translator::COOKIE] ?? null) ? $_COOKIE[Translator::COOKIE] : null;
+    Translator::setLocale(Translator::resolve($requestedLocale, $savedLocale, Env::get('HOLYMD_ADMIN_LOCALE'), $publication->siteLanguage));
+    if ($requestedLocale === Translator::locale()) {
+        setcookie(Translator::COOKIE, $requestedLocale, ['expires' => time() + 31536000, 'path' => $basePath . '/admin', 'httponly' => true, 'secure' => (($_SERVER['HTTPS'] ?? '') === 'on'), 'samesite' => 'Lax']);
+    }
     $publisher = (new BuildPublisherFactory(
         $container->get(\PDO::class),
         $publication,

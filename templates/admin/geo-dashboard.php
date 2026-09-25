@@ -8,41 +8,41 @@ $activeNav = 'geo';
 <main class="admin-shell">
 <?php require __DIR__ . '/_nav.php'; ?>
 <section class="article-index geo-dashboard">
-  <p class="eyebrow">Search & AI Observability</p>
-  <h1>GEO 健康度看板</h1>
-  <p class="muted">全站生成式引擎优化（GEO）健康评分与 AI 爬虫可观测性监控。</p>
+  <p class="eyebrow"><?= __('Search & AI observability') ?></p>
+  <h1><?= __('GEO health dashboard') ?></h1>
+  <p class="muted"><?= __('Site-wide Generative Engine Optimization (GEO) health scores and AI crawler observability.') ?></p>
 
   <div class="geo-section-card geo-hero-card">
     <div class="geo-hero-grid">
       <div class="geo-stat-card">
-        <span class="geo-stat-label">全站平均 GEO 得分</span>
+        <span class="geo-stat-label"><?= __('Average GEO score') ?></span>
         <div class="geo-stat-value <?= $averageScore >= 80 ? 'is-excellent' : ($averageScore >= 50 ? 'is-good' : 'is-weak') ?>">
           <?= (int) $averageScore ?><span class="geo-stat-unit">/ 100</span>
         </div>
-        <span class="geo-stat-hint"><?= $averageScore >= 80 ? '✨ 结构化信号优良' : ($averageScore >= 50 ? '⚡ 部分文章需补强' : '⚠️ 存在较多空缺字段') ?></span>
+        <span class="geo-stat-hint"><?= $averageScore >= 80 ? __('Strong structured signals') : ($averageScore >= 50 ? __('Some articles need work') : __('Many fields are missing')) ?></span>
       </div>
 
       <div class="geo-stat-card">
-        <span class="geo-stat-label">已发布文章达标率</span>
+        <span class="geo-stat-label"><?= __('Articles scoring 80+') ?></span>
         <div class="geo-stat-value"><?= (int) $excellentPercentage ?><span class="geo-stat-unit">%</span></div>
-        <span class="geo-stat-hint">共 <?= (int) $publishedCount ?> 篇文章，<?= (int) $excellentCount ?> 篇达到 80+ 优秀</span>
+        <span class="geo-stat-hint"><?= __('{excellent} of {total} published articles rated excellent', ['excellent' => (int) $excellentCount, 'total' => (int) $publishedCount]) ?></span>
       </div>
 
       <div class="geo-stat-card">
-        <span class="geo-stat-label">评分分布格局</span>
+        <span class="geo-stat-label"><?= __('Score distribution') ?></span>
         <div class="geo-distribution-bar">
           <?php if ($publishedCount > 0): ?>
-            <div class="geo-dist-segment is-excellent" style="width: <?= round(($excellentCount / $publishedCount) * 100) ?>%;" title="优秀: <?= $excellentCount ?>篇"></div>
-            <div class="geo-dist-segment is-good" style="width: <?= round(($goodCount / $publishedCount) * 100) ?>%;" title="良好: <?= $goodCount ?>篇"></div>
-            <div class="geo-dist-segment is-weak" style="width: <?= round(($weakCount / $publishedCount) * 100) ?>%;" title="待优化: <?= $weakCount ?>篇"></div>
+            <div class="geo-dist-segment is-excellent" style="width: <?= round(($excellentCount / $publishedCount) * 100) ?>%;" title="<?= __('Excellent: {count}', ['count' => $excellentCount]) ?>"></div>
+            <div class="geo-dist-segment is-good" style="width: <?= round(($goodCount / $publishedCount) * 100) ?>%;" title="<?= __('Good: {count}', ['count' => $goodCount]) ?>"></div>
+            <div class="geo-dist-segment is-weak" style="width: <?= round(($weakCount / $publishedCount) * 100) ?>%;" title="<?= __('Needs work: {count}', ['count' => $weakCount]) ?>"></div>
           <?php else: ?>
             <div class="geo-dist-segment" style="width: 100%; background: var(--line);"></div>
           <?php endif; ?>
         </div>
         <div class="geo-distribution-legend">
-          <span><span class="dot is-excellent"></span>优秀 <?= (int) $excellentCount ?></span>
-          <span><span class="dot is-good"></span>良好 <?= (int) $goodCount ?></span>
-          <span><span class="dot is-weak"></span>待优化 <?= (int) $weakCount ?></span>
+          <span><span class="dot is-excellent"></span><?= __('Excellent') ?> <?= (int) $excellentCount ?></span>
+          <span><span class="dot is-good"></span><?= __('Good') ?> <?= (int) $goodCount ?></span>
+          <span><span class="dot is-weak"></span><?= __('Needs work') ?> <?= (int) $weakCount ?></span>
         </div>
       </div>
     </div>
@@ -50,12 +50,12 @@ $activeNav = 'geo';
     <?php if ($trends !== []): ?>
       <div class="geo-hero-trend">
         <div class="geo-card-header">
-          <span class="geo-stat-label">发布健康度历史快照 (近 <?= count($trends) ?> 次)</span>
+          <span class="geo-stat-label"><?= __('Score history at publish (last {count})', ['count' => count($trends)]) ?></span>
         </div>
         <div class="geo-trend-chart-wrap">
           <div class="geo-trend-chart">
             <?php foreach ($trends as $point): ?>
-              <div class="geo-chart-col" title="<?= $escape($point['date']) ?>: 平均 <?= (int) $point['score'] ?> 分">
+              <div class="geo-chart-col" title="<?= __('{date}: average {score}', ['date' => $point['date'], 'score' => (int) $point['score']]) ?>">
                 <div class="geo-chart-bar-wrap">
                   <div class="geo-chart-bar <?= $point['score'] >= 80 ? 'is-excellent' : ($point['score'] >= 50 ? 'is-good' : 'is-weak') ?>" style="height: <?= max(6, (int) $point['score']) ?>%;">
                     <span class="geo-chart-val"><?= (int) $point['score'] ?></span>
@@ -71,16 +71,16 @@ $activeNav = 'geo';
   </div>
 
   <div class="geo-grid-two-col">
-    <!-- 品牌主题与实体矩阵 -->
+    <!-- Topics and entities -->
     <div class="geo-section-card">
       <div class="geo-card-header">
         <div>
-          <h2>品牌主题与实体矩阵</h2>
-          <p class="muted">话题分类的内容积累度与核心概念覆盖。</p>
+          <h2><?= __('Topics and entities') ?></h2>
+          <p class="muted"><?= __('How much you have published per topic, and which concepts you cover most.') ?></p>
         </div>
       </div>
       <?php if ($topicStats === [] && $topEntities === []): ?>
-        <p class="muted">全站文章暂未配置话题或实体数据。</p>
+        <p class="muted"><?= __('No topics or entities configured yet.') ?></p>
       <?php else: ?>
         <?php if ($topicStats !== []): ?>
           <div class="geo-topic-list">
@@ -88,10 +88,10 @@ $activeNav = 'geo';
               <div class="geo-topic-row">
                 <div class="geo-topic-info">
                   <strong><?= $escape($t['name']) ?></strong>
-                  <span class="muted"><?= (int) $t['count'] ?> 篇</span>
+                  <span class="muted"><?= __('{count} article(s)', ['count' => (int) $t['count']]) ?></span>
                 </div>
                 <div class="geo-score-badge is-<?= $t['avgScore'] >= 80 ? 'excellent' : ($t['avgScore'] >= 50 ? 'good' : 'weak') ?>">
-                  均分 <strong><?= (int) $t['avgScore'] ?></strong>
+                  <?= __('Avg') ?> <strong><?= (int) $t['avgScore'] ?></strong>
                 </div>
               </div>
             <?php endforeach; ?>
@@ -100,7 +100,7 @@ $activeNav = 'geo';
         <?php if ($topEntities !== []): ?>
           <div class="geo-entity-cloud" style="margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line);">
             <?php foreach (array_slice($topEntities, 0, 16, true) as $entityName => $count): ?>
-              <span class="geo-entity-pill" title="出现在 <?= (int) $count ?> 篇文章中">
+              <span class="geo-entity-pill" title="<?= __('Appears in {count} article(s)', ['count' => (int) $count]) ?>">
                 <?= $escape($entityName) ?><small class="geo-entity-count"><?= (int) $count ?></small>
               </span>
             <?php endforeach; ?>
@@ -109,42 +109,42 @@ $activeNav = 'geo';
       <?php endif; ?>
     </div>
 
-    <!-- AI 爬虫可观测性 -->
+    <!-- AI crawler observability -->
     <div class="geo-section-card">
       <div class="geo-card-header">
         <div>
-          <h2>AI 爬虫可观测性 (AI Bots)</h2>
-          <p class="muted">实时追踪全球主流大模型与 AI 搜索的抓取频次与偏好。</p>
+          <h2><?= __('AI crawler observability') ?></h2>
+          <p class="muted"><?= __('Which AI crawlers visit your site, how often, and what they read.') ?></p>
         </div>
       </div>
 
       <div class="geo-ai-stat-row">
         <div class="geo-ai-stat-item">
           <span class="geo-ai-stat-num"><?= (int) ($aiBotStats['total7d'] ?? 0) ?></span>
-          <span class="geo-ai-stat-lbl">近 7 天抓取</span>
+          <span class="geo-ai-stat-lbl"><?= __('Crawls, last 7 days') ?></span>
         </div>
         <div class="geo-ai-stat-item">
           <span class="geo-ai-stat-num"><?= (int) ($aiBotStats['distinctBots7d'] ?? 0) ?></span>
-          <span class="geo-ai-stat-lbl">活跃爬虫种类</span>
+          <span class="geo-ai-stat-lbl"><?= __('Active crawlers') ?></span>
         </div>
         <div class="geo-ai-stat-item">
           <span class="geo-ai-stat-num"><?= (int) ($aiBotStats['llmsTxt7d'] ?? 0) ?></span>
-          <span class="geo-ai-stat-lbl">llms.txt 访问</span>
+          <span class="geo-ai-stat-lbl"><?= __('llms.txt requests') ?></span>
         </div>
       </div>
 
       <div class="geo-bot-compact-grid">
         <div>
-          <h3 class="geo-sub-title">来源分布</h3>
+          <h3 class="geo-sub-title"><?= __('Crawlers') ?></h3>
           <?php if (empty($aiBotStats['botDistribution'])): ?>
-            <p class="muted" style="font-size: 12px;">暂无捕获记录</p>
+            <p class="muted" style="font-size: 12px;"><?= __('No crawler visits recorded yet') ?></p>
           <?php else: ?>
             <div class="geo-bot-dist-list">
               <?php foreach (array_slice($aiBotStats['botDistribution'], 0, 4) as $b): ?>
                 <div class="geo-bot-dist-row">
                   <div class="geo-bot-name-col">
                     <strong><?= $escape($b['bot_name']) ?></strong>
-                    <span class="muted"><?= (int) $b['count'] ?> 次 (<?= (int) $b['percentage'] ?>%)</span>
+                    <span class="muted"><?= __('{count} visit(s)', ['count' => (int) $b['count']]) ?> (<?= (int) $b['percentage'] ?>%)</span>
                   </div>
                   <div class="geo-bot-progress-track">
                     <div class="geo-bot-progress-bar" style="width: <?= (int) $b['percentage'] ?>%;"></div>
@@ -156,15 +156,15 @@ $activeNav = 'geo';
         </div>
 
         <div>
-          <h3 class="geo-sub-title">Top 热门内容</h3>
+          <h3 class="geo-sub-title"><?= __('Most crawled') ?></h3>
           <?php if (empty($aiBotStats['topPaths'])): ?>
-            <p class="muted" style="font-size: 12px;">暂无热门路径</p>
+            <p class="muted" style="font-size: 12px;"><?= __('No crawled paths yet') ?></p>
           <?php else: ?>
             <ul class="geo-crawled-paths-list">
               <?php foreach (array_slice($aiBotStats['topPaths'], 0, 3) as $tp): ?>
                 <li>
                   <code><?= $escape($tp['path']) ?></code>
-                  <span class="geo-badge-count"><?= (int) $tp['count'] ?>次</span>
+                  <span class="geo-badge-count"><?= (int) $tp['count'] ?></span>
                 </li>
               <?php endforeach; ?>
             </ul>
@@ -174,7 +174,7 @@ $activeNav = 'geo';
 
       <?php if (!empty($aiBotStats['recentVisits'])): ?>
         <div class="geo-stream-wrap">
-          <h3 class="geo-sub-title">最近流水</h3>
+          <h3 class="geo-sub-title"><?= __('Recent visits') ?></h3>
           <div class="geo-stream-list">
             <?php foreach ($aiBotStats['recentVisits'] as $v): ?>
               <div class="geo-stream-item">
@@ -193,13 +193,13 @@ $activeNav = 'geo';
   <div class="geo-section-card">
     <div class="geo-card-header">
       <div>
-        <h2>待优化文章排行榜</h2>
-        <p class="muted">优先补强以下文章的缺失字段，可快速拉升独立站整体 GEO 健康度与搜索展现。</p>
+        <h2><?= __('Articles to improve first') ?></h2>
+        <p class="muted"><?= __('Filling in the missing fields on these articles raises your site-wide GEO health fastest.') ?></p>
       </div>
     </div>
 
     <?php if ($topWeakest === []): ?>
-      <p class="muted">暂无已发布的文章数据。</p>
+      <p class="muted"><?= __('No published articles yet.') ?></p>
     <?php else: ?>
       <ul class="article-list geo-weak-list">
         <?php foreach ($topWeakest as $item): 
@@ -215,20 +215,20 @@ $activeNav = 'geo';
               </a>
               <div class="geo-score-badge is-<?= $sc->grade() ?>">
                 <span class="icon" aria-hidden="true">insights</span>
-                <strong><?= $sc->total ?></strong>分 · <?= $sc->gradeLabel() ?>
+                <strong><?= $sc->total ?></strong> · <?= $escape($sc->gradeLabel()) ?>
               </div>
             </div>
             <div class="article-row-meta">
               <span><?= $escape((string) $art->frontMatter->get('date')) ?> · <code>/articles/<?= $escape($art->slug) ?>/</code></span>
               <a class="button-link-secondary" href="<?= $path('/admin/articles/' . rawurlencode($art->slug) . '/edit') ?>">
-                <span class="icon" aria-hidden="true">edit</span>进入微调优化
+                <span class="icon" aria-hidden="true">edit</span><?= __('Improve') ?>
               </a>
             </div>
             <div class="geo-missing-tags">
               <?php foreach ($sc->breakdown as $field): ?>
                 <?php if ($field['earned'] < $field['weight']): ?>
                   <span class="geo-missing-tag" title="<?= $escape($field['reason']) ?>">
-                    缺失: <?= $escape($field['label']) ?> (-<?= $field['weight'] - $field['earned'] ?>分)
+                    <?= __('Missing: {field} (−{points})', ['field' => $field['label'], 'points' => $field['weight'] - $field['earned']]) ?>
                   </span>
                 <?php endif; ?>
               <?php endforeach; ?>
@@ -242,6 +242,6 @@ $activeNav = 'geo';
 </main>
 <?php
 $content = (string) ob_get_clean();
-$title = 'GEO 仪表盘';
+$title = \HolyMD\I18n\Translator::text('GEO dashboard');
 require __DIR__ . '/layout.php';
 ?>

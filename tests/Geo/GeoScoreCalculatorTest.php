@@ -7,6 +7,7 @@ namespace HolyMD\Tests\Geo;
 use HolyMD\Content\ArticleDocument;
 use HolyMD\Content\FrontMatter;
 use HolyMD\Geo\GeoScoreCalculator;
+use HolyMD\I18n\Translator;
 use PHPUnit\Framework\TestCase;
 
 final class GeoScoreCalculatorTest extends TestCase
@@ -16,6 +17,11 @@ final class GeoScoreCalculatorTest extends TestCase
     protected function setUp(): void
     {
         $this->calculator = new GeoScoreCalculator();
+    }
+
+    protected function tearDown(): void
+    {
+        Translator::setLocale('en');
     }
 
     public function testEmptyArticleScoresZeroExceptAltTextExemption(): void
@@ -64,7 +70,7 @@ final class GeoScoreCalculatorTest extends TestCase
         $score = $this->calculator->calculate($article);
         $this->assertSame(100, $score->total);
         $this->assertSame('excellent', $score->grade());
-        $this->assertSame('优秀', $score->gradeLabel());
+        $this->assertSame('Excellent', $score->gradeLabel());
     }
 
     public function testPartialScores(): void
@@ -91,7 +97,7 @@ final class GeoScoreCalculatorTest extends TestCase
         // 10 + 10 + 8 + 5 + 10 + 5 + 5 + 0 = 53
         $this->assertSame(53, $score->total);
         $this->assertSame('good', $score->grade());
-        $this->assertSame('良好', $score->gradeLabel());
+        $this->assertSame('Good', $score->gradeLabel());
     }
 
     public function testImageWithoutAltTextScoresZeroForAltField(): void
@@ -124,7 +130,7 @@ final class GeoScoreCalculatorTest extends TestCase
         $score = $this->calculator->calculate($article);
         $entitiesField = $score->breakdown[3];
         $this->assertSame(10, $entitiesField['earned']);
-        $this->assertStringContainsString('4个', $entitiesField['reason']);
+        $this->assertSame('4 entities identified', $entitiesField['reason']);
     }
 
     public function testAutoDetectsMarkdownBodyLinksForSourcesAndInternalLinks(): void
@@ -147,9 +153,15 @@ final class GeoScoreCalculatorTest extends TestCase
         $internalField = $score->breakdown[6];
 
         $this->assertSame(10, $sourcesField['earned']);
-        $this->assertStringContainsString('自动识别正文引用', $sourcesField['reason']);
+        $this->assertStringContainsString('detected in the body', $sourcesField['reason']);
 
         $this->assertSame(10, $internalField['earned']);
-        $this->assertStringContainsString('自动识别正文内链', $internalField['reason']);
+        $this->assertStringContainsString('detected in the body', $internalField['reason']);
+
+        Translator::setLocale('zh-CN');
+        $chinese = $this->calculator->calculate($article);
+        $this->assertSame('包含引用来源（2 条，已自动识别正文引用）', $chinese->breakdown[5]['reason']);
+        $this->assertSame('站内互链', $chinese->breakdown[6]['label']);
+        $this->assertSame('优秀', (new \HolyMD\Geo\GeoScore(90, []))->gradeLabel());
     }
 }

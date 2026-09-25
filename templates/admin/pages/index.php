@@ -7,13 +7,13 @@ $activeNav = 'pages';
 <main class="admin-shell">
 <?php require __DIR__ . '/../_nav.php'; ?>
 <section class="article-index">
-  <p class="eyebrow">Site content</p>
+  <p class="eyebrow"><?= __('Site content') ?></p>
   <div class="article-index-heading">
     <div>
-      <h1>Custom Pages</h1>
-      <p>Standalone markdown pages for privacy policies, terms, disclosures, or special sections.</p>
+      <h1><?= __('Custom pages') ?></h1>
+      <p><?= __('Standalone Markdown pages for privacy policies, terms, disclosures, or special sections.') ?></p>
     </div>
-    <a class="button-link" href="<?= $path('/admin/pages/new') ?>"><span class="icon" aria-hidden="true">add</span>New page</a>
+    <a class="button-link" href="<?= $path('/admin/pages/new') ?>"><span class="icon" aria-hidden="true">add</span><?= __('New page') ?></a>
   </div>
   <ul class="article-list">
     <?php
@@ -30,13 +30,13 @@ $activeNav = 'pages';
         <?php require __DIR__ . '/../_status_badge.php'; ?>
       </div>
       <div class="article-row-meta">
-        <span>Route: /<?= htmlspecialchars($page->slug) ?>/</span>
+        <span><?= __('Route: {route}', ['route' => '/' . $page->slug . '/']) ?></span>
         <?php if ($navOrder !== null): ?>
-          <span>· Nav order: <?= htmlspecialchars((string) $navOrder) ?></span>
+          <span>· <?= __('Nav order: {order}', ['order' => (string) $navOrder]) ?></span>
         <?php endif; ?>
-        <span>· Modified <?= $modified === false ? 'unknown' : htmlspecialchars(date('Y-m-d H:i', $modified)) ?></span>
+        <span>· <?= __('Modified {time}', ['time' => $modified === false ? \HolyMD\I18n\Translator::text('unknown') : date('Y-m-d H:i', $modified)]) ?></span>
         <?php if ($status === 'published'): ?>
-          <a href="<?= $path('/' . rawurlencode($page->slug) . '/') ?>"><span class="icon" aria-hidden="true">open_in_new</span>View public</a>
+          <a href="<?= $path('/' . rawurlencode($page->slug) . '/') ?>"><span class="icon" aria-hidden="true">open_in_new</span><?= __('View public') ?></a>
         <?php endif; ?>
       </div>
     </li>
@@ -46,6 +46,6 @@ $activeNav = 'pages';
 </main>
 <?php
 $content = (string) ob_get_clean();
-$title = 'Pages';
+$title = \HolyMD\I18n\Translator::text('Pages');
 require dirname(__DIR__) . '/layout.php';
 ?>

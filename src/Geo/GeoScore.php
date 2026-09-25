@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace HolyMD\Geo;
 
+use HolyMD\I18n\Translator;
+
 final readonly class GeoScore
 {
     /**
@@ -38,9 +40,9 @@ final readonly class GeoScore
     public function gradeLabel(): string
     {
         return match ($this->grade()) {
-            'excellent' => '优秀',
-            'good' => '良好',
-            'weak' => '待优化',
+            'excellent' => Translator::text('Excellent'),
+            'good' => Translator::text('Good'),
+            'weak' => Translator::text('Needs work'),
         };
     }
 }

@@ -61,6 +61,7 @@ final class GeoDashboardControllerTest extends TestCase
 
     protected function tearDown(): void
     {
+        \HolyMD\I18n\Translator::setLocale('en');
         $this->removeDir($this->contentDir);
     }
 
@@ -91,8 +92,16 @@ final class GeoDashboardControllerTest extends TestCase
             $this->contentDir . '/demo.md'
         ));
 
+        $english = $this->router()->dispatch(new ServerRequest('GET', '/admin/geo'));
+        self::assertStringContainsString('<html lang="en">', $english->body);
+        self::assertStringContainsString('GEO health dashboard', $english->body);
+        self::assertStringContainsString('Average GEO score', $english->body);
+        self::assertStringContainsString('AI crawler observability', $english->body);
+
+        \HolyMD\I18n\Translator::setLocale('zh-CN');
         $response = $this->router()->dispatch(new ServerRequest('GET', '/admin/geo'));
         self::assertSame(200, $response->status);
+        self::assertStringContainsString('<html lang="zh-CN">', $response->body);
         self::assertStringContainsString('GEO 健康度看板', $response->body);
         self::assertStringContainsString('Demo Article', $response->body);
         self::assertStringContainsString('全站平均 GEO 得分', $response->body);

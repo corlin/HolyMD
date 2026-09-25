@@ -36,7 +36,10 @@
   "autoload": {
     "psr-4": {
       "HolyMD\\": "src/"
-    }
+    },
+    "files": [
+      "src/I18n/functions.php"
+    ]
   },
   "autoload-dev": {
     "psr-4": {
