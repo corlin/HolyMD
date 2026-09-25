@@ -11,6 +11,8 @@ use HolyMD\Queue\JobStatusRepository;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 
+$argv = $_SERVER['argv'] ?? [];
+
 $usage = "Usage:\n"
     . "  holymd-admin.php create --email <email> --display-name <name>\n"
     . "  holymd-admin.php list\n"

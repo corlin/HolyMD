@@ -7,6 +7,8 @@ use HolyMD\Config\Settings;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 
+$argv = $_SERVER['argv'] ?? [];
+
 $usage = "Usage: holymd-backup.php\n\n"
     . "Creates backups/<UTC timestamp>/ with content.tar.gz, holymd.sql, env.copy and SHA256SUMS.\n"
     . "Run with cron or before deploys; verify with `sha256sum -c SHA256SUMS` inside the backup directory.\n";

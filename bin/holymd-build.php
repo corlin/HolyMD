@@ -15,6 +15,8 @@ use HolyMD\Render\StaticBuilder;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
 
+$argv = $_SERVER['argv'] ?? [];
+
 $root = dirname(__DIR__);
 \HolyMD\Config\Settings::fromEnvironment($root);
 $articles = new ArticleRepository($root . '/content/articles');

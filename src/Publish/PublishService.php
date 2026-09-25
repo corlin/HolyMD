@@ -150,7 +150,6 @@ final readonly class PublishService
                     if ($nextStatus === 'published') {
                         $version = $this->versions === null ? null : ($selectedVersion ?? $this->versions->capturePublicationInput($working));
                         $publicDocument = $version === null ? $working : $this->publicationInput($version, $slug);
-                        if (!$publicDocument instanceof ArticleDocument) throw new RuntimeException('The selected publication version could not be restored.');
                         $scoreDocument = $publicDocument;
                         $documents[] = $publicDocument->withFrontMatter($publicDocument->frontMatter->with('status', 'published'));
                         $frontMatter = $working->frontMatter->with('status', 'published');

@@ -463,7 +463,7 @@ final class StaticBuilder
         return rtrim($input->settings->siteUrl, '/') . $path;
     }
 
-    /** @return array{0: string, name: string, url: string, description?: string} */
+    /** @return array{'@type': string, name: string, url: string, description?: string} */
     private function authorSchema(BuildInput $input): array
     {
         $schema = [
@@ -477,7 +477,7 @@ final class StaticBuilder
         return $schema;
     }
 
-    /** @return array{0: string, name: string, url: string} */
+    /** @return array{'@type': string, name: string, url: string} */
     private function publisherSchema(BuildInput $input): array
     {
         return [
@@ -487,7 +487,7 @@ final class StaticBuilder
         ];
     }
 
-    /** @return array{0: string, name: string, url: string, inLanguage: string, description?: string} */
+    /** @return array{'@type': string, name: string, url: string, inLanguage: string, description?: string} */
     private function websiteSchema(BuildInput $input): array
     {
         $schema = [

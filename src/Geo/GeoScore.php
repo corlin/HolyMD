@@ -18,6 +18,8 @@ final readonly class GeoScore
 
     /**
      * Return semantic grade: 'excellent' (>=80), 'good' (50-79), 'weak' (<50)
+     *
+     * @return 'excellent'|'good'|'weak'
      */
     public function grade(): string
     {

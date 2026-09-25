@@ -10,8 +10,6 @@ use HolyMD\Content\ArticleDocument;
 use HolyMD\Content\ArticleMetadataValidator;
 use HolyMD\Content\ArticleRepository;
 use HolyMD\Content\FrontMatter;
-use HolyMD\Geo\GeoAutoMerge;
-use HolyMD\Geo\GeoConfiguration;
 use HolyMD\Geo\GeoScoreCalculator;
 use HolyMD\Http\Csrf;
 use HolyMD\Http\Response;
@@ -377,7 +375,7 @@ final readonly class ArticleController
                 }
                 $image = @getimagesize($file['tmp_name']);
                 $imageType = @exif_imagetype($file['tmp_name']);
-                if ($image === false || $imageType === false || ($image[0] ?? 0) <= 0 || ($image[1] ?? 0) <= 0) {
+                if ($image === false || $imageType === false || $image[0] <= 0 || $image[1] <= 0) {
                     throw new InvalidArgumentException('The upload must be a decodable image with valid dimensions.');
                 }
                 $encodedImage = file_get_contents($file['tmp_name']);
@@ -387,7 +385,7 @@ final readonly class ArticleController
                 }
                 unset($decodedImage);
                 $detectedMime = (new \finfo(FILEINFO_MIME_TYPE))->file($file['tmp_name']);
-                if (!isset($allowedTypes[$imageType]) || ($image['mime'] ?? null) !== $allowedTypes[$imageType][0] || $detectedMime !== $allowedTypes[$imageType][0]) {
+                if (!isset($allowedTypes[$imageType]) || $image['mime'] !== $allowedTypes[$imageType][0] || $detectedMime !== $allowedTypes[$imageType][0]) {
                     throw new InvalidArgumentException('Only consistently encoded JPEG, PNG, GIF, and WebP images are allowed.');
                 }
                 [, $extension] = $allowedTypes[$imageType];
@@ -543,7 +541,7 @@ final readonly class ArticleController
                 } catch (\JsonException $exception) {
                     throw new InvalidArgumentException('Structured data must be valid JSON.', previous: $exception);
                 }
-                if (!is_array($decoded) || array_is_list($decoded) || $decoded === []) {
+                if (!is_array($decoded) || array_is_list($decoded)) {
                     throw new InvalidArgumentException('Structured data must be a JSON object.');
                 }
                 $frontMatter = $frontMatter->with('structured_data', $decoded);
@@ -571,24 +569,4 @@ final readonly class ArticleController
         }
     }
 
-    private function maybeEnqueueGeoReview(ArticleDocument $document): void
-    {
-        if ($this->queue === null || !GeoConfiguration::fromEnvironment()->configured) {
-            return;
-        }
-        $fm = $document->frontMatter;
-        $hasEmptyField = GeoAutoMerge::isEmpty($fm->get('summary'))
-            || GeoAutoMerge::isEmpty($fm->get('entities'))
-            || GeoAutoMerge::isEmpty($fm->get('faq'))
-            || GeoAutoMerge::isEmpty($fm->get('alt_text'));
-        if (!$hasEmptyField) {
-            return;
-        }
-        try {
-            $version = $this->versions->captureReviewInput($document);
-            $this->queue->enqueueGeoReview($document, 'review-inputs/' . $version . '.md');
-        } catch (\Throwable) {
-            // Silently ignore queueing conflicts or background errors
-        }
-    }
 }
