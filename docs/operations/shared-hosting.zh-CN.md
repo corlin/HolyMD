@@ -1,0 +1,162 @@
+# HolyMD 共享主机部署手册
+
+[English](shared-hosting.md) | 简体中文
+
+## 1. 主机与目录
+
+选择 PHP 8.4+、MySQL 8、Apache 2.4 主机。必须支持 `mod_rewrite` 与 `.htaccess`；当前部署预检要求 `pdo_mysql`、`mbstring`、`fileinfo`、`gd`、`exif`、`sodium`、`openssl` 与 `json`，GEO 客户端还需要 `curl`。发布指针使用普通文件，不依赖符号链接。域名的 DocumentRoot 指向项目的 `public/`，不能指向项目根目录。
+
+推荐目录：
+
+```text
+/home/account/holymd/          项目、vendor、content、bin
+/home/account/holymd/public/   唯一可公开访问的 DocumentRoot
+```
+
+上传代码后安装生产依赖：
+
+```bash
+cd /home/account/holymd
+composer install --no-dev --classmap-authoritative
+cp .env.example .env
+chmod 600 .env
+mkdir -p content/articles content/pages content/versions content/media content/audit public/site
+chmod -R u+rwX,go-rwx content
+chmod u+rwx public public/site
+```
+
+如果 Web 服务器与 SSH 用户不同组，使用主机面板设置等效的最小写权限；不要使用 `chmod -R 777`。
+
+## 2. 环境配置
+
+编辑 `.env`：
+
+- `HOLYMD_DSN`、数据库用户和口令指向专用的 UTF-8 MySQL 数据库；该用户只需此数据库权限。
+- `HOLYMD_SITE_NAME`、`HOLYMD_SITE_URL`、`HOLYMD_AUTHOR_NAME`、`HOLYMD_ABOUT` 必须是真实公开身份；占位值会阻止发布。
+- `HOLYMD_SITE_LANGUAGE` 使用 BCP 47 标签，例如 `zh-CN`。
+- `HOLYMD_TIMEZONE` 仅控制后台显示时区，默认 `Asia/Singapore`；数据库、队列和审计机器时间统一使用 UTC。
+- `HOLYMD_ADMIN_LOCALE` 设置后台界面语言（`en` 或 `zh-CN`），未设置时中文站点默认中文；管理员也可在侧栏按浏览器切换。
+- 子目录部署设置 `HOLYMD_BASE_PATH`；仅在无法运行 Cron/CLI Worker 时才设置 `HOLYMD_SYNC_PUBLISH="1"`。
+- 通常不要设置 `HOLYMD_PUBLIC_TREE`；需要把 release 放到自定义位置时再指向受 PHP 写权限保护的指针文件。
+- 需要 GEO 时配置 OpenAI-compatible HTTPS endpoint、模型和加密凭据。endpoint 必须解析为公开全球单播地址，私网、回环、保留和文档地址会被拒绝。
+
+不要把 `.env` 放进 `public/`，不要将 API key 写入文章或数据库。
+
+## 3. 初始化与升级
+
+每次部署新版本都执行幂等迁移：
+
+```bash
+php bin/holymd-migrate.php
+```
+
+全新数据库会载入 `database/schema.sql`，并把全部迁移登记为已应用；已有数据库执行尚未应用的迁移并记录到 `schema_migrations`。命令失败时不要继续发布。
+
+首次创建管理员：
+
+```bash
+HOLYMD_ADMIN_PASSWORD='use-a-password-manager-value' \
+php bin/holymd-admin.php create --email you@example.com --display-name 'Your name'
+```
+
+口令只通过当前进程环境传入，不写入命令脚本或 `.env`。
+
+账号运维命令：
+
+```bash
+php bin/holymd-admin.php list
+HOLYMD_ADMIN_PASSWORD='...' php bin/holymd-admin.php password-reset --email you@example.com
+php bin/holymd-admin.php disable --email old@example.com
+php bin/holymd-admin.php enable --email old@example.com
+php bin/holymd-admin.php unlock --email you@example.com
+php bin/holymd-admin.php jobs
+```
+
+`password-reset` 同时清除失败计数与锁定；`disable` 拒绝禁用最后一个活跃管理员。连续 5 次登录失败会锁定账号 15 分钟，用 `unlock` 或 `password-reset` 解除。`jobs` 输出队列汇总与最近任务；后台 `/admin/jobs` 页面提供同样信息，构建永久失败会在这里出现。
+
+## 4. 静态发布指针
+
+首次部署先保留 `public/site/` 作为可见旧站，再安装独立指针：
+
+```bash
+php bin/holymd-build.php --dry-run
+php bin/holymd-prepare-release.php
+php bin/holymd-check.php
+```
+
+`holymd-prepare-release.php` 不移动或隐藏旧站；全新 checkout 时会自动创建空的 `public/site/`。它会先为尚未迁移的已发布文章建立 `published_version` 不可变快照；后续新建、自动保存、恢复和 GEO 审核都不推进公开版本。发布任务先绑定不可见的 `publish-inputs/` 输入快照，只有构建并切换成功后才登记新版本并移动公开版本指针。静态站生成完成后再原子替换 `public/.holymd-current` **指针文件**（内容为 `public/..holymd-current-releases/` 下某个 release 的相对路径，由 `public/index.php` 解析）。指针机制不依赖符号链接，`symlink()` 被禁用的共享主机同样可用。
+
+每次升级代码后先运行 `php bin/holymd-migrate.php`。`20260817_normalize_legacy_timestamps.sql` 会幂等修正旧版由数据库默认时区生成的时间列；不要手工重复平移显式 UTC 的锁定、完成、决策或爬虫访问时间。
+
+## 5. Apache 与路由验收
+
+保留仓库的 `public/.htaccess`。后台请求与不存在的真实文件进入 `public/index.php`；公开页面由该轻量解析器跟随指针并读取预生成 release 文件，不会重新渲染 Markdown。`assets/admin.css|admin.js|fonts/*.woff2` 等真实文件由 Apache 直接提供，`.env` 与项目内部路径被显式拒绝。AI 爬虫访问可能写入匿名可观测性记录，因此“静态优先”不等于所有公开请求都绝不触发 PHP/MySQL。
+
+部署后检查：
+
+```bash
+curl -fsS https://your-domain.example/ >/dev/null
+curl -fsS https://your-domain.example/sitemap.xml >/dev/null
+curl -fsS https://your-domain.example/rss.xml >/dev/null
+curl -fsS https://your-domain.example/admin/login >/dev/null
+test "$(curl -sS -o /dev/null -w '%{http_code}' https://your-domain.example/not-a-real-page)" = 404
+```
+
+还应检查一篇规范尾斜杠文章 URL 返回 200、无尾斜杠 URL 的行为符合站点链接策略，并确认 HTML、CSS、Feed 与搜索索引来自同一个 release。不要用“是否进入 `index.php`”判断静态构建是否生效；标准指针部署本来就可能由 PHP 读取预生成文件。
+
+历史 slug（`previous_slugs`）的 301 重定向由发布时写入 release 树根的 `.htaccess` 提供，meta-refresh 页面保留为兜底。验收：
+
+```bash
+curl -sI https://your-domain.example/articles/<old-slug>/ | grep -i '^HTTP\|^location'
+```
+
+release 目录内的 `.htaccess` 依赖宿主对该路径的 `AllowOverride`（通常与 `public/.htaccess` 同开）。若宿主不允许而 301 不生效，meta-refresh 页面仍会跳转，不影响正确性。
+
+## 6. Cron 队列
+
+在主机面板设置每分钟一次的 Cron，使用 PHP CLI 的绝对路径：
+
+```cron
+* * * * * /usr/local/bin/php /home/account/holymd/cron/holymd.php >> /home/account/holymd/content/cron.log 2>&1
+```
+
+Cron 内置非阻塞文件锁，单次领取一个任务；GEO 暂时错误按任务策略重试，永久的认证、配置或响应错误不会无限重复付费调用。首次配置后，在后台发布一篇测试草稿并确认 `jobs`、`builds` 从 queued/running 进入 succeeded，同时在 GEO 看板看到与成功发布快照对应的新评分记录。失败历史会保留在 Jobs 页面用于审计，不应因队列已恢复就直接删除。
+
+## 7. 发布与回滚
+
+部署代码前先备份：`php bin/holymd-backup.php`（见备份与恢复手册）。推荐顺序：维护窗口内暂停 Cron，上传新代码，执行 `composer install --no-dev --classmap-authoritative`、迁移、完整测试或发布包测试、dry-run 与 check，再恢复 Cron。代码回滚时，数据库只向前兼容；不要删除迁移列。
+
+静态站回滚可以把 `public/.holymd-current` 指针文件原子改写为 `public/..holymd-current-releases/` 中已验证的旧版本（写入临时文件后 `mv` 替换，禁止先删除当前指针）。完成后重新运行 HTTP 验收。
+
+## 8. nginx 伪静态与扁平部署（固定 DocumentRoot 的虚机）
+
+部分共享主机（如万网系）DocumentRoot 固定在 `htdocs/`、只有 nginx 且不读 `.htaccess`。部署方式：
+
+1. 项目文件直接铺到 `htdocs/`（项目根 = docroot），把 `public/` 内容（index.php、.htaccess、assets/）也移到 `htdocs/` 根。`public/index.php` 检测到 `.env` 与自身同目录时自动按扁平布局计算项目根、指针与资源路径；标准部署（DocumentRoot 指向 `public/`）行为不变。
+2. `.env` 设置 `HOLYMD_BASE_PATH`（子目录部署如 `/holymd`；根部署留空）与 `HOLYMD_SYNC_PUBLISH="1"`（无 `exec`/`proc_open` 的主机无法运行 cron worker，发布与 GEO 审查改为请求内同步执行）。
+3. 在控制台"伪静态设置"写入 nginx 规则：
+
+```nginx
+location / {
+    if (!-e $request_filename) {
+        rewrite ^/(.*)$ /index.php last;
+    }
+}
+location ~ /\.ht {
+    deny all;
+}
+location ^~ /src/ { deny all; }
+location ^~ /vendor/ { deny all; }
+location ^~ /content/ { deny all; }
+location ^~ /bin/ { deny all; }
+location ^~ /database/ { deny all; }
+location ^~ /templates/ { deny all; }
+location ^~ /cron/ { deny all; }
+location ^~ /docs/ { deny all; }
+location ~ ^/(\.env|composer\.(json|lock)|\.holymd|README) { deny all; }
+```
+
+4. 此类主机通常禁用 `exec`/`proc_open`/`putenv`/`symlink`。HolyMD 已适配内存环境覆盖、OpenSSL AES-256-GCM 凭据加密、普通指针文件和可选同步队列；但当前 `holymd-check.php` 仍把 `ext-sodium` 列为基线扩展，主机缺失时检查会失败，应先通过主机面板启用，而不是绕过检查。
+5. 无 SSH 时，数据库迁移与管理员创建用一次性 Web 脚本执行后立即删除（`Migrator` + `AccountCommands`）；初始 release 也可本地预构建后上传并改写指针。
+
+验收同 §5，另需确认 `.env`、`/content/`、`/src/` 返回 403，登录、发布预检、显式确认、同步发布、撤回与删除全流程可用。发布预检中的建议项不构成收录、排名或 AI 引用保证。

@@ -227,8 +227,8 @@ HolyMD/
 ---
 
 ## 📖 相关文档
-- [共享主机部署手册](docs/operations/shared-hosting.md)
-- [备份与恢复手册](docs/operations/backup-and-restore.md)
+- [共享主机部署手册](docs/operations/shared-hosting.zh-CN.md)
+- [备份与恢复手册](docs/operations/backup-and-restore.zh-CN.md)
 - [产品设计规格（已交付）](docs/superpowers/specs/2026-08-12-holymd-design.md)
 - [首版实施计划（已归档）](docs/superpowers/plans/2026-08-12-holymd-implementation.md)
 - [发布预检与回归加固设计（已交付）](docs/superpowers/specs/2026-08-17-publish-preflight-regression-hardening-design.md)
