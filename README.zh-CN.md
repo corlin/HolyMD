@@ -1,6 +1,10 @@
 # HolyMD
 
-HolyMD 是一款面向个人品牌的**静态优先** Markdown 博客管理工具。作者在 PHP 后台沉浸式编辑文件系统中的 Markdown 文章与单页，发布时原子生成 HTML、CSS、RSS、Atom、JSON Feed、Sitemap、`llms.txt`、`llms-full.txt`、OpenGraph 与结构化数据。标准共享主机部署由轻量 PHP 指针解析器读取这些预生成文件，支持直接静态映射的服务器也可绕过该解析层；MySQL 仅保存账号、任务队列、构建快照、审计日志和 GEO AI 建议等运行状态，不保存文章正文。
+[English](README.md) | 简体中文
+
+[![CI](https://github.com/corlin/HolyMD/actions/workflows/ci.yml/badge.svg)](https://github.com/corlin/HolyMD/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+HolyMD 是一款**GEO 原生**的开源独立站引擎：静态优先、共享主机即可部署，内置面向 AI 搜索与大模型的内容优化与 AI 爬虫监测能力。作者在 PHP 后台沉浸式编辑文件系统中的 Markdown 文章与单页，发布时原子生成 HTML、CSS、RSS、Atom、JSON Feed、Sitemap、`llms.txt`、`llms-full.txt`、OpenGraph 与结构化数据。标准共享主机部署由轻量 PHP 指针解析器读取这些预生成文件，支持直接静态映射的服务器也可绕过该解析层；MySQL 仅保存账号、任务队列、构建快照、审计日志和 GEO AI 建议等运行状态，不保存文章正文。
 
 ---
 
@@ -213,3 +217,9 @@ HolyMD/
 - [公开设计系统精修规格（已交付）](docs/superpowers/specs/2026-08-19-public-design-system-refinement-design.md)
 - [公开设计系统精修计划（已完成）](docs/superpowers/plans/2026-08-19-public-design-system-refinement.md)
 - [公开阅读体验设计验收记录](design-qa.md)
+
+---
+
+## 参与贡献与许可
+
+欢迎提交 Issue 与 Pull Request，流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。HolyMD 以 [MIT 许可证](LICENSE) 开源。
