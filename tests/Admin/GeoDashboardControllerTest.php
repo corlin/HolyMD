@@ -63,6 +63,8 @@ final class GeoDashboardControllerTest extends TestCase
             created_at TEXT NOT NULL
         )');
 
+        $this->pdo->exec('CREATE TABLE citation_probes (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT NOT NULL, question_hash TEXT NOT NULL, question TEXT NOT NULL, model TEXT NOT NULL, cited_site INTEGER NOT NULL, cited_article INTEGER NOT NULL, mentioned INTEGER NOT NULL, cited_url TEXT NULL, citations TEXT NOT NULL, error TEXT NULL, created_at TEXT NOT NULL)');
+
         $now = gmdate('Y-m-d H:i:s');
         $this->pdo->exec("INSERT INTO ai_bot_visits (bot_name, request_path, http_status, ip_hash, user_agent, created_at) VALUES ('GPTBot', '/llms.txt', 200, 'hash1', 'GPTBot/1.0', '{$now}')");
         $this->pdo->exec("INSERT INTO ai_bot_visits (bot_name, request_path, http_status, ip_hash, user_agent, created_at) VALUES ('PerplexityBot', '/articles/demo/', 200, 'hash2', 'PerplexityBot/1.0', '{$now}')");
@@ -143,18 +145,42 @@ final class GeoDashboardControllerTest extends TestCase
         self::assertMatchesRegularExpression('#Demo Article</a></th>\s*<td><span class="geo-score-badge is-[a-z]+">\d+</span></td>\s*<td>1</td>\s*<td>2</td>#', $response->body);
     }
 
+    public function test_dashboard_shows_citation_probe_results_and_guards_the_run_endpoint(): void
+    {
+        $this->session = ['admin_user_id' => 1, 'csrf_token' => 'test-token'];
+        $this->repo->write(new ArticleDocument('demo', 'Demo Article', 'Body markdown.', new FrontMatter(['title' => 'Demo Article', 'slug' => 'demo', 'date' => '2026-08-17', 'status' => 'published']), $this->contentDir . '/demo.md'));
+        $now = gmdate('Y-m-d H:i:s');
+        $this->pdo->exec("INSERT INTO citation_probes (slug, question_hash, question, model, cited_site, cited_article, mentioned, cited_url, citations, error, created_at) VALUES ('demo', 'h1', 'What is GEO?', 'sonar', 1, 1, 0, 'https://example.test/articles/demo/', '[]', NULL, '{$now}'), ('demo', 'h2', 'Is GEO new?', 'sonar', 0, 0, 0, NULL, '[]', NULL, '{$now}'), ('demo', 'h3', 'Why GEO?', 'sonar', 0, 0, 0, NULL, '[]', 'Citation probe provider returned HTTP 429.', '{$now}')");
+
+        $response = $this->router()->dispatch(new ServerRequest('GET', '/admin/geo'));
+
+        self::assertStringContainsString('id="citation-probes"', $response->body);
+        self::assertMatchesRegularExpression('#<span class="geo-ai-stat-num">50<span class="geo-stat-unit">%</span></span>\s*<span class="geo-ai-stat-lbl">Answers citing this site#', $response->body);
+        self::assertStringContainsString('<span class="geo-probe-state is-cited">Article cited</span>', $response->body);
+        self::assertStringContainsString('<span class="geo-probe-state is-missed">Not cited</span>', $response->body);
+        self::assertStringContainsString('Citation probe provider returned HTTP 429.', $response->body);
+        self::assertStringContainsString('1 probe(s) failed in the last 30 days.', $response->body);
+        self::assertMatchesRegularExpression('#Demo Article</a></th>\s*<td>.*?</td>\s*<td>1</td>\s*<td>0</td>\s*<td>1/2</td>#s', $response->body);
+        self::assertStringNotContainsString('action="/admin/geo/probes"', $response->body, 'The run button only appears when probes are configured');
+
+        self::assertSame(419, $this->router()->dispatch(new ServerRequest('POST', '/admin/geo/probes', [], ['csrf_token' => 'wrong']))->status);
+        self::assertSame(409, $this->router()->dispatch(new ServerRequest('POST', '/admin/geo/probes', [], ['csrf_token' => 'test-token']))->status);
+        $this->session = [];
+        self::assertSame(401, $this->router()->dispatch(new ServerRequest('POST', '/admin/geo/probes'))->status);
+    }
+
     public function test_compares_average_ai_visibility_above_and_below_the_excellent_grade(): void
     {
         $article = new ArticleDocument('a', 'A', 'Body.', new FrontMatter(['title' => 'A', 'slug' => 'a', 'date' => '2026-09-25']), 'a.md');
         $comparison = GeoDashboardController::compareByScore([
-            ['article' => $article, 'score' => new \HolyMD\Geo\GeoScore(95, []), 'crawls' => 4, 'referrals' => 3],
-            ['article' => $article, 'score' => new \HolyMD\Geo\GeoScore(85, []), 'crawls' => 2, 'referrals' => 0],
-            ['article' => $article, 'score' => new \HolyMD\Geo\GeoScore(40, []), 'crawls' => 1, 'referrals' => 0],
+            ['article' => $article, 'score' => new \HolyMD\Geo\GeoScore(95, []), 'crawls' => 4, 'referrals' => 3, 'probes' => 2, 'cited' => 2],
+            ['article' => $article, 'score' => new \HolyMD\Geo\GeoScore(85, []), 'crawls' => 2, 'referrals' => 0, 'probes' => 2, 'cited' => 1],
+            ['article' => $article, 'score' => new \HolyMD\Geo\GeoScore(40, []), 'crawls' => 1, 'referrals' => 0, 'probes' => 0, 'cited' => 0],
         ]);
 
-        self::assertSame(['articles' => 2, 'crawls' => 3.0, 'referrals' => 1.5], $comparison['high']);
-        self::assertSame(['articles' => 1, 'crawls' => 1.0, 'referrals' => 0.0], $comparison['low']);
-        self::assertSame(['articles' => 0, 'crawls' => 0.0, 'referrals' => 0.0], GeoDashboardController::compareByScore([])['low']);
+        self::assertSame(['articles' => 2, 'crawls' => 3.0, 'referrals' => 1.5, 'citationRate' => 75], $comparison['high']);
+        self::assertSame(['articles' => 1, 'crawls' => 1.0, 'referrals' => 0.0, 'citationRate' => null], $comparison['low']);
+        self::assertSame(['articles' => 0, 'crawls' => 0.0, 'referrals' => 0.0, 'citationRate' => null], GeoDashboardController::compareByScore([])['low']);
     }
 
     public function test_dashboard_displays_utc_visit_time_in_the_site_timezone(): void

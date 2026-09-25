@@ -15,6 +15,7 @@ final class TranslatorTest extends TestCase
         'geo_review', 'build', 'queued', 'running', 'succeeded', 'failed', 'publish', 'withdraw',
         'New Publication', 'Title', 'Date', 'Body', 'Summary', 'Topics', 'Entities', 'Faq', 'Sources',
         'Alt Text', 'Hierarchy', 'Internal Links', 'Previous Slugs', 'Structured Data',
+        'Failed', 'Article cited', 'Site cited', 'Mentioned', 'Not cited',
     ];
 
     protected function tearDown(): void

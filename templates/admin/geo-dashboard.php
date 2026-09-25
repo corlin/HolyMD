@@ -261,18 +261,69 @@ $activeNav = 'geo';
       <div class="geo-card-header">
         <div>
           <h2><?= __('Does GEO pay off?') ?></h2>
-          <p class="muted"><?= __('Average AI crawls and referrals per published article over the last 30 days, by GEO score.') ?></p>
+          <p class="muted"><?= __('Average AI crawls and referrals per published article, and how often probe answers cited the site, over the last 30 days, by GEO score.') ?></p>
         </div>
       </div>
       <table class="geo-visibility-table">
-        <thead><tr><th scope="col"><?= __('GEO score') ?></th><th scope="col"><?= __('Articles') ?></th><th scope="col"><?= __('AI crawls') ?></th><th scope="col"><?= __('AI referrals') ?></th></tr></thead>
+        <thead><tr><th scope="col"><?= __('GEO score') ?></th><th scope="col"><?= __('Articles') ?></th><th scope="col"><?= __('AI crawls') ?></th><th scope="col"><?= __('AI referrals') ?></th><th scope="col"><?= __('Cited') ?></th></tr></thead>
         <tbody>
-          <tr><th scope="row"><?= __('80 and above') ?></th><td><?= (int) $visibilityComparison['high']['articles'] ?></td><td><?= $escape((string) $visibilityComparison['high']['crawls']) ?></td><td><?= $escape((string) $visibilityComparison['high']['referrals']) ?></td></tr>
-          <tr><th scope="row"><?= __('Below 80') ?></th><td><?= (int) $visibilityComparison['low']['articles'] ?></td><td><?= $escape((string) $visibilityComparison['low']['crawls']) ?></td><td><?= $escape((string) $visibilityComparison['low']['referrals']) ?></td></tr>
+          <tr><th scope="row"><?= __('80 and above') ?></th><td><?= (int) $visibilityComparison['high']['articles'] ?></td><td><?= $escape((string) $visibilityComparison['high']['crawls']) ?></td><td><?= $escape((string) $visibilityComparison['high']['referrals']) ?></td><td><?= $visibilityComparison['high']['citationRate'] === null ? '–' : (int) $visibilityComparison['high']['citationRate'] . '%' ?></td></tr>
+          <tr><th scope="row"><?= __('Below 80') ?></th><td><?= (int) $visibilityComparison['low']['articles'] ?></td><td><?= $escape((string) $visibilityComparison['low']['crawls']) ?></td><td><?= $escape((string) $visibilityComparison['low']['referrals']) ?></td><td><?= $visibilityComparison['low']['citationRate'] === null ? '–' : (int) $visibilityComparison['low']['citationRate'] . '%' ?></td></tr>
         </tbody>
       </table>
       <p class="muted geo-footnote"><?= __('This shows correlation, not cause: topic, age, and promotion also matter. Compare again as your site grows.') ?></p>
     </div>
+  </div>
+
+  <div class="geo-section-card" id="citation-probes">
+    <div class="geo-card-header">
+      <div>
+        <h2><?= __('AI citation probes') ?></h2>
+        <p class="muted"><?= __('Your articles\' FAQ questions, asked to an AI search engine. Does the answer cite this site?') ?></p>
+      </div>
+      <?php if ($probeConfigured): ?>
+        <form method="post" action="<?= $path('/admin/geo/probes') ?>">
+          <input type="hidden" name="csrf_token" value="<?= $escape($csrfToken) ?>">
+          <button type="submit" class="secondary"><span class="icon" aria-hidden="true">travel_explore</span><?= __('Probe {count} questions now', ['count' => \HolyMD\Admin\GeoDashboardController::PROBES_PER_REQUEST]) ?></button>
+        </form>
+      <?php endif; ?>
+    </div>
+
+    <?php if (!$probeConfigured && $probeStats['recent'] === []): ?>
+      <p class="muted"><?= str_replace(['%%ENCRYPT%%', '%%CLI%%'], ['<code>holymd-admin.php encrypt-probe-key</code>', '<code>php bin/holymd-probe.php</code>'], __('Not configured. Encrypt a Perplexity (or other search-backed, OpenAI-compatible) API key with {encrypt}, add it to .env, then run {cli} weekly from cron or use the button here.', ['encrypt' => '%%ENCRYPT%%', 'cli' => '%%CLI%%'])) ?></p>
+    <?php else: ?>
+      <div class="geo-ai-stat-row">
+        <div class="geo-ai-stat-item">
+          <span class="geo-ai-stat-num"><?= $probeStats['probes30d'] > 0 ? (int) round($probeStats['citedSite30d'] / $probeStats['probes30d'] * 100) : 0 ?><span class="geo-stat-unit">%</span></span>
+          <span class="geo-ai-stat-lbl"><?= __('Answers citing this site') ?></span>
+        </div>
+        <div class="geo-ai-stat-item">
+          <span class="geo-ai-stat-num"><?= (int) $probeStats['citedArticle30d'] ?></span>
+          <span class="geo-ai-stat-lbl"><?= __('Cited the article itself') ?></span>
+        </div>
+        <div class="geo-ai-stat-item">
+          <span class="geo-ai-stat-num"><?= (int) $probeStats['probes30d'] ?></span>
+          <span class="geo-ai-stat-lbl"><?= __('Questions probed, last 30 days') ?></span>
+        </div>
+      </div>
+      <?php if ($probeStats['failed30d'] > 0): ?>
+        <p class="muted geo-footnote"><?= __('{count} probe(s) failed in the last 30 days.', ['count' => (int) $probeStats['failed30d']]) ?></p>
+      <?php endif; ?>
+      <?php if ($probeStats['recent'] !== []): ?>
+        <h3 class="geo-sub-title"><?= __('Latest answers') ?></h3>
+        <ul class="geo-probe-list">
+          <?php foreach ($probeStats['recent'] as $probe): ?>
+            <?php $probeState = $probe['error'] !== null ? 'failed' : ($probe['cited_article'] ? 'cited' : ($probe['cited_site'] ? 'site' : ($probe['mentioned'] ? 'mentioned' : 'missed'))); ?>
+            <li>
+              <span class="geo-probe-state is-<?= $probeState ?>"><?= __(['failed' => 'Failed', 'cited' => 'Article cited', 'site' => 'Site cited', 'mentioned' => 'Mentioned', 'missed' => 'Not cited'][$probeState]) ?></span>
+              <span class="geo-probe-question"><?= $escape($probe['question']) ?></span>
+              <span class="geo-probe-meta muted"><code>/articles/<?= $escape($probe['slug']) ?>/</code> · <?= $escape($probe['model']) ?> · <?= $escape($probe['created_at_display']) ?><?php if ($probe['error'] !== null): ?> · <?= $escape($probe['error']) ?><?php endif; ?></span>
+            </li>
+          <?php endforeach; ?>
+        </ul>
+      <?php endif; ?>
+    <?php endif; ?>
+    <p class="muted geo-footnote"><?= __('Each probe is one paid API call. AI answers vary between runs, so read trends over several weeks rather than single results.') ?></p>
   </div>
 
   <?php if ($visibility !== []): ?>
@@ -284,7 +335,7 @@ $activeNav = 'geo';
         </div>
       </div>
       <table class="geo-visibility-table">
-        <thead><tr><th scope="col"><?= __('Article') ?></th><th scope="col"><?= __('GEO score') ?></th><th scope="col"><?= __('AI crawls') ?></th><th scope="col"><?= __('AI referrals') ?></th></tr></thead>
+        <thead><tr><th scope="col"><?= __('Article') ?></th><th scope="col"><?= __('GEO score') ?></th><th scope="col"><?= __('AI crawls') ?></th><th scope="col"><?= __('AI referrals') ?></th><th scope="col"><?= __('Cited') ?></th></tr></thead>
         <tbody>
           <?php foreach (array_slice($visibility, 0, 10) as $row): ?>
             <tr>
@@ -292,6 +343,7 @@ $activeNav = 'geo';
               <td><span class="geo-score-badge is-<?= $row['score']->grade() ?>"><?= (int) $row['score']->total ?></span></td>
               <td><?= (int) $row['crawls'] ?></td>
               <td><?= (int) $row['referrals'] ?></td>
+              <td><?= $row['probes'] === 0 ? '–' : (int) $row['cited'] . '/' . (int) $row['probes'] ?></td>
             </tr>
           <?php endforeach; ?>
         </tbody>

@@ -122,6 +122,14 @@ release 目录内的 `.htaccess` 依赖宿主对该路径的 `AllowOverride`（�
 
 Cron 内置非阻塞文件锁，单次领取一个任务；GEO 暂时错误按任务策略重试，永久的认证、配置或响应错误不会无限重复付费调用。首次配置后，在后台发布一篇测试草稿并确认 `jobs`、`builds` 从 queued/running 进入 succeeded，同时在 GEO 看板看到与成功发布快照对应的新评分记录。失败历史会保留在 Jobs 页面用于审计，不应因队列已恢复就直接删除。
 
+如已配置引用探针，建议每周运行一次。每个问题是一次付费 API 调用，数量上限由 `HOLYMD_PROBE_MAX_PER_RUN` 控制：
+
+```cron
+0 3 * * 1 /usr/local/bin/php /home/account/holymd/bin/holymd-probe.php >> /home/account/holymd/content/probe.log 2>&1
+```
+
+无法使用 Cron 的主机可在 GEO 看板点击探测按钮，每次点击探测两个问题，以免请求超时。
+
 ## 7. 发布与回滚
 
 部署代码前先备份：`php bin/holymd-backup.php`（见备份与恢复手册）。推荐顺序：维护窗口内暂停 Cron，上传新代码，执行 `composer install --no-dev --classmap-authoritative`、迁移、完整测试或发布包测试、dry-run 与 check，再恢复 Cron。代码回滚时，数据库只向前兼容；不要删除迁移列。

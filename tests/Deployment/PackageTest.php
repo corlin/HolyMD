@@ -11,7 +11,7 @@ final class PackageTest extends TestCase
     public function test_shared_hosting_package_exposes_executable_checks_and_operational_guides(): void
     {
         $root = dirname(__DIR__, 2);
-        foreach (['bin/holymd-check.php', 'bin/holymd-migrate.php', 'bin/holymd-prepare-release.php', 'bin/holymd-backup.php'] as $command) {
+        foreach (['bin/holymd-check.php', 'bin/holymd-migrate.php', 'bin/holymd-prepare-release.php', 'bin/holymd-backup.php', 'bin/holymd-probe.php'] as $command) {
             self::assertFileIsReadable($root . '/' . $command);
             self::assertTrue(is_executable($root . '/' . $command), "{$command} must be executable.");
         }
@@ -21,7 +21,7 @@ final class PackageTest extends TestCase
             $recovery = file_get_contents($root . '/docs/operations/backup-and-restore' . $language . '.md');
             self::assertIsString($deployment);
             self::assertIsString($recovery);
-            foreach (['holymd-migrate.php', 'holymd-prepare-release.php', 'holymd-check.php', 'cron/holymd.php', 'DocumentRoot', 'password-reset', 'holymd-admin.php list', 'HOLYMD_ADMIN_LOCALE'] as $required) {
+            foreach (['holymd-migrate.php', 'holymd-prepare-release.php', 'holymd-check.php', 'cron/holymd.php', 'DocumentRoot', 'password-reset', 'holymd-admin.php list', 'HOLYMD_ADMIN_LOCALE', 'holymd-probe.php'] as $required) {
                 self::assertStringContainsString($required, $deployment);
             }
             foreach (['content', 'mysqldump', 'holymd-migrate.php', 'SHA256SUMS', 'holymd-backup.php'] as $required) {

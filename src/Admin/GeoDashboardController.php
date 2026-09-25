@@ -8,6 +8,7 @@ use HolyMD\Auth\AdminGuard;
 use HolyMD\Auth\Unauthorized;
 use HolyMD\Content\ArticleDocument;
 use HolyMD\Content\ArticleRepository;
+use HolyMD\Geo\CitationProbeRunner;
 use HolyMD\Geo\GeoScore;
 use HolyMD\Geo\GeoScoreCalculator;
 use HolyMD\Http\Csrf;
@@ -27,6 +28,7 @@ final readonly class GeoDashboardController
         private Csrf $csrf,
         private ?PDO $pdo = null,
         ?AdminTimeFormatter $timeFormatter = null,
+        private ?CitationProbeRunner $probeRunner = null,
     ) {
         $this->timeFormatter = $timeFormatter ?? new AdminTimeFormatter(SiteTimezone::fromEnvironment());
     }
@@ -120,12 +122,35 @@ final readonly class GeoDashboardController
         $aiReferralStats = $this->fetchAiReferralStats();
         $visibility = $this->fetchArticleVisibility($articleScores);
         $visibilityComparison = self::compareByScore($visibility);
+        $probeStats = $this->fetchProbeStats();
+        $probeConfigured = $this->probeRunner !== null;
 
         $csrfToken = $this->csrf->token();
         ob_start();
         require dirname(__DIR__, 2) . '/templates/admin/geo-dashboard.php';
         return new Response(200, (string) ob_get_clean(), ['Content-Type' => 'text/html; charset=utf-8']);
     }
+
+    /** Run a few citation probes now, for hosts that cannot schedule the CLI with cron. */
+    public function runProbes(ServerRequest $request): Response
+    {
+        try {
+            $this->guard->requireAdministrator();
+        } catch (Unauthorized) {
+            return Response::json(['error' => 'Administrator authentication is required.'], 401);
+        }
+        if (!$this->csrf->valid($request)) {
+            return Response::json(['error' => 'CSRF token is invalid.'], 419);
+        }
+        if ($this->probeRunner === null) {
+            return Response::json(['error' => 'Citation probes are not configured.'], 409);
+        }
+        $this->probeRunner->run(self::PROBES_PER_REQUEST);
+        return Response::redirect('/admin/geo#citation-probes');
+    }
+
+    /** Kept small so a synchronous run fits within typical shared-host request limits. */
+    public const PROBES_PER_REQUEST = 2;
 
     /**
      * @return array{
@@ -298,10 +323,10 @@ final readonly class GeoDashboardController
     }
 
     /**
-     * AI crawls and AI referrals per published article over the last 30 days.
+     * AI crawls, AI referrals, and citation probe results per published article over the last 30 days.
      *
      * @param array<string, array{article: ArticleDocument, score: GeoScore}> $articleScores
-     * @return list<array{article: ArticleDocument, score: GeoScore, crawls: int, referrals: int}>
+     * @return list<array{article: ArticleDocument, score: GeoScore, crawls: int, referrals: int, probes: int, cited: int}>
      */
     private function fetchArticleVisibility(array $articleScores): array
     {
@@ -309,11 +334,13 @@ final readonly class GeoDashboardController
         $crawls = $this->countArticlePaths('SELECT request_path AS path, COUNT(*) AS count FROM ai_bot_visits WHERE created_at >= ? GROUP BY request_path', $cutoff);
         $referrals = $this->countArticlePaths('SELECT landing_path AS path, COUNT(*) AS count FROM ai_referrals WHERE created_at >= ? AND http_status <> 404 GROUP BY landing_path', $cutoff);
 
+        $probes = $this->probeCountsBySlug($cutoff);
+
         $rows = [];
         foreach ($articleScores as $slug => $entry) {
-            $rows[] = [...$entry, 'crawls' => $crawls[$slug] ?? 0, 'referrals' => $referrals[$slug] ?? 0];
+            $rows[] = [...$entry, 'crawls' => $crawls[$slug] ?? 0, 'referrals' => $referrals[$slug] ?? 0, 'probes' => $probes[$slug]['probes'] ?? 0, 'cited' => $probes[$slug]['cited'] ?? 0];
         }
-        usort($rows, static fn (array $a, array $b): int => [$b['referrals'], $b['crawls'], $b['score']->total] <=> [$a['referrals'], $a['crawls'], $a['score']->total]);
+        usort($rows, static fn (array $a, array $b): int => [$b['cited'], $b['referrals'], $b['crawls'], $b['score']->total] <=> [$a['cited'], $a['referrals'], $a['crawls'], $a['score']->total]);
         return $rows;
     }
 
@@ -342,24 +369,101 @@ final readonly class GeoDashboardController
      * Average AI crawls and referrals per article, split at the "excellent"
      * GEO grade. A first, correlation-only view of whether GEO work pays off.
      *
-     * @param list<array{article: ArticleDocument, score: GeoScore, crawls: int, referrals: int}> $visibility
-     * @return array{high: array{articles: int, crawls: float, referrals: float}, low: array{articles: int, crawls: float, referrals: float}}
+     * @param list<array{article: ArticleDocument, score: GeoScore, crawls: int, referrals: int, probes: int, cited: int}> $visibility
+     * @return array{high: array{articles: int, crawls: float, referrals: float, citationRate: ?int}, low: array{articles: int, crawls: float, referrals: float, citationRate: ?int}}
      */
     public static function compareByScore(array $visibility): array
     {
-        $groups = ['high' => ['articles' => 0, 'crawls' => 0, 'referrals' => 0], 'low' => ['articles' => 0, 'crawls' => 0, 'referrals' => 0]];
+        $groups = ['high' => ['articles' => 0, 'crawls' => 0, 'referrals' => 0, 'probes' => 0, 'cited' => 0], 'low' => ['articles' => 0, 'crawls' => 0, 'referrals' => 0, 'probes' => 0, 'cited' => 0]];
         foreach ($visibility as $row) {
             $group = $row['score']->total >= 80 ? 'high' : 'low';
             $groups[$group]['articles']++;
             $groups[$group]['crawls'] += $row['crawls'];
             $groups[$group]['referrals'] += $row['referrals'];
+            $groups[$group]['probes'] += $row['probes'];
+            $groups[$group]['cited'] += $row['cited'];
         }
         $average = static fn (array $group): array => [
             'articles' => $group['articles'],
             'crawls' => $group['articles'] > 0 ? round($group['crawls'] / $group['articles'], 1) : 0.0,
             'referrals' => $group['articles'] > 0 ? round($group['referrals'] / $group['articles'], 1) : 0.0,
+            // Share of probe questions whose answers cited this site; null until something was probed.
+            'citationRate' => $group['probes'] > 0 ? (int) round($group['cited'] / $group['probes'] * 100) : null,
         ];
         return ['high' => $average($groups['high']), 'low' => $average($groups['low'])];
+    }
+
+    /** @return array<string, array{probes: int, cited: int}> */
+    private function probeCountsBySlug(string $cutoff): array
+    {
+        if ($this->pdo === null) {
+            return [];
+        }
+        try {
+            $statement = $this->pdo->prepare('SELECT slug, COUNT(*) AS probes, SUM(cited_site) AS cited FROM citation_probes WHERE created_at >= ? AND error IS NULL GROUP BY slug');
+            $statement->execute([$cutoff]);
+            $counts = [];
+            foreach ($statement->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $counts[(string) $row['slug']] = ['probes' => (int) $row['probes'], 'cited' => (int) $row['cited']];
+            }
+            return $counts;
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * @return array{
+     *   probes30d: int,
+     *   citedSite30d: int,
+     *   citedArticle30d: int,
+     *   mentioned30d: int,
+     *   failed30d: int,
+     *   recent: list<array{slug: string, question: string, model: string, cited_site: bool, cited_article: bool, mentioned: bool, cited_url: ?string, error: ?string, created_at_display: string}>
+     * }
+     */
+    private function fetchProbeStats(): array
+    {
+        $default = ['probes30d' => 0, 'citedSite30d' => 0, 'citedArticle30d' => 0, 'mentioned30d' => 0, 'failed30d' => 0, 'recent' => []];
+        if ($this->pdo === null) {
+            return $default;
+        }
+        try {
+            $statement = $this->pdo->prepare(
+                'SELECT SUM(CASE WHEN error IS NULL THEN 1 ELSE 0 END) AS probes, SUM(cited_site) AS cited_site, SUM(cited_article) AS cited_article,
+                        SUM(mentioned) AS mentioned, SUM(CASE WHEN error IS NULL THEN 0 ELSE 1 END) AS failed
+                 FROM citation_probes WHERE created_at >= ?'
+            );
+            $statement->execute([gmdate('Y-m-d H:i:s', time() - 30 * 86400)]);
+            $summary = $statement->fetch(PDO::FETCH_ASSOC) ?: [];
+
+            $recent = [];
+            $rows = $this->pdo->query('SELECT slug, question, model, cited_site, cited_article, mentioned, cited_url, error, created_at FROM citation_probes ORDER BY id DESC LIMIT 8');
+            foreach ($rows ? $rows->fetchAll(PDO::FETCH_ASSOC) : [] as $row) {
+                $recent[] = [
+                    'slug' => (string) $row['slug'],
+                    'question' => (string) $row['question'],
+                    'model' => (string) $row['model'],
+                    'cited_site' => (bool) $row['cited_site'],
+                    'cited_article' => (bool) $row['cited_article'],
+                    'mentioned' => (bool) $row['mentioned'],
+                    'cited_url' => $row['cited_url'] === null ? null : (string) $row['cited_url'],
+                    'error' => $row['error'] === null ? null : (string) $row['error'],
+                    'created_at_display' => $this->timeFormatter->format((string) $row['created_at'], 'm-d H:i'),
+                ];
+            }
+
+            return [
+                'probes30d' => (int) ($summary['probes'] ?? 0),
+                'citedSite30d' => (int) ($summary['cited_site'] ?? 0),
+                'citedArticle30d' => (int) ($summary['cited_article'] ?? 0),
+                'mentioned30d' => (int) ($summary['mentioned'] ?? 0),
+                'failed30d' => (int) ($summary['failed'] ?? 0),
+                'recent' => $recent,
+            ];
+        } catch (\Throwable) {
+            return $default;
+        }
     }
 
     /**

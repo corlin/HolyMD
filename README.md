@@ -46,6 +46,7 @@ Article content lives in Markdown files on disk. MySQL holds only operational st
 - **AI crawler observability** — recognizes GPTBot, ClaudeBot, PerplexityBot, Google-AI, Bytespider, and more in the front controller, stores anonymized hashed visits, and shows 7-day crawl volume, bot share, most-crawled pages, and a live feed.
 - **AI referral tracking** — counts human visitors arriving from ChatGPT, Perplexity, Gemini, Copilot, Claude, DeepSeek, Kimi, Doubao, Qwen, and other AI assistants (by referrer or `utm_source`), flags AI citations that land on dead URLs, and stores no IP address or user agent. Many AI apps send no referrer, so counts are a lower bound.
 - **Does GEO pay off?** — lines up each article's GEO score with its AI crawls and AI referrals over 30 days, and compares articles scoring 80+ with the rest.
+- **AI citation probes** — asks an AI search engine (Perplexity Sonar by default, any search-backed OpenAI-compatible API works) the FAQ questions of your articles and records whether the answer cites your site or the article itself. Runs weekly from cron or on demand from the dashboard; least recently probed questions go first, and each run is capped to control cost.
 - **Topic and entity clusters** — see how deep your coverage is per topic and which named entities your site is building authority around.
 - **Score history** — every successful publish records an immutable GEO score snapshot for trend tracking.
 
@@ -128,6 +129,14 @@ To enable the AI reviewer, encrypt your provider key into `.env` (the plaintext 
 
 ```bash
 HOLYMD_GEO_PLAINTEXT_KEY='sk-your-provider-key' php bin/holymd-admin.php encrypt-geo-key
+```
+
+Citation probes use their own key and a separate provider, since they need web search:
+
+```bash
+HOLYMD_PROBE_PLAINTEXT_KEY='pplx-your-key' php bin/holymd-admin.php encrypt-probe-key
+php bin/holymd-probe.php --list      # preview which questions run next, no API calls
+php bin/holymd-probe.php --limit 5   # ask five questions and record the results
 ```
 
 Before the first production deploy, run all environment checks:
