@@ -50,7 +50,8 @@ final class AtomicPublicTree
             return;
         }
         if (file_exists($pointer)) return;
-        if (!is_dir($legacyTree)) throw new RuntimeException('Legacy static tree does not exist.');
+        // A fresh checkout has no generated tree yet; start from an empty one until the first build.
+        if (!is_dir($legacyTree) && !mkdir($legacyTree, 0775, true) && !is_dir($legacyTree)) throw new RuntimeException('Unable to create the initial static tree.');
         $this->installPointerFile($pointer, basename($legacyTree));
     }
 

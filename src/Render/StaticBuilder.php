@@ -21,7 +21,7 @@ final class StaticBuilder
 
     public function build(BuildInput $input, string $temporaryRoot): BuildManifest
     {
-        if (!str_starts_with($input->settings->siteUrl, 'https://')) {
+        if (!str_starts_with($input->settings->siteUrl, 'https://') && !self::isLoopbackHttpUrl($input->settings->siteUrl)) {
             throw new RuntimeException('The public site URL must use HTTPS.');
         }
         if (preg_match('/^[a-z]{2,3}(?:-[A-Z]{2})?$/', $input->settings->siteLanguage) !== 1) {
@@ -475,6 +475,13 @@ final class StaticBuilder
             $schema['description'] = $input->settings->about;
         }
         return $schema;
+    }
+
+    /** Plain HTTP is accepted only for local previews such as the Docker demo. */
+    private static function isLoopbackHttpUrl(string $url): bool
+    {
+        return parse_url($url, PHP_URL_SCHEME) === 'http'
+            && in_array(parse_url($url, PHP_URL_HOST), ['localhost', '127.0.0.1', '[::1]'], true);
     }
 
     /** @return array{'@type': string, name: string, url: string} */

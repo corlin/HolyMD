@@ -52,6 +52,14 @@ final class AtomicPublicTreeTest extends TestCase
         $tree->swap($this->root . '/temporary', $this->root . '/directory-pointer');
     }
 
+    public function test_prepare_creates_an_empty_initial_tree_on_a_fresh_checkout(): void
+    {
+        (new AtomicPublicTree())->prepare($this->root . '/current', $this->root . '/site');
+
+        self::assertDirectoryExists($this->root . '/site');
+        self::assertSame("site\n", file_get_contents($this->root . '/current'));
+    }
+
     public function test_prepare_migrates_a_legacy_symlink_to_an_atomic_pointer_file(): void
     {
         mkdir($this->root . '/releases');

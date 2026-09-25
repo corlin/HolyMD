@@ -72,6 +72,15 @@ final class StaticBuilderTest extends TestCase
         self::assertSame(1, substr_count($article, '<h1'));
     }
 
+    public function test_requires_https_except_for_loopback_previews(): void
+    {
+        $manifest = (new StaticBuilder())->build($this->input([], 'Demo', 'http://localhost:8080', 'Ada', 'About.'), $this->outputRoot . '/local');
+        self::assertSame(0, $manifest->articleCount);
+
+        $this->expectExceptionMessage('must use HTTPS');
+        (new StaticBuilder())->build($this->input([], 'Demo', 'http://example.test', 'Ada', 'About.'), $this->outputRoot . '/remote');
+    }
+
     public function test_closes_lists_and_quotes_before_following_blocks(): void
     {
         $article = new ArticleDocument('blocks', 'Blocks', "- item\n# Heading\n> quote\n## Subheading", new FrontMatter(['title' => 'Blocks', 'slug' => 'blocks', 'date' => '2026-08-12']), '/blocks');
