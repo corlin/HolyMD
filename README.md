@@ -44,6 +44,8 @@ Article content lives in Markdown files on disk. MySQL holds only operational st
 - **GEO Scorecard (0–100)** — weighted checks for summary (20), structured data (20), FAQ (15), entities (10), topics (10), sources (10), internal links (10), and image alt text (5, waived when there are no images). Links written naturally in the Markdown body count as sources and internal links automatically.
 - **Human-in-the-loop AI reviewer** — optional and lazy: the model runs only when you click *Analyze*, never on autosave. It proposes metadata; it never rewrites your article body. Works with any OpenAI-compatible chat endpoint (DeepSeek, Claude, Gemini, and others).
 - **AI crawler observability** — recognizes GPTBot, ClaudeBot, PerplexityBot, Google-AI, Bytespider, and more in the front controller, stores anonymized hashed visits, and shows 7-day crawl volume, bot share, most-crawled pages, and a live feed.
+- **AI referral tracking** — counts human visitors arriving from ChatGPT, Perplexity, Gemini, Copilot, Claude, DeepSeek, Kimi, Doubao, Qwen, and other AI assistants (by referrer or `utm_source`), flags AI citations that land on dead URLs, and stores no IP address or user agent. Many AI apps send no referrer, so counts are a lower bound.
+- **Does GEO pay off?** — lines up each article's GEO score with its AI crawls and AI referrals over 30 days, and compares articles scoring 80+ with the rest.
 - **Topic and entity clusters** — see how deep your coverage is per topic and which named entities your site is building authority around.
 - **Score history** — every successful publish records an immutable GEO score snapshot for trend tracking.
 
@@ -165,6 +167,10 @@ Simulate AI crawler visits against the dev server to exercise the dashboard:
 ```bash
 curl -s -o /dev/null -H "User-Agent: Mozilla/5.0 (compatible; GPTBot/1.2; +https://openai.com/gptbot)" http://127.0.0.1:8789/llms.txt
 curl -s -o /dev/null -H "User-Agent: ClaudeBot/1.0; +claudebot@anthropic.com" http://127.0.0.1:8789/llms-full.txt
+
+# AI referrals: a human visit from ChatGPT, by referrer or by utm_source
+curl -s -o /dev/null -e 'https://chatgpt.com/' http://127.0.0.1:8789/
+curl -s -o /dev/null 'http://127.0.0.1:8789/?utm_source=perplexity'
 ```
 
 ### Project layout

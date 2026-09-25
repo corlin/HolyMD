@@ -76,6 +76,10 @@ HolyMD 是一款**GEO 原生**的开源独立站引擎：静态优先、共享�
 - **AI 爬虫可观测性与访问追踪 (AI Bot Observability)**：
   - 入口层轻量识别全球主流 AI 爬虫（GPTBot, PerplexityBot, ClaudeBot, Google-AI, Bytespider 等）；
   - 单向哈希匿名脱敏记录入库，在 GEO 看板紧凑呈现：近 7 天抓取总次数、爬虫阵营占比、最受 AI 关注的内容与最新抓取微流水。
+- **AI 引荐追踪 (AI Referrals)**：
+  - 通过来源页或 `utm_source` 识别从 ChatGPT、Perplexity、Gemini、Copilot、Claude、DeepSeek、Kimi、豆包、通义千问等 AI 助手点击进入的真实访客；
+  - 标记被 AI 引用却已失效的链接；不记录 IP 地址与 User-Agent。许多 AI 应用不发送来源信息，统计值为下限。
+- **GEO 效果对照 (Does GEO pay off?)**：按文章对照 GEO 评分与近 30 天的 AI 抓取、AI 引荐次数，并比较 80 分及以上文章与其余文章的平均表现。
 
 ---
 
@@ -198,6 +202,10 @@ curl -s -o /dev/null -H "User-Agent: Mozilla/5.0 (compatible; GPTBot/1.2; +https
 curl -s -o /dev/null -H "User-Agent: Mozilla/5.0 (compatible; PerplexityBot/1.0; +https://docs.perplexity.ai/docs/perplexitybot)" http://127.0.0.1:8789/
 curl -s -o /dev/null -H "User-Agent: ClaudeBot/1.0; +claudebot@anthropic.com" http://127.0.0.1:8789/llms-full.txt
 curl -s -o /dev/null -H "User-Agent: Mozilla/5.0 (compatible; Bytespider; spider-feedback@bytedance.com)" http://127.0.0.1:8789/
+
+# 模拟 AI 引荐访问：通过来源页或 utm_source
+curl -s -o /dev/null -e 'https://chatgpt.com/' http://127.0.0.1:8789/
+curl -s -o /dev/null 'http://127.0.0.1:8789/?utm_source=perplexity'
 ```
 
 ---

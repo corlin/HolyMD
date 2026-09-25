@@ -190,6 +190,115 @@ $activeNav = 'geo';
     </div>
   </div>
 
+  <div class="geo-grid-two-col">
+    <!-- AI referrals -->
+    <div class="geo-section-card">
+      <div class="geo-card-header">
+        <div>
+          <h2><?= __('AI referrals') ?></h2>
+          <p class="muted"><?= __('Human visitors who arrived from an AI assistant or AI search engine.') ?></p>
+        </div>
+      </div>
+
+      <div class="geo-ai-stat-row">
+        <div class="geo-ai-stat-item">
+          <span class="geo-ai-stat-num"><?= (int) $aiReferralStats['total7d'] ?></span>
+          <span class="geo-ai-stat-lbl"><?= __('Referrals, last 7 days') ?></span>
+        </div>
+        <div class="geo-ai-stat-item">
+          <span class="geo-ai-stat-num"><?= (int) $aiReferralStats['distinctSources7d'] ?></span>
+          <span class="geo-ai-stat-lbl"><?= __('AI sources') ?></span>
+        </div>
+        <div class="geo-ai-stat-item">
+          <span class="geo-ai-stat-num"><?= (int) $aiReferralStats['deadLinks7d'] ?></span>
+          <span class="geo-ai-stat-lbl"><?= __('Cited dead links') ?></span>
+        </div>
+      </div>
+
+      <div class="geo-bot-compact-grid">
+        <div>
+          <h3 class="geo-sub-title"><?= __('Sources') ?></h3>
+          <?php if ($aiReferralStats['sourceDistribution'] === []): ?>
+            <p class="muted" style="font-size: 12px;"><?= __('No AI referrals recorded yet') ?></p>
+          <?php else: ?>
+            <div class="geo-bot-dist-list">
+              <?php foreach (array_slice($aiReferralStats['sourceDistribution'], 0, 4) as $referralSource): ?>
+                <div class="geo-bot-dist-row">
+                  <div class="geo-bot-name-col">
+                    <strong><?= $escape($referralSource['source']) ?></strong>
+                    <span class="muted"><?= __('{count} visit(s)', ['count' => $referralSource['count']]) ?> (<?= (int) $referralSource['percentage'] ?>%)</span>
+                  </div>
+                  <div class="geo-bot-progress-track">
+                    <div class="geo-bot-progress-bar" style="width: <?= (int) $referralSource['percentage'] ?>%;"></div>
+                  </div>
+                </div>
+              <?php endforeach; ?>
+            </div>
+          <?php endif; ?>
+        </div>
+
+        <div>
+          <h3 class="geo-sub-title"><?= __('Landing pages') ?></h3>
+          <?php if ($aiReferralStats['topLandingPages'] === []): ?>
+            <p class="muted" style="font-size: 12px;"><?= __('No landing pages yet') ?></p>
+          <?php else: ?>
+            <ul class="geo-crawled-paths-list">
+              <?php foreach (array_slice($aiReferralStats['topLandingPages'], 0, 3) as $landingPage): ?>
+                <li>
+                  <code><?= $escape($landingPage['path']) ?></code>
+                  <span class="geo-badge-count"><?= (int) $landingPage['count'] ?></span>
+                </li>
+              <?php endforeach; ?>
+            </ul>
+          <?php endif; ?>
+        </div>
+      </div>
+      <p class="muted geo-footnote"><?= __('Many AI apps send no referrer, so these counts are a lower bound. No IP address or user agent is stored.') ?></p>
+    </div>
+
+    <!-- GEO score versus AI visibility -->
+    <div class="geo-section-card">
+      <div class="geo-card-header">
+        <div>
+          <h2><?= __('Does GEO pay off?') ?></h2>
+          <p class="muted"><?= __('Average AI crawls and referrals per published article over the last 30 days, by GEO score.') ?></p>
+        </div>
+      </div>
+      <table class="geo-visibility-table">
+        <thead><tr><th scope="col"><?= __('GEO score') ?></th><th scope="col"><?= __('Articles') ?></th><th scope="col"><?= __('AI crawls') ?></th><th scope="col"><?= __('AI referrals') ?></th></tr></thead>
+        <tbody>
+          <tr><th scope="row"><?= __('80 and above') ?></th><td><?= (int) $visibilityComparison['high']['articles'] ?></td><td><?= $escape((string) $visibilityComparison['high']['crawls']) ?></td><td><?= $escape((string) $visibilityComparison['high']['referrals']) ?></td></tr>
+          <tr><th scope="row"><?= __('Below 80') ?></th><td><?= (int) $visibilityComparison['low']['articles'] ?></td><td><?= $escape((string) $visibilityComparison['low']['crawls']) ?></td><td><?= $escape((string) $visibilityComparison['low']['referrals']) ?></td></tr>
+        </tbody>
+      </table>
+      <p class="muted geo-footnote"><?= __('This shows correlation, not cause: topic, age, and promotion also matter. Compare again as your site grows.') ?></p>
+    </div>
+  </div>
+
+  <?php if ($visibility !== []): ?>
+    <div class="geo-section-card">
+      <div class="geo-card-header">
+        <div>
+          <h2><?= __('AI visibility by article') ?></h2>
+          <p class="muted"><?= __('GEO score next to what AI systems actually did with each article in the last 30 days.') ?></p>
+        </div>
+      </div>
+      <table class="geo-visibility-table">
+        <thead><tr><th scope="col"><?= __('Article') ?></th><th scope="col"><?= __('GEO score') ?></th><th scope="col"><?= __('AI crawls') ?></th><th scope="col"><?= __('AI referrals') ?></th></tr></thead>
+        <tbody>
+          <?php foreach (array_slice($visibility, 0, 10) as $row): ?>
+            <tr>
+              <th scope="row"><a href="<?= $path('/admin/articles/' . rawurlencode($row['article']->slug) . '/edit') ?>"><?= $escape($row['article']->title) ?></a></th>
+              <td><span class="geo-score-badge is-<?= $row['score']->grade() ?>"><?= (int) $row['score']->total ?></span></td>
+              <td><?= (int) $row['crawls'] ?></td>
+              <td><?= (int) $row['referrals'] ?></td>
+            </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+  <?php endif; ?>
+
   <div class="geo-section-card">
     <div class="geo-card-header">
       <div>

@@ -72,11 +72,24 @@ final class BootstrapTest extends TestCase
                 'audit_events',
                 'geo_scores',
                 'ai_bot_visits',
+                'ai_referrals',
             ],
             $matches[1],
         );
         self::assertDoesNotMatchRegularExpression('/\b(?:article_)?body\b/i', $schema);
         self::assertStringContainsString('`failed_attempts`', $schema);
         self::assertStringContainsString('`is_active`', $schema);
+    }
+
+    public function test_schema_contains_every_table_created_by_a_migration(): void
+    {
+        // Fresh installs load schema.sql and skip migrations, so the two must not drift.
+        $schema = (string) file_get_contents(__DIR__ . '/../database/schema.sql');
+        foreach (glob(__DIR__ . '/../database/migrations/*.sql') ?: [] as $migration) {
+            preg_match_all('/CREATE TABLE IF NOT EXISTS `([^`]+)`/i', (string) file_get_contents($migration), $matches);
+            foreach ($matches[1] as $table) {
+                self::assertStringContainsString('CREATE TABLE IF NOT EXISTS `' . $table . '`', $schema, basename($migration) . ' creates a table missing from schema.sql');
+            }
+        }
     }
 }
