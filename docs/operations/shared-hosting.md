@@ -122,6 +122,14 @@ In the hosting panel, add a cron job that runs every minute, using the absolute 
 
 The cron script holds a non-blocking file lock and claims one job per run. Transient GEO errors are retried according to the job policy; permanent authentication, configuration, or response errors are not retried endlessly against a paid API. After setting it up, publish a test draft from the admin and confirm that `jobs` and `builds` move from queued/running to succeeded, and that the GEO dashboard shows a new score for the published snapshot. Failure history stays on the Jobs page for auditing; do not delete it just because the queue has recovered.
 
+If citation probes are configured, run them weekly. Each question is one paid API call, capped by `HOLYMD_PROBE_MAX_PER_RUN`:
+
+```cron
+0 3 * * 1 /usr/local/bin/php /home/account/holymd/bin/holymd-probe.php >> /home/account/holymd/content/probe.log 2>&1
+```
+
+Hosts without cron can use the probe button on the GEO dashboard instead; it asks two questions per click so the request stays short.
+
 ## 7. Releases and rollback
 
 Back up before deploying code: `php bin/holymd-backup.php` (see the backup and restore guide). Recommended order: pause cron during a maintenance window, upload the new code, run `composer install --no-dev --classmap-authoritative`, the migrations, the full test suite or package tests, the dry run, and the check, then resume cron. When rolling back code, remember the database is only forward-compatible; never drop migrated columns.

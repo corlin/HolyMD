@@ -21,9 +21,22 @@ $usage = "Usage:\n"
     . "  holymd-admin.php enable --email <email>\n"
     . "  holymd-admin.php unlock --email <email>\n"
     . "  holymd-admin.php jobs\n"
-    . "  HOLYMD_GEO_PLAINTEXT_KEY='<provider-key>' holymd-admin.php encrypt-geo-key\n\n"
+    . "  HOLYMD_GEO_PLAINTEXT_KEY='<provider-key>' holymd-admin.php encrypt-geo-key\n"
+    . "  HOLYMD_PROBE_PLAINTEXT_KEY='<provider-key>' holymd-admin.php encrypt-probe-key\n\n"
     . "Administrator password: set HOLYMD_ADMIN_PASSWORD in the environment (minimum 12 characters).\n";
 $command = $argv[1] ?? null;
+
+if ($command === 'encrypt-probe-key') {
+    $plain = \HolyMD\Config\Env::get('HOLYMD_PROBE_PLAINTEXT_KEY');
+    if (!is_string($plain) || $plain === '') {
+        fwrite(STDERR, "Set HOLYMD_PROBE_PLAINTEXT_KEY for this command only.\n");
+        exit(64);
+    }
+    $encrypted = EncryptedApiCredential::encrypt($plain);
+    fwrite(STDOUT, 'HOLYMD_PROBE_API_CREDENTIAL="' . $encrypted['credential'] . '"' . "\n");
+    fwrite(STDOUT, 'HOLYMD_PROBE_API_KEY="' . $encrypted['key'] . '"' . "\n");
+    exit(0);
+}
 
 if ($command === 'encrypt-geo-key') {
     $plain = \HolyMD\Config\Env::get('HOLYMD_GEO_PLAINTEXT_KEY');

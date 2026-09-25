@@ -193,7 +193,22 @@ try {
     $jobs = new JobsController(new JobStatusRepository($container->get(\PDO::class)), new AdminGuard($_SESSION), new Csrf($_SESSION), $container->get(\HolyMD\Admin\AdminTimeFormatter::class));
     $profile = new \HolyMD\Admin\ProfileController($container->get(\PDO::class), new AdminGuard($_SESSION), new Csrf($_SESSION));
     $pages = new \HolyMD\Admin\PageController($pageRepo, new AdminGuard($_SESSION), new Csrf($_SESSION), $publisher, new VersionService($root . '/content/versions'));
-    $geoDashboard = new \HolyMD\Admin\GeoDashboardController(new ArticleRepository($root . '/content/articles'), new \HolyMD\Geo\GeoScoreCalculator(), new AdminGuard($_SESSION), new Csrf($_SESSION), $container->get(\PDO::class), $container->get(\HolyMD\Admin\AdminTimeFormatter::class));
+    $probeConfiguration = \HolyMD\Geo\CitationProbeConfiguration::fromEnvironment();
+    // A misconfigured probe key disables probes instead of taking the whole admin down.
+    try {
+        $probeCredential = $probeConfiguration->configured ? \HolyMD\Geo\EncryptedApiCredential::fromEnvironment(\HolyMD\Geo\CitationProbeConfiguration::CREDENTIAL_VARIABLE, \HolyMD\Geo\CitationProbeConfiguration::KEY_VARIABLE)->reveal() : null;
+    } catch (RuntimeException $exception) {
+        error_log('HolyMD citation probes disabled: ' . $exception->getMessage());
+        $probeCredential = null;
+    }
+    $probeRunner = $probeCredential !== null ? new \HolyMD\Geo\CitationProbeRunner(
+        $articles,
+        new \HolyMD\Geo\CitationProbeClient($probeCredential, $probeConfiguration),
+        $container->get(\PDO::class),
+        $publication,
+        $probeConfiguration,
+    ) : null;
+    $geoDashboard = new \HolyMD\Admin\GeoDashboardController(new ArticleRepository($root . '/content/articles'), new \HolyMD\Geo\GeoScoreCalculator(), new AdminGuard($_SESSION), new Csrf($_SESSION), $container->get(\PDO::class), $container->get(\HolyMD\Admin\AdminTimeFormatter::class), $probeRunner);
     $response = (new Router($controller, $geo, new AuthController($container->get(\PDO::class), $_SESSION, new Csrf($_SESSION)), $jobs, $profile, $pages, $geoDashboard))->dispatch(new ServerRequest(
         (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'HEAD') ? 'GET' : ($_SERVER['REQUEST_METHOD'] ?? 'GET'),
         $path,

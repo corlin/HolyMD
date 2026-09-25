@@ -80,6 +80,7 @@ HolyMD 是一款**GEO 原生**的开源独立站引擎：静态优先、共享�
   - 通过来源页或 `utm_source` 识别从 ChatGPT、Perplexity、Gemini、Copilot、Claude、DeepSeek、Kimi、豆包、通义千问等 AI 助手点击进入的真实访客；
   - 标记被 AI 引用却已失效的链接；不记录 IP 地址与 User-Agent。许多 AI 应用不发送来源信息，统计值为下限。
 - **GEO 效果对照 (Does GEO pay off?)**：按文章对照 GEO 评分与近 30 天的 AI 抓取、AI 引荐次数，并比较 80 分及以上文章与其余文章的平均表现。
+- **AI 引用探针 (Citation Probes)**：把文章的 FAQ 问题交给 AI 搜索引擎回答（默认 Perplexity Sonar，也支持其他联网搜索、兼容 OpenAI 接口的服务），记录答案是否引用了本站或该文章。可通过 Cron 每周运行，也可在看板中手动触发；优先探测最久未测的问题，每次运行有数量上限以控制费用。
 
 ---
 
@@ -152,6 +153,13 @@ while true; do php bin/holymd-worker.php >/dev/null 2>&1; sleep 2; done
 若配置 GEO 审核，使用加密工具将 API Key 密文写入 `.env`（明文仅存在于当前会话环境变量）：
 ```bash
 HOLYMD_GEO_PLAINTEXT_KEY='sk-your-provider-key' php bin/holymd-admin.php encrypt-geo-key
+```
+
+引用探针需要联网搜索能力，使用独立的服务商与密钥：
+```bash
+HOLYMD_PROBE_PLAINTEXT_KEY='pplx-your-key' php bin/holymd-admin.php encrypt-probe-key
+php bin/holymd-probe.php --list      # 预览接下来要探测的问题，不调用 API
+php bin/holymd-probe.php --limit 5   # 探测 5 个问题并记录结果
 ```
 
 首次正式部署前运行全项检查：
