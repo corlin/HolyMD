@@ -116,6 +116,11 @@ final readonly class GeoDashboardController
         // Fetch AI bot observability metrics
         $aiBotStats = $this->fetchAiBotStats();
 
+        // Human visitors sent by AI assistants, and how they line up with GEO scores
+        $aiReferralStats = $this->fetchAiReferralStats();
+        $visibility = $this->fetchArticleVisibility($articleScores);
+        $visibilityComparison = self::compareByScore($visibility);
+
         $csrfToken = $this->csrf->token();
         ob_start();
         require dirname(__DIR__, 2) . '/templates/admin/geo-dashboard.php';
@@ -237,6 +242,124 @@ final readonly class GeoDashboardController
         } catch (\Throwable) {
             return $default;
         }
+    }
+
+    /**
+     * @return array{
+     *   total7d: int,
+     *   distinctSources7d: int,
+     *   deadLinks7d: int,
+     *   sourceDistribution: list<array{source: string, count: int, percentage: int}>,
+     *   topLandingPages: list<array{path: string, count: int}>
+     * }
+     */
+    private function fetchAiReferralStats(): array
+    {
+        $default = ['total7d' => 0, 'distinctSources7d' => 0, 'deadLinks7d' => 0, 'sourceDistribution' => [], 'topLandingPages' => []];
+        if ($this->pdo === null) {
+            return $default;
+        }
+
+        try {
+            $cutoff = gmdate('Y-m-d H:i:s', time() - 7 * 86400);
+            $statement = $this->pdo->prepare(
+                'SELECT COUNT(*) AS total_7d, COUNT(DISTINCT source) AS sources_7d, SUM(CASE WHEN http_status = 404 THEN 1 ELSE 0 END) AS dead_7d
+                 FROM ai_referrals WHERE created_at >= ?'
+            );
+            $statement->execute([$cutoff]);
+            $summary = $statement->fetch(PDO::FETCH_ASSOC) ?: [];
+            $total7d = (int) ($summary['total_7d'] ?? 0);
+
+            $sources = [];
+            $statement = $this->pdo->prepare('SELECT source, COUNT(*) AS count FROM ai_referrals WHERE created_at >= ? GROUP BY source ORDER BY count DESC');
+            $statement->execute([$cutoff]);
+            foreach ($statement->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $count = (int) $row['count'];
+                $sources[] = ['source' => (string) $row['source'], 'count' => $count, 'percentage' => $total7d > 0 ? (int) round($count / $total7d * 100) : 0];
+            }
+
+            $landingPages = [];
+            $statement = $this->pdo->prepare('SELECT landing_path, COUNT(*) AS count FROM ai_referrals WHERE created_at >= ? GROUP BY landing_path ORDER BY count DESC LIMIT 5');
+            $statement->execute([$cutoff]);
+            foreach ($statement->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $landingPages[] = ['path' => (string) $row['landing_path'], 'count' => (int) $row['count']];
+            }
+
+            return [
+                'total7d' => $total7d,
+                'distinctSources7d' => (int) ($summary['sources_7d'] ?? 0),
+                'deadLinks7d' => (int) ($summary['dead_7d'] ?? 0),
+                'sourceDistribution' => $sources,
+                'topLandingPages' => $landingPages,
+            ];
+        } catch (\Throwable) {
+            return $default;
+        }
+    }
+
+    /**
+     * AI crawls and AI referrals per published article over the last 30 days.
+     *
+     * @param array<string, array{article: ArticleDocument, score: GeoScore}> $articleScores
+     * @return list<array{article: ArticleDocument, score: GeoScore, crawls: int, referrals: int}>
+     */
+    private function fetchArticleVisibility(array $articleScores): array
+    {
+        $cutoff = gmdate('Y-m-d H:i:s', time() - 30 * 86400);
+        $crawls = $this->countArticlePaths('SELECT request_path AS path, COUNT(*) AS count FROM ai_bot_visits WHERE created_at >= ? GROUP BY request_path', $cutoff);
+        $referrals = $this->countArticlePaths('SELECT landing_path AS path, COUNT(*) AS count FROM ai_referrals WHERE created_at >= ? AND http_status <> 404 GROUP BY landing_path', $cutoff);
+
+        $rows = [];
+        foreach ($articleScores as $slug => $entry) {
+            $rows[] = [...$entry, 'crawls' => $crawls[$slug] ?? 0, 'referrals' => $referrals[$slug] ?? 0];
+        }
+        usort($rows, static fn (array $a, array $b): int => [$b['referrals'], $b['crawls'], $b['score']->total] <=> [$a['referrals'], $a['crawls'], $a['score']->total]);
+        return $rows;
+    }
+
+    /** @return array<string, int> Article slug => visits */
+    private function countArticlePaths(string $sql, string $cutoff): array
+    {
+        if ($this->pdo === null) {
+            return [];
+        }
+        try {
+            $statement = $this->pdo->prepare($sql);
+            $statement->execute([$cutoff]);
+            $counts = [];
+            foreach ($statement->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                if (preg_match('#^/articles/([a-z0-9]+(?:-[a-z0-9]+)*)(?:/(?:index\.html)?)?$#', (string) $row['path'], $matches) === 1) {
+                    $counts[$matches[1]] = ($counts[$matches[1]] ?? 0) + (int) $row['count'];
+                }
+            }
+            return $counts;
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * Average AI crawls and referrals per article, split at the "excellent"
+     * GEO grade. A first, correlation-only view of whether GEO work pays off.
+     *
+     * @param list<array{article: ArticleDocument, score: GeoScore, crawls: int, referrals: int}> $visibility
+     * @return array{high: array{articles: int, crawls: float, referrals: float}, low: array{articles: int, crawls: float, referrals: float}}
+     */
+    public static function compareByScore(array $visibility): array
+    {
+        $groups = ['high' => ['articles' => 0, 'crawls' => 0, 'referrals' => 0], 'low' => ['articles' => 0, 'crawls' => 0, 'referrals' => 0]];
+        foreach ($visibility as $row) {
+            $group = $row['score']->total >= 80 ? 'high' : 'low';
+            $groups[$group]['articles']++;
+            $groups[$group]['crawls'] += $row['crawls'];
+            $groups[$group]['referrals'] += $row['referrals'];
+        }
+        $average = static fn (array $group): array => [
+            'articles' => $group['articles'],
+            'crawls' => $group['articles'] > 0 ? round($group['crawls'] / $group['articles'], 1) : 0.0,
+            'referrals' => $group['articles'] > 0 ? round($group['referrals'] / $group['articles'], 1) : 0.0,
+        ];
+        return ['high' => $average($groups['high']), 'low' => $average($groups['low'])];
     }
 
     /**

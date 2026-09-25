@@ -54,6 +54,15 @@ final class GeoDashboardControllerTest extends TestCase
             created_at TEXT NOT NULL
         )');
 
+        $this->pdo->exec('CREATE TABLE ai_referrals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source TEXT NOT NULL,
+            landing_path TEXT NOT NULL,
+            http_status INTEGER NOT NULL,
+            referrer_host TEXT NULL,
+            created_at TEXT NOT NULL
+        )');
+
         $now = gmdate('Y-m-d H:i:s');
         $this->pdo->exec("INSERT INTO ai_bot_visits (bot_name, request_path, http_status, ip_hash, user_agent, created_at) VALUES ('GPTBot', '/llms.txt', 200, 'hash1', 'GPTBot/1.0', '{$now}')");
         $this->pdo->exec("INSERT INTO ai_bot_visits (bot_name, request_path, http_status, ip_hash, user_agent, created_at) VALUES ('PerplexityBot', '/articles/demo/', 200, 'hash2', 'PerplexityBot/1.0', '{$now}')");
@@ -113,6 +122,39 @@ final class GeoDashboardControllerTest extends TestCase
         self::assertStringContainsString('GPTBot', $response->body);
         self::assertStringContainsString('PerplexityBot', $response->body);
         self::assertStringContainsString('/llms.txt', $response->body);
+    }
+
+    public function test_dashboard_lines_up_ai_referrals_and_crawls_with_geo_scores(): void
+    {
+        $this->session = ['admin_user_id' => 1, 'csrf_token' => 'test-token'];
+        $this->repo->write(new ArticleDocument('demo', 'Demo Article', 'Body markdown.', new FrontMatter(['title' => 'Demo Article', 'slug' => 'demo', 'date' => '2026-08-17', 'status' => 'published']), $this->contentDir . '/demo.md'));
+        $now = gmdate('Y-m-d H:i:s');
+        $old = gmdate('Y-m-d H:i:s', time() - 40 * 86400);
+        $this->pdo->exec("INSERT INTO ai_referrals (source, landing_path, http_status, referrer_host, created_at) VALUES ('ChatGPT', '/articles/demo/', 200, 'chatgpt.com', '{$now}'), ('ChatGPT', '/articles/demo/', 200, NULL, '{$now}'), ('Perplexity', '/articles/gone/', 404, 'www.perplexity.ai', '{$now}'), ('Kimi', '/articles/demo/', 200, 'kimi.com', '{$old}')");
+
+        $response = $this->router()->dispatch(new ServerRequest('GET', '/admin/geo'));
+
+        self::assertSame(200, $response->status);
+        self::assertStringContainsString('AI referrals', $response->body);
+        self::assertStringContainsString('<strong>ChatGPT</strong>', $response->body);
+        self::assertStringNotContainsString('<strong>Kimi</strong>', $response->body);
+        self::assertMatchesRegularExpression('#<span class="geo-ai-stat-num">3</span>\s*<span class="geo-ai-stat-lbl">Referrals, last 7 days#', $response->body);
+        self::assertMatchesRegularExpression('#<span class="geo-ai-stat-num">1</span>\s*<span class="geo-ai-stat-lbl">Cited dead links#', $response->body);
+        self::assertMatchesRegularExpression('#Demo Article</a></th>\s*<td><span class="geo-score-badge is-[a-z]+">\d+</span></td>\s*<td>1</td>\s*<td>2</td>#', $response->body);
+    }
+
+    public function test_compares_average_ai_visibility_above_and_below_the_excellent_grade(): void
+    {
+        $article = new ArticleDocument('a', 'A', 'Body.', new FrontMatter(['title' => 'A', 'slug' => 'a', 'date' => '2026-09-25']), 'a.md');
+        $comparison = GeoDashboardController::compareByScore([
+            ['article' => $article, 'score' => new \HolyMD\Geo\GeoScore(95, []), 'crawls' => 4, 'referrals' => 3],
+            ['article' => $article, 'score' => new \HolyMD\Geo\GeoScore(85, []), 'crawls' => 2, 'referrals' => 0],
+            ['article' => $article, 'score' => new \HolyMD\Geo\GeoScore(40, []), 'crawls' => 1, 'referrals' => 0],
+        ]);
+
+        self::assertSame(['articles' => 2, 'crawls' => 3.0, 'referrals' => 1.5], $comparison['high']);
+        self::assertSame(['articles' => 1, 'crawls' => 1.0, 'referrals' => 0.0], $comparison['low']);
+        self::assertSame(['articles' => 0, 'crawls' => 0.0, 'referrals' => 0.0], GeoDashboardController::compareByScore([])['low']);
     }
 
     public function test_dashboard_displays_utc_visit_time_in_the_site_timezone(): void

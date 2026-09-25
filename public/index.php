@@ -112,23 +112,29 @@ if (!str_starts_with($path, '/admin')) {
         $redirectTarget = is_array($redirects) && is_string($redirects[rtrim($relative, '/') . '/'] ?? null) ? $redirects[rtrim($relative, '/') . '/'] : null;
         if (is_string($redirectTarget)) {
             \HolyMD\Geo\AiBotDetector::trackIfBot($root, $path, 301);
+            \HolyMD\Geo\AiReferralDetector::trackIfReferred($root, $path, 301);
             header('Location: ' . $basePath . $redirectTarget, true, 301);
             exit;
         }
         $notFound = $siteRoot === false ? false : $siteRoot . '/404.html';
         if ($notFound !== false && is_file($notFound)) {
             \HolyMD\Geo\AiBotDetector::trackIfBot($root, $path, 404);
+            \HolyMD\Geo\AiReferralDetector::trackIfReferred($root, $path, 404);
             http_response_code(404);
             header('Content-Type: text/html; charset=utf-8');
             readfile($notFound);
             exit;
         }
         \HolyMD\Geo\AiBotDetector::trackIfBot($root, $path, 404);
+        \HolyMD\Geo\AiReferralDetector::trackIfReferred($root, $path, 404);
         http_response_code(404); exit;
     }
     $types = ['html' => 'text/html; charset=utf-8', 'xml' => 'application/xml', 'json' => 'application/feed+json', 'txt' => 'text/plain; charset=utf-8', 'css' => 'text/css', 'js' => 'text/javascript'];
     $extension = strtolower(pathinfo($candidate, PATHINFO_EXTENSION));
     \HolyMD\Geo\AiBotDetector::trackIfBot($root, $path, 200);
+    if ($extension === 'html') {
+        \HolyMD\Geo\AiReferralDetector::trackIfReferred($root, $path, 200);
+    }
     header('Content-Type: ' . ($types[$extension] ?? 'application/octet-stream'));
     readfile($candidate);
     exit;
