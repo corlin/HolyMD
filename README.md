@@ -59,6 +59,7 @@ Article content lives in Markdown files on disk. MySQL holds only operational st
 - **Standalone pages** — About, terms, and other pages with navigation ordering and version history.
 - **Slug redirects** — renamed slugs keep working through generated 301 redirects.
 - **Bilingual admin** — English and Simplified Chinese interface, switchable from the sidebar.
+- **Localized public site** — reader-facing text (navigation, labels, meta descriptions, search, image viewer) follows `HOLYMD_SITE_LANGUAGE`; Chinese sites render in Chinese whatever language the admin uses.
 
 ### Reader experience
 

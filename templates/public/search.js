@@ -5,6 +5,9 @@
   var trigger = document.getElementById('search-trigger');
   var dropdown = document.getElementById('search-dropdown');
   var closeBtn = document.getElementById('search-close');
+  // Labels come from the page, translated into the site language at build time.
+  var readLabel = (input && input.getAttribute('data-read-label')) || 'Read {title}';
+  var emptyLabel = (input && input.getAttribute('data-empty-label')) || 'No matching articles.';
   if (!input || !results) return;
 
   var wordmark = document.querySelector('a.wordmark');
@@ -135,7 +138,7 @@
         var arrow = document.createElement('a');
         arrow.className = 'quiet-arrow';
         arrow.href = link.href;
-        arrow.setAttribute('aria-label', 'Read ' + article.title);
+        arrow.setAttribute('aria-label', readLabel.replace('{title}', article.title));
         var arrowIcon = document.createElement('span');
         arrowIcon.className = 'icon';
         arrowIcon.setAttribute('aria-hidden', 'true');
@@ -172,7 +175,7 @@
     if (hits.length === 0) {
       var empty = document.createElement('p');
       empty.className = 'muted search-no-results';
-      empty.textContent = 'No matching articles.';
+      empty.textContent = emptyLabel;
       results.appendChild(empty);
     } else {
       hits.slice(0, 8).forEach(function (article) {

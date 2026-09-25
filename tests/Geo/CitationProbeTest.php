@@ -148,6 +148,15 @@ final class CitationProbeTest extends TestCase
         self::assertSame(['Does GEO replace SEO?', 'What is GEO?'], array_column($runner->dueQuestions(), 'question'), 'A question with only failed probes counts as never probed');
     }
 
+    public function test_splits_plain_text_faq_into_separate_questions(): void
+    {
+        $packed = new ArticleDocument('z', 'Z', 'Body.', new FrontMatter(['title' => 'Z', 'slug' => 'z', 'date' => '2026-08-13', 'faq' => '问题：为什么不能从流程开始？什么是七层模型？ Why now?']), 'z.md');
+        $mixed = new ArticleDocument('m', 'M', 'Body.', new FrontMatter(['title' => 'M', 'slug' => 'm', 'date' => '2026-08-13', 'faq' => [['question' => 'Paired?', 'answer' => 'Yes.'], 'Questions: First? Second?', 'No question mark']]), 'm.md');
+
+        self::assertSame(['为什么不能从流程开始？', '什么是七层模型？', 'Why now?'], CitationProbeRunner::questions($packed));
+        self::assertSame(['Paired?', 'First?', 'Second?', 'No question mark'], CitationProbeRunner::questions($mixed));
+    }
+
     private function database(): PDO
     {
         $pdo = new PDO('sqlite::memory:');

@@ -54,7 +54,7 @@ final class StaticBuilderTest extends TestCase
         self::assertStringContainsString('<article>', $article);
         self::assertStringContainsString('"@type":"BlogPosting"', $article);
         self::assertStringContainsString('"publisher":{"@type":"Organization","name":"HolyMD Notes"', $article);
-        self::assertStringContainsString('"inLanguage":"zh-CN"', $article);
+        self::assertStringContainsString('"inLanguage":"en"', $article);
         self::assertStringContainsString('https://example.test/articles/first-post/', $article);
         $indexHtml = (string) file_get_contents($this->outputRoot . '/index.html');
         self::assertStringContainsString('"@type":"WebSite"', $indexHtml);
@@ -63,7 +63,7 @@ final class StaticBuilderTest extends TestCase
         self::assertStringContainsString('/articles/second-post/', (string) file_get_contents($this->outputRoot . '/sitemap.xml'));
         self::assertStringContainsString('/topics/notes/', (string) file_get_contents($this->outputRoot . '/sitemap.xml'));
         self::assertStringContainsString('og:title', $article);
-        self::assertStringContainsString('<html lang="zh-CN">', $article);
+        self::assertStringContainsString('<html lang="en">', $article);
         self::assertStringContainsString('<h2 id="first">First</h2>', $article);
         self::assertStringContainsString('1 min read', $article);
         self::assertStringContainsString('class="theme-switcher"', $article);
@@ -79,6 +79,34 @@ final class StaticBuilderTest extends TestCase
 
         $this->expectExceptionMessage('must use HTTPS');
         (new StaticBuilder())->build($this->input([], 'Demo', 'http://example.test', 'Ada', 'About.'), $this->outputRoot . '/remote');
+    }
+
+    public function test_renders_reader_facing_text_in_the_site_language_and_restores_the_admin_locale(): void
+    {
+        \HolyMD\I18n\Translator::setLocale('en');
+        $articles = [
+            new ArticleDocument('first', '第一篇', "# 一\n\n正文。\n\n## 二\n\n更多。\n\n## 三\n\n结束。", new FrontMatter(['title' => '第一篇', 'slug' => 'first', 'date' => '2026-08-12', 'topics' => ['笔记'], 'faq' => [['question' => '问？', 'answer' => '答。']]]), '/articles/first.md'),
+            new ArticleDocument('second', '第二篇', '正文。', new FrontMatter(['title' => '第二篇', 'slug' => 'second', 'date' => '2026-08-11']), '/articles/second.md'),
+        ];
+
+        (new StaticBuilder())->build($this->input($articles, '中文站', 'https://example.test', '作者', '', true, 'zh-CN'), $this->outputRoot);
+
+        self::assertSame('en', \HolyMD\I18n\Translator::locale(), 'The build must not leave the admin interface in the site language');
+        $home = (string) file_get_contents($this->outputRoot . '/index.html');
+        $article = (string) file_get_contents($this->outputRoot . '/articles/first/index.html');
+        $missing = (string) file_get_contents($this->outputRoot . '/404.html');
+        foreach (['精选', '阅读全文', '最新文章', '<meta name="description" content="作者 的文章">', '搜索文章…', 'data-read-label="阅读《{title}》"', '中文站 — 作者 撰写。由 <a href="https://github.com/corlin/HolyMD"', '"system":"跟随系统"'] as $text) {
+            self::assertStringContainsString($text, $home);
+        }
+        foreach (['跳到正文', '作者</dt>', '约 1 分钟', '常见问题', '关于作者', '中文站 是一份个人出版物。', '"count":"第 {index} \/ {total} 张"'] as $text) {
+            self::assertStringContainsString($text, $article);
+        }
+        self::assertStringContainsString('<h1>页面未找到</h1>', $missing);
+        foreach ([$home, $article, $missing] as $html) {
+            foreach (['Latest writing', 'min read', 'Skip to', 'Page not found', 'Written by'] as $english) {
+                self::assertStringNotContainsString($english, $html);
+            }
+        }
     }
 
     public function test_closes_lists_and_quotes_before_following_blocks(): void
@@ -279,8 +307,9 @@ final class StaticBuilderTest extends TestCase
 
         foreach (['/index.html', '/articles/accessible-controls/index.html', '/topics/notes/index.html', '/about/index.html'] as $path) {
             $html = (string) file_get_contents($this->outputRoot . $path);
-            self::assertStringContainsString('class="theme-switcher" role="group" aria-label="Display mode"', $html, $path);
-            self::assertStringContainsString('data-theme-cycle aria-label="Display mode: System. Activate to use Light mode." title="Change display mode"', $html, $path);
+            // Built with zh-CN, so reader-facing controls are in Chinese.
+            self::assertStringContainsString('class="theme-switcher" role="group" aria-label="显示模式"', $html, $path);
+            self::assertStringContainsString('data-theme-cycle aria-label="显示模式：跟随系统。点击切换为浅色。" title="切换显示模式"', $html, $path);
             foreach (['Theme switcher', 'Change theme', '"Theme:', ' theme.'] as $readerFacingThemeCopy) {
                 self::assertStringNotContainsString($readerFacingThemeCopy, $html, $path);
             }
@@ -295,8 +324,9 @@ final class StaticBuilderTest extends TestCase
         (new StaticBuilder())->build($this->input([$article], 'Site', 'https://example.test', 'Author', 'About'), $this->outputRoot);
 
         $html = (string) file_get_contents($this->outputRoot . '/index.html');
-        self::assertStringContainsString('auto:{label:"System",next:"light",icon:"brightness_auto"},light:{label:"Light",next:"dark",icon:"light_mode"},dark:{label:"Dark",next:"auto",icon:"dark_mode"}', $html);
-        self::assertStringContainsString('a.setAttribute("aria-label","Display mode: "+l.label+". Activate to use "+n.label+" mode.")', $html);
+        self::assertStringContainsString('"system":"System","light":"Light","dark":"Dark","cycle":"Display mode: {current}. Activate to use {next} mode."', $html);
+        self::assertStringContainsString('auto:{label:T.system,next:"light",icon:"brightness_auto"},light:{label:T.light,next:"dark",icon:"light_mode"},dark:{label:T.dark,next:"auto",icon:"dark_mode"}', $html);
+        self::assertStringContainsString('a.setAttribute("aria-label",T.cycle.replace("{current}",l.label).replace("{next}",n.label))', $html);
         self::assertStringContainsString('document.querySelectorAll("[data-theme-set]")', $html);
         self::assertStringContainsString('e.setAttribute("aria-pressed",a?"true":"false")', $html);
         self::assertStringContainsString('r&&a(e[t()].next)', $html);
@@ -377,12 +407,12 @@ final class StaticBuilderTest extends TestCase
         self::assertStringContainsString('.site-footer nav a { display: inline-flex; align-items: center; justify-content: center; min-width: var(--control-size); min-height: var(--control-size);', $styles);
         self::assertStringContainsString('@media (max-width: 48rem) {', $styles);
         self::assertStringContainsString('.brand-nav nav a:not(:first-child) { display: none; }', $styles);
-        self::assertStringContainsString('.wordmark { max-width: min(12rem, 34vw); overflow: hidden; text-overflow: ellipsis; }', $styles);
+        self::assertStringContainsString('.wordmark { display: block; flex: 0 1 auto; min-width: 0; max-width: 100%; line-height: var(--control-size); overflow: hidden; text-overflow: ellipsis; }', $styles);
         self::assertStringContainsString('@media (max-width: 38rem) {', $styles);
         self::assertStringContainsString('.nav-row { gap: .35rem; }', $styles);
         self::assertStringContainsString('.brand-nav { flex: 1 1 auto; gap: .35rem; min-width: 0; }', $styles);
         self::assertStringContainsString('.header-tools { flex: none; gap: .35rem; min-width: 0; }', $styles);
-        self::assertStringContainsString('.wordmark { max-width: min(8rem, 34vw); overflow: hidden; text-overflow: ellipsis; }', $styles);
+        self::assertStringContainsString('.wordmark { display: block; flex: 0 1 auto; min-width: 0; max-width: 100%; line-height: var(--control-size); overflow: hidden; text-overflow: ellipsis; }', $styles);
         self::assertStringContainsString('.image-viewer-actions button, .image-viewer-download, .image-viewer-nav { display: inline-flex; align-items: center; justify-content: center; min-width: var(--control-size); min-height: var(--control-size);', $styles);
         self::assertStringNotContainsString('.image-viewer-actions button, .image-viewer-download { min-width: var(--control-size); min-height: var(--control-size); }', $styles);
         foreach (['radius-control', 'radius-item', 'radius-overlay', 'radius-media'] as $token) {
@@ -979,7 +1009,7 @@ JS);
         string $authorName,
         string $about,
         bool $generateLlmsTxt = false,
-        string $siteLanguage = 'zh-CN',
+        string $siteLanguage = 'en',
         ?string $builtAt = null,
         string $basePath = '',
         array $pages = [],

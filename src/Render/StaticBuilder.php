@@ -6,6 +6,7 @@ namespace HolyMD\Render;
 
 use DateTimeImmutable;
 use HolyMD\Content\ArticleDocument;
+use HolyMD\I18n\Translator;
 use RuntimeException;
 
 final class StaticBuilder
@@ -19,7 +20,22 @@ final class StaticBuilder
         $this->markdownRenderer = $markdownRenderer ?? new MarkdownRenderer();
     }
 
+    /**
+     * Public pages are rendered in the site language, whatever language the
+     * administrator who triggered the build is using.
+     */
     public function build(BuildInput $input, string $temporaryRoot): BuildManifest
+    {
+        $adminLocale = Translator::locale();
+        Translator::setLocale(Translator::resolve(null, null, null, $input->settings->siteLanguage));
+        try {
+            return $this->buildInSiteLanguage($input, $temporaryRoot);
+        } finally {
+            Translator::setLocale($adminLocale);
+        }
+    }
+
+    private function buildInSiteLanguage(BuildInput $input, string $temporaryRoot): BuildManifest
     {
         if (!str_starts_with($input->settings->siteUrl, 'https://') && !self::isLoopbackHttpUrl($input->settings->siteUrl)) {
             throw new RuntimeException('The public site URL must use HTTPS.');
