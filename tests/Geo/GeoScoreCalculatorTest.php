@@ -133,6 +133,18 @@ final class GeoScoreCalculatorTest extends TestCase
         $this->assertSame('4 entities identified', $entitiesField['reason']);
     }
 
+    public function testPlainTextFaqExplainsWhyItEarnsNoPoints(): void
+    {
+        foreach (['问题：一？二？', ['Only a question?']] as $faq) {
+            $article = new ArticleDocument('plain', 'Plain', 'Body.', new FrontMatter(['date' => '2026-08-13', 'faq' => $faq]), 'plain.md');
+            $field = $this->calculator->calculate($article)->breakdown[2];
+            $this->assertSame(0, $field['earned']);
+            $this->assertStringContainsString('question and answer pairs', $field['reason']);
+        }
+        $none = new ArticleDocument('none', 'None', 'Body.', new FrontMatter(['date' => '2026-08-13']), 'none.md');
+        $this->assertSame('Missing FAQ pairs', $this->calculator->calculate($none)->breakdown[2]['reason']);
+    }
+
     public function testAutoDetectsMarkdownBodyLinksForSourcesAndInternalLinks(): void
     {
         $article = new ArticleDocument(

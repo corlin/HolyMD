@@ -78,12 +78,29 @@ final readonly class CitationProbeRunner
     {
         $questions = [];
         foreach ((array) $article->frontMatter->get('faq', []) as $entry) {
-            $question = is_array($entry) ? ($entry['question'] ?? null) : $entry;
-            if (is_string($question) && trim($question) !== '') {
-                $questions[] = mb_substr(trim($question), 0, 500);
+            if (is_array($entry)) {
+                $candidates = [$entry['question'] ?? null];
+            } elseif (is_string($entry)) {
+                // Plain-text FAQ often packs several questions into one line: ask each separately.
+                $candidates = self::splitQuestions($entry);
+            } else {
+                continue;
+            }
+            foreach ($candidates as $question) {
+                if (is_string($question) && trim($question) !== '') {
+                    $questions[] = mb_substr(trim($question), 0, 500);
+                }
             }
         }
         return array_values(array_unique($questions));
+    }
+
+    /** @return list<string> */
+    private static function splitQuestions(string $text): array
+    {
+        $text = (string) preg_replace('/^\s*(?:问题|常见问题|FAQ|Questions?)\s*[:：]\s*/iu', '', $text);
+        $parts = preg_split('/(?<=[?？])\s*/u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        return array_values(array_filter(array_map('trim', $parts), static fn (string $part): bool => $part !== ''));
     }
 
     /** @param array{slug: string, question: string, hash: string} $candidate */

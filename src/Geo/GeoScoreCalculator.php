@@ -51,10 +51,14 @@ final class GeoScoreCalculator
         // 3. FAQ (15)
         $faq = $fm->get('faq');
         $faqCount = 0;
+        // Questions written as plain text (no answers) cannot become FAQPage structured data.
+        $plainTextFaq = is_string($faq) && trim($faq) !== '';
         if (is_array($faq)) {
             foreach ($faq as $item) {
                 if (is_array($item) && !empty($item['question']) && !empty($item['answer'])) {
                     $faqCount++;
+                } elseif (is_string($item) && trim($item) !== '') {
+                    $plainTextFaq = true;
                 }
             }
         }
@@ -64,6 +68,9 @@ final class GeoScoreCalculator
         } elseif ($faqCount === 1) {
             $earned = 8;
             $reason = Translator::text('Only 1 FAQ pair; add at least 2');
+        } elseif ($plainTextFaq) {
+            $earned = 0;
+            $reason = Translator::text('FAQ is plain text; rewrite it as question and answer pairs to publish FAQPage structured data');
         } else {
             $earned = 0;
             $reason = Translator::text('Missing FAQ pairs');
