@@ -183,11 +183,9 @@ HolyMD/
 
 ## Documentation
 
-Operations guides are currently in Chinese; English translations are planned.
-
 - [Shared hosting deployment](docs/operations/shared-hosting.md)
 - [Backup and restore](docs/operations/backup-and-restore.md)
-- [Product design specification](docs/superpowers/specs/2026-08-12-holymd-design.md)
+- [Product design specification](docs/superpowers/specs/2026-08-12-holymd-design.md) (Chinese)
 
 ---
 
