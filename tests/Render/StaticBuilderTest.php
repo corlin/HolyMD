@@ -583,7 +583,7 @@ JS);
     public function test_browser_fixture_resolves_chromium_from_path(): void
     {
         $this->buildResponsiveBrowserArticle();
-        $fakeChrome = $this->outputRoot . '/chromium';
+        $fakeChrome = $this->outputRoot . '/google-chrome';
         file_put_contents($fakeChrome, "#!/bin/sh\necho 'PATH Chromium diagnostic' >&2\nexit 43\n");
         chmod($fakeChrome, 0755);
         $previousPath = (string) getenv('PATH');
