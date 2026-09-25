@@ -47,7 +47,7 @@ final readonly class CitationProbeRunner
     }
 
     /**
-     * FAQ questions of published articles, least recently probed first.
+     * FAQ questions of published articles, least recently probed successfully first.
      *
      * @return list<array{slug: string, question: string, hash: string}>
      */
@@ -64,7 +64,8 @@ final readonly class CitationProbeRunner
         }
 
         $lastProbed = [];
-        $statement = $this->pdo->query('SELECT question_hash, MAX(created_at) AS last_probed FROM citation_probes GROUP BY question_hash');
+        // Only successful probes count, so a question whose probe failed is retried first next time.
+        $statement = $this->pdo->query('SELECT question_hash, MAX(created_at) AS last_probed FROM citation_probes WHERE error IS NULL GROUP BY question_hash');
         foreach ($statement === false ? [] : $statement->fetchAll(PDO::FETCH_ASSOC) as $row) {
             $lastProbed[(string) $row['question_hash']] = (string) $row['last_probed'];
         }

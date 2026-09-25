@@ -142,7 +142,10 @@ final class CitationProbeTest extends TestCase
         self::assertSame('https://www.example.com/articles/what-is-geo/', $rows[0]['cited_url']);
         self::assertSame('["https://www.example.com/articles/what-is-geo/"]', $rows[0]['citations']);
         self::assertSame('Citation probe provider returned HTTP 500.', $rows[1]['error']);
-        self::assertSame(['What is GEO?', 'Does GEO replace SEO?'], array_column($runner->dueQuestions(), 'question'), 'The just-probed question moves to the back of the queue');
+        self::assertSame(['What is GEO?', 'Does GEO replace SEO?'], array_column($runner->dueQuestions(), 'question'), 'The failed question keeps its last successful time and is retried first; the just-cited one moves to the back');
+
+        $pdo->exec("UPDATE citation_probes SET error = 'Citation probe provider returned HTTP 403.' WHERE question = 'Does GEO replace SEO?'");
+        self::assertSame(['Does GEO replace SEO?', 'What is GEO?'], array_column($runner->dueQuestions(), 'question'), 'A question with only failed probes counts as never probed');
     }
 
     private function database(): PDO
