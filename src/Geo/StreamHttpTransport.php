@@ -19,7 +19,7 @@ final class StreamHttpTransport implements HttpTransport {
 
     public function post(string $url,array $headers,string $body,int $timeoutSeconds,int $maxResponseBytes,array $resolvedAddresses=[]): HttpResponse {
         $parts=parse_url($url);$host=is_array($parts)&&is_string($parts['host']??null)?trim($parts['host'],'[]'):'';$port=(int)($parts['port']??443);
-        if(($parts['scheme']??null)!=='https'||$host===''||$port<1||$port>65535)throw new GeoAiException('GEO endpoint is invalid for the HTTPS transport.',false);
+        if(($parts['scheme']??null)!=='https'||$host===''||$port<1)throw new GeoAiException('GEO endpoint is invalid for the HTTPS transport.',false);
         if($resolvedAddresses===[])throw new GeoAiException('GEO provider transport requires a validated public address.',false);
         $pinned=[];foreach($resolvedAddresses as $address){if(!is_string($address)||inet_pton($address)===false)throw new GeoAiException('GEO provider transport received an invalid validated address.',false);$pinned[]=str_contains($address,':')?'['.$address.']':$address;}
         $lines=[];foreach($headers as $name=>$value)$lines[]=$name.': '.$value;

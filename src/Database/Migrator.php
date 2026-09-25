@@ -39,13 +39,14 @@ final readonly class Migrator
                 continue;
             }
 
-            $sql = file_get_contents($migrationPath);
+            // schema.sql is the current full schema, so a fresh install only records migrations as applied.
+            $sql = $installed ? '' : file_get_contents($migrationPath);
             if (is_string($sql) && trim($sql) !== '') {
                 $this->executeSql($sql);
             }
 
             $this->record($version);
-            $applied++;
+            $applied += $installed ? 0 : 1;
         }
 
         return new MigrationResult($installed, $applied);

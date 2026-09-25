@@ -8,6 +8,8 @@ use HolyMD\Geo\AiClient;
 use HolyMD\Geo\GeoReviewService;
 
 require dirname(__DIR__) . '/vendor/autoload.php';
+
+$argv = $_SERVER['argv'] ?? [];
 $root = dirname(__DIR__);
 $articleOption = array_search('--article', $argv, true);
 $reviewOption = array_search('--review-id', $argv, true);

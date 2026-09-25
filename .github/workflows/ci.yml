@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.4', '8.5']
+
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: holymd
+          MYSQL_USER: holymd
+          MYSQL_PASSWORD: holymd
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+
+    env:
+      HOLYMD_DSN: mysql:host=127.0.0.1;port=3306;dbname=holymd;charset=utf8mb4
+      HOLYMD_DB_USERNAME: holymd
+      HOLYMD_DB_PASSWORD: holymd
+      HOLYMD_CHROME_NO_SANDBOX: '1'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: curl, exif, fileinfo, gd, json, mbstring, openssl, pdo, pdo_mysql, pdo_sqlite, sodium
+          coverage: none
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Validate composer.json
+        run: composer validate --strict
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Install database schema
+        run: php bin/holymd-migrate.php
+
+      - name: Re-run migrations (idempotency)
+        run: php bin/holymd-migrate.php
+
+      - name: Static analysis
+        run: composer analyse -- --no-progress
+
+      - name: Tests
+        run: |
+          export HOLYMD_CHROME_BIN="$(command -v google-chrome || command -v chromium)"
+          vendor/bin/phpunit

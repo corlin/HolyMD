@@ -35,7 +35,7 @@ final readonly class ArticleMetadataValidator
         }
         $structured = $document->frontMatter->get('structured_data');
         if ($structured !== null) {
-            if (!is_array($structured) || array_is_list($structured) || $structured === [] || self::containsForbiddenKey($structured)) {
+            if (!is_array($structured) || array_is_list($structured) || self::containsForbiddenKey($structured)) {
                 $errors[] = sprintf('Article "%s" has invalid structured data.', $slug);
             } elseif (empty($structured['@type']) && empty($structured['type']) && empty($structured['@context'])) {
                 $errors[] = sprintf('Article "%s" structured data must specify @type or @context.', $slug);
@@ -50,7 +50,7 @@ final readonly class ArticleMetadataValidator
         $faq = $document->frontMatter->get('faq');
         if (is_array($faq)) {
             $validFaq = array_is_list($faq) && array_reduce($faq, static function (bool $valid, mixed $entry): bool {
-                if (!$valid || is_string($entry)) return $valid && is_string($entry);
+                if (!$valid || is_string($entry)) return $valid;
                 return is_array($entry) && array_diff(array_keys($entry), ['question', 'answer']) === [] && is_string($entry['question'] ?? null) && trim($entry['question']) !== '' && is_string($entry['answer'] ?? null) && trim($entry['answer']) !== '';
             }, true);
             if (!$validFaq) $errors[] = sprintf('Article "%s" has invalid faq metadata.', $slug);
