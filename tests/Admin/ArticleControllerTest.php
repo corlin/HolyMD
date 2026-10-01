@@ -706,6 +706,52 @@ final class ArticleControllerTest extends TestCase
         self::assertSame(401, $this->router([])->dispatch(new ServerRequest('POST', '/admin/markdown/preview', [], ['body' => '**No admin**']))->status);
     }
 
+    public function test_version_diff_endpoint_returns_diff_html(): void
+    {
+        $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);
+        $versions = new VersionService($this->root . '/versions');
+        $repo = new ArticleRepository($this->root . '/articles');
+        $doc = $repo->read('first-note');
+        $versionId = $versions->recordPublished($doc);
+
+        // Modify draft body
+        file_put_contents($this->root . '/articles/first-note.md', "---\ntitle: First note\nslug: first-note\ndate: 2026-08-12\n---\nModified body line\n");
+
+        $response = $router->dispatch(new ServerRequest('GET', '/admin/articles/first-note/versions/' . $versionId . '/diff'));
+        self::assertSame(200, $response->status);
+        $payload = json_decode($response->body, true);
+        self::assertSame('ok', $payload['status']);
+        self::assertSame($versionId, $payload['version']);
+        self::assertStringContainsString('diff-viewer', $payload['diff_html']);
+        self::assertStringContainsString('Modified body line', $payload['diff_html']);
+    }
+
+    public function test_media_endpoint_supports_json_format(): void
+    {
+        $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);
+        $response = $router->dispatch(new ServerRequest('GET', '/admin/media', ['accept' => 'application/json']));
+        self::assertSame(200, $response->status);
+        $payload = json_decode($response->body, true);
+        self::assertSame('ok', $payload['status']);
+        self::assertIsArray($payload['media']);
+    }
+
+    public function test_preflight_page_renders_body_diff_viewer(): void
+    {
+        $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'expected-token']);
+        $payload = [
+            'title' => 'First note',
+            'date' => '2026-08-12',
+            'body' => "New candidate body line\n",
+            'expected_checksum' => hash_file('sha256', $this->root . '/articles/first-note.md'),
+            'csrf_token' => 'expected-token',
+        ];
+        $response = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/preflight', [], $payload));
+        self::assertSame(200, $response->status);
+        self::assertStringContainsString('preflight-diff-section', $response->body);
+        self::assertStringContainsString('diff-viewer', $response->body);
+    }
+
     /** @param array<string, mixed> $session */
     private function router(array $session): Router
     {

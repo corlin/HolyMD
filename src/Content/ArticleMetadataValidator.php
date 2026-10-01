@@ -71,6 +71,10 @@ final readonly class ArticleMetadataValidator
         if ($summary !== null && !is_string($summary)) {
             $errors[] = sprintf('Article "%s" has an invalid summary.', $slug);
         }
+        $subtitle = $document->frontMatter->get('subtitle');
+        if ($subtitle !== null && (!is_string($subtitle) || str_contains($subtitle, "\n") || mb_strlen($subtitle) > 300)) {
+            $errors[] = sprintf('Article "%s" has an invalid subtitle.', $slug);
+        }
         return $errors;
     }
 

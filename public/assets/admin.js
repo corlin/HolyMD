@@ -246,6 +246,193 @@
       }
     });
 
+    const uploadAndInsertImage = async file => {
+      if (!file || !file.type.startsWith('image/')) return;
+      const placeholder = `![${t('Uploading image…')}]()`;
+      const start = body.selectionStart;
+      const end = body.selectionEnd;
+      const currentVal = body.value;
+      body.value = currentVal.slice(0, start) + placeholder + currentVal.slice(end);
+      body.selectionStart = body.selectionEnd = start + placeholder.length;
+      body.dispatchEvent(new Event('input', {bubbles: true}));
+
+      const formData = new FormData();
+      formData.append('image', file);
+      formData.append('csrf_token', token.value);
+      try {
+        const response = await fetch(`${base}/admin/media`, {
+          method: 'POST',
+          headers: {'Accept': 'application/json'},
+          body: formData,
+        });
+        const data = await response.json();
+        if (!response.ok || !data.status) {
+          throw new Error(data.error || t('Image upload failed'));
+        }
+        const fileInfo = data.first || (data.files && data.files[0]) || {url: data.url, filename: file.name};
+        const stem = file.name.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_-]+/g, '-');
+        const markdown = `![${stem}](${fileInfo.url})`;
+        body.value = body.value.replace(placeholder, markdown);
+        body.dispatchEvent(new Event('input', {bubbles: true}));
+      } catch (err) {
+        alert(err.message || t('Image upload failed'));
+        body.value = body.value.replace(placeholder, '');
+        body.dispatchEvent(new Event('input', {bubbles: true}));
+      }
+    };
+
+    body.addEventListener('paste', event => {
+      const items = event.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (file) {
+            event.preventDefault();
+            void uploadAndInsertImage(file);
+            return;
+          }
+        }
+      }
+    });
+
+    body.addEventListener('dragover', event => {
+      if (event.dataTransfer?.types?.includes('Files')) {
+        event.preventDefault();
+        body.style.outline = '2px dashed var(--blue)';
+      }
+    });
+
+    const resetDrag = () => { body.style.outline = ''; };
+    body.addEventListener('dragleave', resetDrag);
+    body.addEventListener('drop', event => {
+      resetDrag();
+      const files = event.dataTransfer?.files;
+      if (!files || files.length === 0) return;
+      let handled = false;
+      for (const file of files) {
+        if (file.type.startsWith('image/')) {
+          event.preventDefault();
+          void uploadAndInsertImage(file);
+          handled = true;
+        }
+      }
+      if (handled) event.preventDefault();
+    });
+
+    const wrapSelection = (before, after, defaultText) => {
+      const start = body.selectionStart;
+      const end = body.selectionEnd;
+      const text = body.value;
+      const selected = text.slice(start, end) || defaultText;
+      const replacement = before + selected + after;
+      body.value = text.slice(0, start) + replacement + text.slice(end);
+      body.selectionStart = start + before.length;
+      body.selectionEnd = start + before.length + selected.length;
+      body.focus();
+      body.dispatchEvent(new Event('input', {bubbles: true}));
+    };
+
+    const handleTab = isShift => {
+      const start = body.selectionStart;
+      const end = body.selectionEnd;
+      const text = body.value;
+      if (start === end) {
+        if (!isShift) {
+          body.value = text.slice(0, start) + '  ' + text.slice(end);
+          body.selectionStart = body.selectionEnd = start + 2;
+          body.dispatchEvent(new Event('input', {bubbles: true}));
+        }
+        return;
+      }
+      const before = text.slice(0, start);
+      const sel = text.slice(start, end);
+      const after = text.slice(end);
+      const lines = sel.split('\n');
+      const modified = lines.map(line => {
+        if (isShift) {
+          return line.startsWith('  ') ? line.slice(2) : (line.startsWith(' ') ? line.slice(1) : line);
+        }
+        return '  ' + line;
+      }).join('\n');
+      body.value = before + modified + after;
+      body.selectionStart = start;
+      body.selectionEnd = start + modified.length;
+      body.dispatchEvent(new Event('input', {bubbles: true}));
+    };
+
+    body.addEventListener('keydown', event => {
+      const isMod = event.metaKey || event.ctrlKey;
+      if (isMod && (event.key === 'b' || event.key === 'B')) {
+        event.preventDefault();
+        wrapSelection('**', '**', 'bold');
+      } else if (isMod && (event.key === 'i' || event.key === 'I')) {
+        event.preventDefault();
+        wrapSelection('*', '*', 'italic');
+      } else if (isMod && (event.key === 'k' || event.key === 'K')) {
+        event.preventDefault();
+        wrapSelection('[', '](url)', 'text');
+      } else if (event.key === 'Tab') {
+        event.preventDefault();
+        handleTab(event.shiftKey);
+      }
+    });
+
+    const mediaModal = document.querySelector('#media-modal');
+    const openMediaBtn = document.querySelector('[data-open-media-modal]');
+    const closeMediaBtn = document.querySelector('[data-close-media-modal]');
+    const mediaListContainer = document.querySelector('[data-media-modal-list]');
+
+    const loadMediaList = async () => {
+      if (!mediaListContainer) return;
+      try {
+        const response = await fetch(`${base}/admin/media`, {
+          headers: {'Accept': 'application/json'},
+        });
+        const data = await response.json();
+        if (!response.ok || !Array.isArray(data.media)) {
+          throw new Error(data.error || 'Failed to load media');
+        }
+        if (data.media.length === 0) {
+          mediaListContainer.innerHTML = `<p class="muted">${t('No media files uploaded yet.')}</p>`;
+          return;
+        }
+        mediaListContainer.innerHTML = '<div class="media-picker-grid"></div>';
+        const grid = mediaListContainer.querySelector('.media-picker-grid');
+        data.media.forEach(item => {
+          const div = document.createElement('div');
+          div.className = 'media-picker-item';
+          div.title = item.filename;
+          div.innerHTML = `<img src="${item.url}" alt="${item.filename}"><span class="media-picker-name">${item.filename}</span>`;
+          div.onclick = () => {
+            const stem = item.filename.replace(/\.[^.]+$/, '');
+            const markdown = `![${stem}](${item.url})\n`;
+            const curStart = body.selectionStart;
+            const curEnd = body.selectionEnd;
+            body.value = body.value.slice(0, curStart) + markdown + body.value.slice(curEnd);
+            body.selectionStart = body.selectionEnd = curStart + markdown.length;
+            body.focus();
+            body.dispatchEvent(new Event('input', {bubbles: true}));
+            mediaModal?.close();
+          };
+          grid.appendChild(div);
+        });
+      } catch (err) {
+        mediaListContainer.innerHTML = `<p class="muted">${err.message || 'Failed to load media'}</p>`;
+      }
+    };
+
+    if (openMediaBtn && mediaModal) {
+      openMediaBtn.addEventListener('click', () => {
+        mediaModal.showModal();
+        void loadMediaList();
+      });
+      closeMediaBtn?.addEventListener('click', () => mediaModal.close());
+      mediaModal.addEventListener('click', event => {
+        if (event.target === mediaModal) mediaModal.close();
+      });
+    }
+
     window.addEventListener('beforeunload', event => {
       if (!dirty && !saveInFlight) return;
       event.preventDefault();
@@ -347,6 +534,38 @@
     editorBody.dispatchEvent(new Event('input', {bubbles: true}));
     applyBtn.disabled = true;
     applyBtn.innerHTML = '<span class="icon" aria-hidden="true">check</span> ' + t('Applied');
+  });
+
+  document.addEventListener('click', async event => {
+    const btn = event.target.closest('[data-compare-version]');
+    if (!btn) return;
+    const version = btn.dataset.compareVersion;
+    const slug = btn.dataset.slug;
+    const container = document.querySelector(`[data-version-diff-container="${version}"]`);
+    if (!container) return;
+    if (!container.hidden) {
+      container.hidden = true;
+      return;
+    }
+    if (container.dataset.loaded === 'true') {
+      container.hidden = false;
+      return;
+    }
+    btn.disabled = true;
+    try {
+      const response = await fetch(`${base}/admin/articles/${slug}/versions/${version}/diff`);
+      const data = await response.json();
+      if (!response.ok || !data.diff_html) {
+        throw new Error(data.error || t('Failed to load version diff'));
+      }
+      container.innerHTML = data.diff_html;
+      container.dataset.loaded = 'true';
+      container.hidden = false;
+    } catch (err) {
+      alert(err.message || t('Failed to load version diff'));
+    } finally {
+      btn.disabled = false;
+    }
   });
 
   const panel = document.querySelector('[data-geo-panel]');

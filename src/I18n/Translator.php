@@ -110,5 +110,9 @@ final class Translator
         'View gap analysis',
         'Applied',
         'Apply link',
+        'Uploading image…',
+        'Image upload failed',
+        'Failed to load version diff',
+        'No media files uploaded yet.',
     ];
 }

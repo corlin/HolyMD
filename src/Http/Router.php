@@ -49,6 +49,9 @@ final readonly class Router
         if ($this->articles !== null && $request->method === 'POST' && preg_match('#^/admin/articles/[a-z0-9]+(?:-[a-z0-9]+)*/restore/[a-f0-9]{32}$#', $request->path) === 1) {
             return $this->articles->restore($request);
         }
+        if ($this->articles !== null && $request->method === 'GET' && preg_match('#^/admin/articles/[a-z0-9]+(?:-[a-z0-9]+)*/versions/[a-f0-9]{32}/diff$#', $request->path) === 1) {
+            return $this->articles->versionDiff($request);
+        }
         if ($this->articles !== null && $request->method === 'POST' && preg_match('#^/admin/articles/[a-z0-9-]+/preflight$#', $request->path) === 1) {
             return $this->articles->preflight($request);
         }

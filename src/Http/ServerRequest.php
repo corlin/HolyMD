@@ -26,4 +26,15 @@ final readonly class ServerRequest
         $value = $this->parsedBody[$name] ?? null;
         return is_string($value) ? $value : null;
     }
+
+    public function header(string $name, ?string $default = null): ?string
+    {
+        $normalized = strtolower($name);
+        foreach ($this->headers as $key => $value) {
+            if (strtolower($key) === $normalized) {
+                return $value;
+            }
+        }
+        return $default;
+    }
 }

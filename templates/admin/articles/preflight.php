@@ -18,6 +18,17 @@ $activeNav = 'articles';
   </div>
 
   <section aria-labelledby="preflight-changes"><h2 id="preflight-changes"><?= __('Changes') ?></h2><ul><?php foreach ($preflight->changes as $change): ?><li><?= __(ucwords(str_replace('_', ' ', $change))) ?></li><?php endforeach; ?></ul></section>
+  <?php if (isset($bodyDiffHtml)): ?>
+    <section class="preflight-diff-section" aria-labelledby="preflight-diff-heading">
+      <details open>
+        <summary id="preflight-diff-heading">
+          <span class="icon" aria-hidden="true">difference</span>
+          <span><?= __('Content differences') ?> (<?= ($isFirstPublication ?? false) ? __('First publication') : __('Compared with published version') ?>)</span>
+        </summary>
+        <?= $bodyDiffHtml ?>
+      </details>
+    </section>
+  <?php endif; ?>
   <?php if ($preflight->blockers !== []): ?><section class="preflight-blockers" aria-labelledby="preflight-blockers"><h2 id="preflight-blockers"><?= __('Publication blockers') ?></h2><ul><?php foreach ($preflight->blockers as $blocker): ?><li><?= $escape($blocker) ?></li><?php endforeach; ?></ul></section><?php endif; ?>
   <?php if ($preflight->warnings !== []): ?><section class="preflight-warnings" aria-labelledby="preflight-warnings"><h2 id="preflight-warnings"><?= __('Recommendations to acknowledge') ?></h2><ul><?php foreach ($preflight->warnings as $warning): ?><li><?= $escape($warning) ?></li><?php endforeach; ?></ul><p class="muted"><?= __('These checks are editorial guidance, not a guarantee of indexing, ranking, or AI citation.') ?></p></section><?php endif; ?>
 

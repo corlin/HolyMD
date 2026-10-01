@@ -27,10 +27,19 @@ $activeNav = 'articles';
       <input id="article-title" name="title" form="<?= $publicationFormId ?>" value="<?= $escape($article->title) ?>">
     </label>
     <label>
+      <?= __('Subtitle') ?> <span class="muted"><?= __('(optional)') ?></span>
+      <input id="article-subtitle" name="subtitle" data-metadata-input form="<?= $publicationFormId ?>" value="<?= $escape((string) ($article->subtitle() ?? '')) ?>" placeholder="<?= __('A short secondary headline or epigraph…') ?>">
+    </label>
+    <label>
       <?= __('Date') ?>
       <input id="article-date" name="date" form="<?= $publicationFormId ?>" type="date" value="<?= $escape((string) $article->frontMatter->get('date')) ?>">
     </label>
-    <label class="markdown-label" for="markdown-body">Markdown</label>
+    <div class="editor-label-bar" style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 16px;">
+      <label class="markdown-label" for="markdown-body" style="margin: 0;">Markdown</label>
+      <button type="button" class="btn-media-drawer-toggle button-link-secondary" data-open-media-modal title="<?= __('Browse or insert media') ?>">
+        <span class="icon" aria-hidden="true">photo_library</span><?= __('Media library') ?>
+      </button>
+    </div>
     <textarea id="markdown-body" name="body" form="<?= $publicationFormId ?>" spellcheck="true"><?= $escape($article->bodyMarkdown) ?></textarea>
     <input id="csrf-token" type="hidden" value="<?= $escape($csrfToken) ?>">
   </section>
@@ -109,7 +118,13 @@ $activeNav = 'articles';
       <p class="muted"><?= __('A restorable Markdown version is created only after a successful publish.') ?></p>
       <ul class="versions">
         <?php foreach ($versions as $version): ?>
-          <li><form method="post" action="<?= $path('/admin/articles/' . rawurlencode($article->slug) . '/restore/' . $version) ?>"><input type="hidden" name="csrf_token" value="<?= $escape($csrfToken) ?>"><button type="submit"><span class="icon" aria-hidden="true">history</span><?= __('Restore {version}', ['version' => substr($version, 0, 8)]) ?></button></form></li>
+          <li class="version-item" data-version-item="<?= $version ?>">
+            <div class="version-item-actions">
+              <form method="post" action="<?= $path('/admin/articles/' . rawurlencode($article->slug) . '/restore/' . $version) ?>"><input type="hidden" name="csrf_token" value="<?= $escape($csrfToken) ?>"><button type="submit"><span class="icon" aria-hidden="true">history</span><?= __('Restore {version}', ['version' => substr($version, 0, 8)]) ?></button></form>
+              <button type="button" class="version-diff-btn" data-compare-version="<?= $version ?>" data-slug="<?= $escape($article->slug) ?>"><span class="icon" aria-hidden="true">difference</span><?= __('Diff') ?></button>
+            </div>
+            <div class="version-diff-container" data-version-diff-container="<?= $version ?>" hidden></div>
+          </li>
         <?php endforeach; ?>
       </ul>
     </details>
@@ -126,6 +141,17 @@ $activeNav = 'articles';
     <?php endif; ?>
   </aside>
 </main>
+<dialog id="media-modal" class="media-modal" aria-labelledby="media-modal-title">
+  <div class="media-modal-card">
+    <div class="media-modal-header">
+      <h3 id="media-modal-title"><span class="icon" aria-hidden="true">photo_library</span><?= __('Insert media') ?></h3>
+      <button type="button" class="button-link-secondary" data-close-media-modal><span class="icon" aria-hidden="true">close</span></button>
+    </div>
+    <div class="media-modal-body" data-media-modal-list>
+      <p class="muted"><?= __('Loading media…') ?></p>
+    </div>
+  </div>
+</dialog>
 <?php
 $content = (string) ob_get_clean();
 $title = \HolyMD\I18n\Translator::text('Edit {title}', ['title' => $article->title]);

@@ -100,4 +100,21 @@ final class ArticleMetadataValidatorTest extends TestCase
         self::assertSame([], ArticleMetadataValidator::errors($this->document(['structured_data' => ['@context' => 'https://schema.org', 'name' => 'Custom']])));
         self::assertSame([], ArticleMetadataValidator::errors($this->document(['structured_data' => ['type' => 'CustomType']])));
     }
+
+    public function test_subtitle_validation_accepts_clean_string_and_rejects_newlines_or_excessive_length(): void
+    {
+        self::assertSame([], ArticleMetadataValidator::errors($this->document(['subtitle' => 'A clean secondary headline'])));
+        self::assertContains('Article "article" has an invalid subtitle.', ArticleMetadataValidator::errors($this->document(['subtitle' => "Line 1\nLine 2"])));
+        self::assertContains('Article "article" has an invalid subtitle.', ArticleMetadataValidator::errors($this->document(['subtitle' => str_repeat('a', 301)])));
+        self::assertContains('Article "article" has an invalid subtitle.', ArticleMetadataValidator::errors($this->document(['subtitle' => ['not-a-string']])));
+    }
+
+    public function test_article_document_subtitle_accessor(): void
+    {
+        $doc = $this->document(['subtitle' => '  My Subtitle  ']);
+        self::assertSame('My Subtitle', $doc->subtitle());
+
+        $docEmpty = $this->document([]);
+        self::assertNull($docEmpty->subtitle());
+    }
 }

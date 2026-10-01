@@ -12,6 +12,7 @@ use HolyMD\Content\ArticleRepository;
 use HolyMD\Content\FrontMatter;
 use HolyMD\Geo\GeoScoreCalculator;
 use HolyMD\Http\Csrf;
+use HolyMD\Content\DiffService;
 use HolyMD\Http\Response;
 use HolyMD\Http\ServerRequest;
 use HolyMD\Publish\PublishService;
@@ -38,6 +39,7 @@ final readonly class ArticleController
         private ?MarkdownRenderer $markdownRenderer = null,
         private ?GeoScoreCalculator $geoCalculator = null,
         private ?PDO $pdo = null,
+        private ?DiffService $diffService = null,
     ) {
     }
 
@@ -267,6 +269,25 @@ final readonly class ArticleController
     {
         $csrfToken = $this->csrf->token();
         $fields = $this->publicationFields($candidate);
+        $existing = $this->articles->find($candidate->slug);
+        $publishedBody = null;
+        if ($existing !== null && $existing->frontMatter->get('status') === 'published') {
+            $pointer = $existing->frontMatter->get('published_version');
+            if (is_string($pointer) && preg_match('/^[a-f0-9]{32}$/', $pointer) === 1) {
+                try {
+                    $publishedDoc = $this->versions->restore($pointer, $candidate->slug);
+                    $publishedBody = $publishedDoc->bodyMarkdown;
+                } catch (InvalidArgumentException) {
+                    $publishedBody = $existing->bodyMarkdown;
+                }
+            } else {
+                $publishedBody = $existing->bodyMarkdown;
+            }
+        }
+        $diff = $this->diffService ?? new DiffService();
+        $isFirstPublication = ($publishedBody === null);
+        $bodyDiffHtml = $diff->renderHtml($publishedBody ?? '', $candidate->bodyMarkdown);
+
         ob_start();
         require dirname(__DIR__, 2) . '/templates/admin/articles/preflight.php';
         return new Response($preflight->canPublish() ? 200 : 422, (string) ob_get_clean(), ['Content-Type' => 'text/html; charset=utf-8']);
@@ -280,7 +301,7 @@ final readonly class ArticleController
             'date' => (string) $document->frontMatter->get('date'),
             'body' => $document->bodyMarkdown,
         ];
-        foreach (['summary', 'topics', 'entities', 'faq', 'sources', 'alt_text', 'hierarchy', 'internal_links', 'previous_slugs', 'structured_data'] as $key) {
+        foreach (['subtitle', 'summary', 'topics', 'entities', 'faq', 'sources', 'alt_text', 'hierarchy', 'internal_links', 'previous_slugs', 'structured_data'] as $key) {
             $value = $document->frontMatter->get($key);
             if ($value === null) {
                 $fields[$key] = '';
@@ -337,10 +358,49 @@ final readonly class ArticleController
         }
     }
 
+    public function versionDiff(ServerRequest $request): Response
+    {
+        try {
+            $this->guard->requireAdministrator();
+        } catch (Unauthorized) {
+            return Response::json(['error' => 'Administrator authentication is required.'], 401);
+        }
+        if (preg_match('#^/admin/articles/([a-z0-9]+(?:-[a-z0-9]+)*)/versions/([a-f0-9]{32})/diff$#', $request->path, $matches) !== 1) {
+            return Response::json(['error' => 'Invalid version diff route.'], 404);
+        }
+        $slug = $matches[1];
+        $versionId = $matches[2];
+        $current = $this->articles->find($slug);
+        if ($current === null) {
+            return Response::json(['error' => 'Article was not found.'], 404);
+        }
+        try {
+            $historical = $this->versions->restore($versionId, $slug);
+        } catch (\InvalidArgumentException) {
+            return Response::json(['error' => 'Historical version was not found.'], 404);
+        }
+        $diff = $this->diffService ?? new DiffService();
+        $diffHtml = $diff->renderHtml($historical->bodyMarkdown, $current->bodyMarkdown);
+        return Response::json([
+            'status' => 'ok',
+            'version' => $versionId,
+            'diff_html' => $diffHtml,
+        ]);
+    }
+
     public function media(ServerRequest $request): Response
     {
         try { $this->guard->requireAdministrator(); } catch (Unauthorized) { return Response::json(['error' => 'Administrator authentication is required.'], 401); }
         $media = $this->mediaFiles();
+        if (str_contains((string) $request->header('Accept'), 'application/json') || $request->input('format') === 'json') {
+            return Response::json([
+                'status' => 'ok',
+                'media' => array_map(static fn (string $filename): array => [
+                    'filename' => $filename,
+                    'url' => '/media/' . $filename,
+                ], $media),
+            ]);
+        }
         $csrfToken = $this->csrf->token();
         ob_start(); require dirname(__DIR__, 2) . '/templates/admin/media.php';
         return new Response(200, (string) ob_get_clean(), ['Content-Type' => 'text/html; charset=utf-8']);
@@ -377,6 +437,7 @@ final readonly class ArticleController
 
             if (!is_dir($this->mediaRoot) && !mkdir($this->mediaRoot, 0775, true) && !is_dir($this->mediaRoot)) throw new \RuntimeException('Unable to create media storage.');
 
+            $uploaded = [];
             foreach ($filesToProcess as $file) {
                 if (($file['error'] ?? null) !== UPLOAD_ERR_OK || !is_string($file['tmp_name'] ?? null) || !is_string($file['name'] ?? null) || !is_file($file['tmp_name'])) {
                     throw new InvalidArgumentException('A valid image upload is required.');
@@ -408,6 +469,18 @@ final readonly class ArticleController
                 if (!move_uploaded_file($file['tmp_name'], $destination) && !rename($file['tmp_name'], $destination)) {
                     throw new \RuntimeException('Unable to store the image.');
                 }
+                $uploaded[] = [
+                    'filename' => $name,
+                    'url' => '/media/' . $name,
+                    'markdown' => '![' . $stem . '](/media/' . $name . ')',
+                ];
+            }
+            if (str_contains((string) $request->header('Accept'), 'application/json') || $request->input('format') === 'json') {
+                return Response::json([
+                    'status' => 'ok',
+                    'files' => $uploaded,
+                    'first' => $uploaded[0],
+                ]);
             }
             return Response::redirect('/admin/media');
         } catch (InvalidArgumentException $exception) { return Response::json(['error' => $exception->getMessage()], 422); }

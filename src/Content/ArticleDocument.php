@@ -28,6 +28,12 @@ final readonly class ArticleDocument
         return new self($this->slug, $this->title, $this->bodyMarkdown, $frontMatter, $this->sourcePath);
     }
 
+    public function subtitle(): ?string
+    {
+        $subtitle = $this->frontMatter->get('subtitle');
+        return is_string($subtitle) && trim($subtitle) !== '' ? trim($subtitle) : null;
+    }
+
     public function serialize(): string
     {
         return "---\n" . $this->frontMatter->toYaml() . "\n---\n" . $this->bodyMarkdown;

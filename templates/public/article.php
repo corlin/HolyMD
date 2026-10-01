@@ -29,7 +29,7 @@ require __DIR__ . '/_header.php';
       <header class="article-header">
         <?php if ($topics !== []): ?><p class="eyebrow article-topics"><?php foreach ($topics as $index => $topic): ?><?php if ($index > 0): ?><span aria-hidden="true"> · </span><?php endif; ?><a href="<?= $basePath ?>/topics/<?= htmlspecialchars((string) ($topicSlugs[$topic] ?? ''), ENT_QUOTES, 'UTF-8') ?>/"><?= htmlspecialchars($topic) ?></a><?php endforeach; ?></p><?php endif; ?>
         <h1><?= htmlspecialchars($article->title) ?></h1>
-        <?php if ($summary !== ''): ?><p class="deck"><?= htmlspecialchars($summary) ?></p><?php endif; ?>
+        <?php if (($subtitle = $article->subtitle()) !== null): ?><p class="deck article-subtitle"><?= htmlspecialchars($subtitle) ?></p><?php elseif ($summary !== ''): ?><p class="deck"><?= htmlspecialchars($summary) ?></p><?php endif; ?>
         <dl class="reading-meta"><div><dt><span class="icon" aria-hidden="true">person</span><?= __('Written by') ?></dt><dd rel="author"><?= htmlspecialchars($authorName) ?></dd></div><div><dt><span class="icon" aria-hidden="true">calendar_today</span><?= __('Published') ?></dt><dd><time datetime="<?= htmlspecialchars($date) ?>"><?= htmlspecialchars($date) ?></time></dd></div><?php if ($modified !== $date): ?><div><dt><span class="icon" aria-hidden="true">update</span><?= __('Updated') ?></dt><dd><time datetime="<?= htmlspecialchars($modified) ?>"><?= htmlspecialchars($modified) ?></time></dd></div><?php endif; ?><div><dt><span class="icon" aria-hidden="true">schedule</span><?= __('Reading time') ?></dt><dd><?= __('{minutes} min read', ['minutes' => (int) ($readingMinutes ?? 1)]) ?></dd></div></dl>
       </header>
       <?php if (!empty($toc) && count($toc) >= 3): ?>
