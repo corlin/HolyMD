@@ -136,11 +136,12 @@ final class CitationProbeTest extends TestCase
         self::assertTrue($outcomes[0]['result']?->citedArticle);
         self::assertNull($outcomes[1]['result']);
         self::assertSame('Citation probe provider returned HTTP 500.', $outcomes[1]['error']);
-        $rows = $pdo->query('SELECT question, cited_site, cited_article, cited_url, citations, error FROM citation_probes WHERE id > 1 ORDER BY id')->fetchAll(PDO::FETCH_ASSOC);
+        $rows = $pdo->query('SELECT question, cited_site, cited_article, cited_url, citations, answer_text, error FROM citation_probes WHERE id > 1 ORDER BY id')->fetchAll(PDO::FETCH_ASSOC);
         self::assertSame('Does GEO replace SEO?', $rows[0]['question']);
         self::assertSame(1, (int) $rows[0]['cited_article']);
         self::assertSame('https://www.example.com/articles/what-is-geo/', $rows[0]['cited_url']);
         self::assertSame('["https://www.example.com/articles/what-is-geo/"]', $rows[0]['citations']);
+        self::assertSame('No.', $rows[0]['answer_text']);
         self::assertSame('Citation probe provider returned HTTP 500.', $rows[1]['error']);
         self::assertSame(['What is GEO?', 'Does GEO replace SEO?'], array_column($runner->dueQuestions(), 'question'), 'The failed question keeps its last successful time and is retried first; the just-cited one moves to the back');
 
@@ -160,7 +161,7 @@ final class CitationProbeTest extends TestCase
     private function database(): PDO
     {
         $pdo = new PDO('sqlite::memory:');
-        $pdo->exec('CREATE TABLE citation_probes (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT NOT NULL, question_hash TEXT NOT NULL, question TEXT NOT NULL, model TEXT NOT NULL, cited_site INTEGER NOT NULL, cited_article INTEGER NOT NULL, mentioned INTEGER NOT NULL, cited_url TEXT NULL, citations TEXT NOT NULL, error TEXT NULL, created_at TEXT NOT NULL)');
+        $pdo->exec('CREATE TABLE citation_probes (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT NOT NULL, question_hash TEXT NOT NULL, question TEXT NOT NULL, model TEXT NOT NULL, cited_site INTEGER NOT NULL, cited_article INTEGER NOT NULL, mentioned INTEGER NOT NULL, cited_url TEXT NULL, citations TEXT NOT NULL, answer_text TEXT NULL, gap_analysis TEXT NULL, analyzed_at TEXT NULL, error TEXT NULL, created_at TEXT NOT NULL)');
         return $pdo;
     }
 }

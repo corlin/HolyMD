@@ -314,10 +314,24 @@ $activeNav = 'geo';
         <ul class="geo-probe-list">
           <?php foreach ($probeStats['recent'] as $probe): ?>
             <?php $probeState = $probe['error'] !== null ? 'failed' : ($probe['cited_article'] ? 'cited' : ($probe['cited_site'] ? 'site' : ($probe['mentioned'] ? 'mentioned' : 'missed'))); ?>
-            <li>
+            <li data-probe-item="<?= (int) ($probe['id'] ?? 0) ?>">
               <span class="geo-probe-state is-<?= $probeState ?>"><?= __(['failed' => 'Failed', 'cited' => 'Article cited', 'site' => 'Site cited', 'mentioned' => 'Mentioned', 'missed' => 'Not cited'][$probeState]) ?></span>
-              <span class="geo-probe-question"><?= $escape($probe['question']) ?></span>
-              <span class="geo-probe-meta muted"><code>/articles/<?= $escape($probe['slug']) ?>/</code> · <?= $escape($probe['model']) ?> · <?= $escape($probe['created_at_display']) ?><?php if ($probe['error'] !== null): ?> · <?= $escape($probe['error']) ?><?php endif; ?></span>
+              <div class="geo-probe-body">
+                <span class="geo-probe-question"><?= $escape($probe['question']) ?></span>
+                <span class="geo-probe-meta muted"><code>/articles/<?= $escape($probe['slug']) ?>/</code> · <?= $escape($probe['model']) ?> · <?= $escape($probe['created_at_display']) ?><?php if ($probe['error'] !== null): ?> · <?= $escape($probe['error']) ?><?php endif; ?></span>
+                <?php if (!empty($probe['gap_analysis'])): ?>
+                  <details class="geo-gap-details">
+                    <summary><span class="icon" aria-hidden="true">analytics</span><?= __('View gap analysis') ?></summary>
+                    <div class="geo-gap-content prose"><?= nl2br($escape($probe['gap_analysis'])) ?></div>
+                  </details>
+                <?php elseif (!empty($probe['has_answer']) && !$probe['cited_article']): ?>
+                  <div class="geo-gap-actions" data-gap-action-container>
+                    <button type="button" class="btn-gap-analyze button-link-secondary" data-analyze-probe="<?= (int) $probe['id'] ?>" data-csrf="<?= $escape($csrfToken) ?>">
+                      <span class="icon" aria-hidden="true">psychology</span><?= __('Analyze citation gap') ?>
+                    </button>
+                  </div>
+                <?php endif; ?>
+              </div>
             </li>
           <?php endforeach; ?>
         </ul>

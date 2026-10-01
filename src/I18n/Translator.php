@@ -105,5 +105,10 @@ final class Translator
         'GEO review running…',
         'GEO review queued — waiting for Cron worker…',
         'Starting analysis…',
+        'Analyzing gap…',
+        'Gap analysis failed',
+        'View gap analysis',
+        'Applied',
+        'Apply link',
     ];
 }

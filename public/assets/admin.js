@@ -10,7 +10,7 @@
   })();
   const t = (text, params = {}) => Object.entries(params).reduce((result, [name, value]) => result.split(`{${name}}`).join(String(value)), i18n[text] || text);
   const studio = document.querySelector('.studio');
-  const base = (studio ? studio.dataset.basePath : '') || '';
+  const base = (studio ? studio.dataset.basePath : document.body?.dataset.basePath) || '';
   let geoApi = null;
   if (studio) {
     const body = document.querySelector('#markdown-body');
@@ -273,6 +273,82 @@
     }, 2000);
   });
 
+  document.addEventListener('click', async event => {
+    const btn = event.target.closest('[data-analyze-probe]');
+    if (!btn || btn.disabled) return;
+    const probeId = btn.dataset.analyzeProbe;
+    const csrf = btn.dataset.csrf || document.querySelector('[data-geo-csrf]')?.value || document.querySelector('#csrf-token')?.value || '';
+    const container = btn.closest('[data-gap-action-container]');
+    const originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="icon" aria-hidden="true">sync</span> ' + t('Analyzing gap…');
+    try {
+      const response = await fetch(`${base}/admin/geo/probes/${probeId}/gap-analysis`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: new URLSearchParams({csrf_token: csrf}),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.gap_analysis) {
+        throw new Error(data.error || t('Gap analysis failed'));
+      }
+      if (container) {
+        const details = document.createElement('details');
+        details.className = 'geo-gap-details';
+        details.open = true;
+        const summary = document.createElement('summary');
+        summary.innerHTML = '<span class="icon" aria-hidden="true">analytics</span> ' + t('View gap analysis');
+        const content = document.createElement('div');
+        content.className = 'geo-gap-content prose';
+        const p = document.createElement('p');
+        p.textContent = data.gap_analysis;
+        content.innerHTML = p.innerHTML.replace(/\n/g, '<br>');
+        details.appendChild(summary);
+        details.appendChild(content);
+        container.replaceWith(details);
+      }
+    } catch (err) {
+      alert(err.message || t('Gap analysis failed'));
+      btn.disabled = false;
+      btn.innerHTML = originalHtml;
+    }
+  });
+
+  document.addEventListener('click', event => {
+    const applyBtn = event.target.closest('[data-link-markdown]');
+    const editorBody = document.querySelector('#markdown-body');
+    if (!applyBtn || !editorBody) return;
+    const raw = applyBtn.dataset.linkMarkdown || '';
+    const match = raw.match(/\[([^\]]+)\]\(([^)]+)\)/);
+    const linkMd = match ? match[0] : raw;
+    const phrase = match ? match[1] : '';
+
+    const start = editorBody.selectionStart;
+    const end = editorBody.selectionEnd;
+    const val = editorBody.value;
+
+    let applied = false;
+    if (phrase && val.includes(phrase)) {
+      const idx = val.indexOf(phrase);
+      if (idx !== -1) {
+        editorBody.value = val.slice(0, idx) + linkMd + val.slice(idx + phrase.length);
+        editorBody.selectionStart = idx;
+        editorBody.selectionEnd = idx + linkMd.length;
+        applied = true;
+      }
+    }
+
+    if (!applied) {
+      editorBody.value = val.slice(0, start) + linkMd + val.slice(end);
+      editorBody.selectionStart = editorBody.selectionEnd = start + linkMd.length;
+    }
+
+    editorBody.focus();
+    editorBody.dispatchEvent(new Event('input', {bubbles: true}));
+    applyBtn.disabled = true;
+    applyBtn.innerHTML = '<span class="icon" aria-hidden="true">check</span> ' + t('Applied');
+  });
+
   const panel = document.querySelector('[data-geo-panel]');
   if (!panel || !geoApi) return;
   const slug = panel.dataset.articleSlug;
@@ -325,6 +401,29 @@
         }
       }
     });
+    const internalLinksProposal = proposals.find(p => p.type === 'internal_links');
+    const linksBlock = panel.querySelector('[data-geo-internal-links]');
+    const linksList = panel.querySelector('[data-geo-internal-links-list]');
+    if (linksBlock && linksList && internalLinksProposal && Array.isArray(internalLinksProposal.value) && internalLinksProposal.value.length > 0) {
+      linksList.innerHTML = '';
+      internalLinksProposal.value.forEach(linkText => {
+        const card = document.createElement('div');
+        card.className = 'geo-internal-link-card';
+        const span = document.createElement('span');
+        span.className = 'geo-internal-link-text';
+        span.textContent = linkText;
+        const applyBtn = document.createElement('button');
+        applyBtn.type = 'button';
+        applyBtn.className = 'btn-geo-apply-link button-link-secondary';
+        applyBtn.innerHTML = '<span class="icon" aria-hidden="true">add_link</span> ' + t('Apply link');
+        applyBtn.dataset.linkMarkdown = linkText;
+        card.appendChild(span);
+        card.appendChild(applyBtn);
+        linksList.appendChild(card);
+      });
+      linksBlock.hidden = false;
+    }
+
     const catchAll = panel.querySelector('[data-geo-catchall]');
     if (catchAll) catchAll.hidden = true;
     if (anyFilled) {

@@ -23,7 +23,8 @@ final readonly class GeoController {
                 return Response::json(['articleSlug' => $slug, 'queued' => true, 'jobId' => $jobId], 202);
             }
 
-            $review = $this->reviews->review($document);
+            $publishedIndex = $this->publishedArticlesIndex($slug);
+            $review = $this->reviews->review($document, $publishedIndex);
             $snapshotPath = null;
             if ($this->versions !== null) {
                 $version = $this->versions->captureReviewInput($document);
@@ -76,5 +77,22 @@ final readonly class GeoController {
             return is_array($item) && array_diff(array_keys($item), ['question', 'answer']) === [] && is_string($item['question'] ?? null) && is_string($item['answer'] ?? null);
         }, true);
         return !array_is_list($value);
+    }
+
+    /** @return list<array{slug: string, title: string, topics: list<string>}> */
+    private function publishedArticlesIndex(string $excludeSlug): array
+    {
+        $list = [];
+        foreach ($this->articles->all() as $article) {
+            if ($article->slug !== $excludeSlug && $article->frontMatter->get('status', 'draft') === 'published') {
+                $topics = (array) $article->frontMatter->get('topics', []);
+                $list[] = [
+                    'slug' => $article->slug,
+                    'title' => $article->title,
+                    'topics' => array_values(array_filter($topics, 'is_string')),
+                ];
+            }
+        }
+        return $list;
     }
 }

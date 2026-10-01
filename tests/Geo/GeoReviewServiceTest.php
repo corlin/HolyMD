@@ -78,4 +78,10 @@ final class RecordingAiClient implements AiClient
 
         return new AiResponse($this->json);
     }
+
+    public function complete(string $systemPrompt, string $userMessage): string
+    {
+        $this->systemPrompt = $systemPrompt;
+        return $this->json;
+    }
 }

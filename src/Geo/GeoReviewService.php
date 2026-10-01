@@ -14,11 +14,18 @@ final readonly class GeoReviewService
     {
     }
 
-    public function review(ArticleDocument $document): GeoReview
+    /**
+     * @param list<array{slug: string, title: string, topics?: list<string>}> $publishedArticles
+     */
+    public function review(ArticleDocument $document, array $publishedArticles = []): GeoReview
     {
         $hash = hash('sha256', $document->bodyMarkdown);
         try {
-            $rawJson = $this->client->analyze(GeoPrompt::system(), $document->serialize())->json;
+            $userContent = $document->serialize();
+            if ($publishedArticles !== []) {
+                $userContent .= "\n\n# Available Published Site Articles for Internal Linking:\n" . json_encode($publishedArticles, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            }
+            $rawJson = $this->client->analyze(GeoPrompt::system(), $userContent)->json;
             $payload = json_decode($rawJson, true, 512, JSON_THROW_ON_ERROR);
             return $this->validatedReview($payload, $document->slug, $hash);
         } catch (JsonException|InvalidArgumentException $exception) {

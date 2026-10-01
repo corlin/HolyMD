@@ -40,10 +40,21 @@ try {
 if (!hash_equals($expectedChecksum, hash('sha256', $document->serialize()))) {
     throw new RuntimeException('GEO review input does not match its saved article checksum.');
 }
-use HolyMD\Geo\GeoAutoMerge;
+$articleRepo = new ArticleRepository($root . '/content/articles');
+$publishedIndex = [];
+foreach ($articleRepo->all() as $art) {
+    if ($art->slug !== $slug && $art->frontMatter->get('status', 'draft') === 'published') {
+        $topics = (array) $art->frontMatter->get('topics', []);
+        $publishedIndex[] = [
+            'slug' => $art->slug,
+            'title' => $art->title,
+            'topics' => array_values(array_filter($topics, 'is_string')),
+        ];
+    }
+}
 
 try {
-    $review = (new GeoReviewService($container->get(AiClient::class)))->review($document);
+    $review = (new GeoReviewService($container->get(AiClient::class)))->review($document, $publishedIndex);
 } catch (\HolyMD\Geo\GeoAiException $error) {
     fwrite(STDERR, ($error->retryable ? 'RETRYABLE: ' : 'PERMANENT: ') . $error->getMessage() . "\n");
     exit($error->retryable ? 75 : 78);
@@ -52,7 +63,8 @@ try {
     exit(78);
 }
 
-$articleRepo = new ArticleRepository($root . '/content/articles');
+use HolyMD\Geo\GeoAutoMerge;
+
 try {
     $currentDoc = $articleRepo->read($slug);
     // Merge only if the body hasn't changed

@@ -35,11 +35,11 @@ final readonly class CitationProbeRunner
             try {
                 $answer = $this->client->ask($candidate['question']);
                 $result = CitationProbeResult::evaluate($answer, $this->publication->siteUrl, $this->publication->siteName, $articleUrl);
-                $this->record($candidate, $result, null);
+                $this->record($candidate, $result, $answer, null);
                 $outcomes[] = ['slug' => $candidate['slug'], 'question' => $candidate['question'], 'result' => $result, 'error' => null];
             } catch (Throwable $exception) {
                 $error = $exception instanceof GeoAiException ? $exception->getMessage() : 'Citation probe failed.';
-                $this->record($candidate, null, $error);
+                $this->record($candidate, null, null, $error);
                 $outcomes[] = ['slug' => $candidate['slug'], 'question' => $candidate['question'], 'result' => null, 'error' => $error];
             }
         }
@@ -104,11 +104,11 @@ final readonly class CitationProbeRunner
     }
 
     /** @param array{slug: string, question: string, hash: string} $candidate */
-    private function record(array $candidate, ?CitationProbeResult $result, ?string $error): void
+    private function record(array $candidate, ?CitationProbeResult $result, ?CitationProbeAnswer $answer, ?string $error): void
     {
         $statement = $this->pdo->prepare(
-            'INSERT INTO citation_probes (slug, question_hash, question, model, cited_site, cited_article, mentioned, cited_url, citations, error, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            'INSERT INTO citation_probes (slug, question_hash, question, model, cited_site, cited_article, mentioned, cited_url, citations, answer_text, error, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
         $statement->execute([
             $candidate['slug'],
@@ -120,6 +120,7 @@ final readonly class CitationProbeRunner
             $result?->mentioned ? 1 : 0,
             $result?->citedUrl === null ? null : substr($result->citedUrl, 0, 768),
             json_encode(array_slice($result->citations ?? [], 0, 20), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+            $answer?->text,
             $error === null ? null : mb_substr($error, 0, 500),
             gmdate('Y-m-d H:i:s'),
         ]);

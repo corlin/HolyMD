@@ -8,6 +8,7 @@ use HolyMD\Auth\AdminGuard;
 use HolyMD\Auth\Unauthorized;
 use HolyMD\Content\ArticleDocument;
 use HolyMD\Content\ArticleRepository;
+use HolyMD\Geo\CitationGapAnalyzer;
 use HolyMD\Geo\CitationProbeRunner;
 use HolyMD\Geo\GeoScore;
 use HolyMD\Geo\GeoScoreCalculator;
@@ -29,6 +30,7 @@ final readonly class GeoDashboardController
         private ?PDO $pdo = null,
         ?AdminTimeFormatter $timeFormatter = null,
         private ?CitationProbeRunner $probeRunner = null,
+        private ?CitationGapAnalyzer $gapAnalyzer = null,
     ) {
         $this->timeFormatter = $timeFormatter ?? new AdminTimeFormatter(SiteTimezone::fromEnvironment());
     }
@@ -147,6 +149,32 @@ final readonly class GeoDashboardController
         }
         $this->probeRunner->run(self::PROBES_PER_REQUEST);
         return Response::redirect('/admin/geo#citation-probes');
+    }
+
+    public function gapAnalysis(ServerRequest $request, int $probeId): Response
+    {
+        try {
+            $this->guard->requireAdministrator();
+        } catch (Unauthorized) {
+            return Response::json(['error' => 'Administrator authentication is required.'], 401);
+        }
+        if (!$this->csrf->valid($request)) {
+            return Response::json(['error' => 'CSRF token is invalid.'], 419);
+        }
+        if ($this->gapAnalyzer === null) {
+            return Response::json(['error' => 'Citation gap analyzer is not configured.'], 503);
+        }
+        $force = ($request->parsedBody['force'] ?? null) === '1' || ($request->parsedBody['force'] ?? null) === true;
+        try {
+            $analysis = $this->gapAnalyzer->analyze($probeId, $force);
+            return Response::json([
+                'success' => true,
+                'probe_id' => $probeId,
+                'gap_analysis' => $analysis,
+            ]);
+        } catch (\Throwable $e) {
+            return Response::json(['error' => $e->getMessage()], 400);
+        }
     }
 
     /** Kept small so a synchronous run fits within typical shared-host request limits. */
@@ -438,9 +466,10 @@ final readonly class GeoDashboardController
             $summary = $statement->fetch(PDO::FETCH_ASSOC) ?: [];
 
             $recent = [];
-            $rows = $this->pdo->query('SELECT slug, question, model, cited_site, cited_article, mentioned, cited_url, error, created_at FROM citation_probes ORDER BY id DESC LIMIT 8');
+            $rows = $this->pdo->query('SELECT id, slug, question, model, cited_site, cited_article, mentioned, cited_url, answer_text, gap_analysis, analyzed_at, error, created_at FROM citation_probes ORDER BY id DESC LIMIT 8');
             foreach ($rows ? $rows->fetchAll(PDO::FETCH_ASSOC) : [] as $row) {
                 $recent[] = [
+                    'id' => (int) $row['id'],
                     'slug' => (string) $row['slug'],
                     'question' => (string) $row['question'],
                     'model' => (string) $row['model'],
@@ -448,6 +477,9 @@ final readonly class GeoDashboardController
                     'cited_article' => (bool) $row['cited_article'],
                     'mentioned' => (bool) $row['mentioned'],
                     'cited_url' => $row['cited_url'] === null ? null : (string) $row['cited_url'],
+                    'has_answer' => !empty($row['answer_text']),
+                    'gap_analysis' => $row['gap_analysis'] === null ? null : (string) $row['gap_analysis'],
+                    'analyzed_at' => $row['analyzed_at'] === null ? null : (string) $row['analyzed_at'],
                     'error' => $row['error'] === null ? null : (string) $row['error'],
                     'created_at_display' => $this->timeFormatter->format((string) $row['created_at'], 'm-d H:i'),
                 ];

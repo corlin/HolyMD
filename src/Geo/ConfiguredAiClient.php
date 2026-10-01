@@ -21,4 +21,16 @@ final readonly class ConfiguredAiClient implements AiClient {
   }
   return new AiResponse(trim($content));
  }
+
+ public function complete(string $systemPrompt, string $userMessage): string {
+  if($this->credential==='')throw new GeoAiException('GEO AI credentials are not configured.',false);
+  try{$resolvedAddresses=$this->endpointPolicy->validate($this->endpoint,true);}catch(\InvalidArgumentException $e){throw new GeoAiException($e->getMessage(),false);}
+  $body=json_encode(['model'=>$this->model,'messages'=>[['role'=>'system','content'=>$systemPrompt],['role'=>'user','content'=>$userMessage]]],JSON_THROW_ON_ERROR);
+  $response=$this->transport->post($this->endpoint,['Authorization'=>'Bearer '.$this->credential,'Content-Type'=>'application/json','Accept'=>'application/json'],$body,$this->timeoutSeconds,$this->maxResponseBytes,$resolvedAddresses);
+  if($response->status<200||$response->status>=300)throw new GeoAiException('GEO provider returned HTTP '.$response->status.'.',in_array($response->status,[408,409,425,429,500,502,503,504],true));
+  try{$payload=json_decode($response->body,true,512,JSON_THROW_ON_ERROR);}catch(JsonException $e){throw new GeoAiException('GEO provider returned invalid JSON.',true);}
+  $content=$payload['choices'][0]['message']['content']??null;
+  if(!is_string($content)||trim($content)==='')throw new GeoAiException('GEO provider response was empty.',true);
+  return trim($content);
+ }
 }

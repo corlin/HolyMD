@@ -98,6 +98,7 @@ final readonly class ArticleMetadataValidator
 
     private static function internalLink(string $value): bool
     {
+        if (preg_match('/^\[.+\]\((?:https?:\/\/[^\s)]+|\/[^)\s]*)\)$/', $value) === 1) return true;
         if (self::webUrl($value)) return true;
         return preg_match('~^/(?!/)[^\s\x00-\x1F]*$~D', $value) === 1;
     }

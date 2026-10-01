@@ -362,4 +362,11 @@ return [
     'GEO review running…' => 'GEO 分析进行中…',
     'GEO review queued — waiting for Cron worker…' => 'GEO 分析已排队，等待 Cron Worker…',
     'Starting analysis…' => '正在发起分析…',
+    'View gap analysis' => '查看差距分析',
+    'Analyze citation gap' => '分析引用差距',
+    'Analyzing gap…' => '正在分析差距…',
+    'Gap analysis failed' => '差距分析失败',
+    'Recommended internal links' => '建议站内链接',
+    'Apply link' => '应用链接',
+    'Applied' => '已应用',
 ];

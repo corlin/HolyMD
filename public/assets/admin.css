@@ -106,3 +106,28 @@
 .geo-bot-pill.is-claudebot{background:#fcefe7;color:#c55c1e;border-color:#fadbd0}
 .geo-bot-pill.is-perplexitybot{background:#e8eaed;color:#202124;border-color:#dadce0}
 .left-rail .locale-switch{display:flex;align-items:center;gap:6px;margin:0 0 10px;font-size:13px}.left-rail .locale-switch .icon{font-size:15px;color:var(--muted)}.left-rail .locale-switch a{display:inline;color:var(--blue);text-decoration:underline}.left-rail .locale-switch strong{color:var(--ink)}.geo-visibility-table{width:100%;border-collapse:collapse;font-size:13px}.geo-visibility-table th,.geo-visibility-table td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:right}.geo-visibility-table th:first-child,.geo-visibility-table td:first-child{text-align:left}.geo-visibility-table thead th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}.geo-visibility-table tbody th{font-weight:600}.geo-visibility-table a{color:var(--ink);text-decoration:none}.geo-visibility-table a:hover{color:var(--blue)}.geo-footnote{font-size:12px;margin:12px 0 0}.geo-probe-list{list-style:none;padding:0;margin:8px 0 0;display:flex;flex-direction:column;gap:8px}.geo-probe-list li{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:#fffdf9}.geo-probe-question{font-size:13.5px;font-weight:600}.geo-probe-meta{grid-column:2;font-size:12px}.geo-probe-state{grid-row:span 2;align-self:start;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;border:1px solid var(--line);white-space:nowrap}.geo-probe-state.is-cited{color:#17633b;background:#e6f4ea;border-color:#ceead6}.geo-probe-state.is-site{color:#174a66;background:#e8f1f6;border-color:#c2d8e4}.geo-probe-state.is-mentioned{color:#86541b;background:#fbf1e2;border-color:#ecd9b8}.geo-probe-state.is-missed{color:var(--muted)}.geo-probe-state.is-failed{color:#9a2626;background:#fce8e6;border-color:#fad2cf}#citation-probes .geo-card-header form{margin:0}
+.geo-probe-body{display:flex;flex-direction:column;gap:4px;min-width:0}
+.geo-gap-details{margin:8px 0 4px;padding:6px 10px;background:var(--paper);border:1px solid var(--line);border-radius:6px;font-size:12.5px}
+.geo-gap-details summary{cursor:pointer;font-weight:600;display:inline-flex;align-items:center;gap:5px;color:var(--ink)}
+.geo-gap-details summary:hover{color:var(--blue)}
+.geo-gap-content{margin-top:8px;font-size:12px;line-height:1.55;color:var(--ink);white-space:pre-wrap;border-top:1px dashed var(--line);padding-top:8px}
+.geo-gap-actions{margin-top:4px}
+.btn-gap-analyze{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;padding:3px 8px;border-radius:4px;cursor:pointer}
+.geo-probes-block .geo-probe-card-list{display:flex;flex-direction:column;gap:8px;padding:8px 0}
+.geo-probe-mini-item{padding:6px 0;border-bottom:1px solid var(--line)}
+.geo-probe-mini-item:last-child{border-bottom:none}
+.geo-probe-mini-top{display:flex;align-items:baseline;gap:6px}
+.geo-probe-mini-top .geo-probe-state{font-size:10px;padding:1px 6px}
+.geo-probe-q{font-size:12px;font-weight:600;color:var(--ink)}
+.geo-internal-links-block{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.geo-internal-links-block .geo-sub-header{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink);margin-bottom:8px}
+.geo-internal-links-list{display:flex;flex-direction:column;gap:6px}
+.geo-internal-link-card{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;background:var(--paper);border:1px solid var(--line);border-radius:6px}
+.geo-internal-link-meta{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.geo-internal-link-phrase{font-size:12px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.geo-internal-link-url{font-size:10.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.geo-internal-link-actions{display:flex;align-items:center;gap:4px;flex-shrink:0}
+.geo-internal-link-actions .btn-sm{padding:3px 6px;font-size:11px;display:inline-flex;align-items:center;justify-content:center;border-radius:4px;border:1px solid var(--line);background:var(--surface);cursor:pointer}
+.geo-internal-link-actions .btn-sm:hover{border-color:var(--blue);color:var(--blue)}
+.geo-internal-link-actions .btn-sm.primary{background:var(--blue);color:#fff;border-color:var(--blue)}
+.geo-internal-link-actions .btn-sm.primary:hover{opacity:.9}

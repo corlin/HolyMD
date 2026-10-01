@@ -101,7 +101,19 @@ final readonly class ArticleRepository
 
     public function exists(string $slug): bool
     {
-        return is_file($this->safePath($slug));
+        try {
+            return is_file($this->safePath($slug));
+        } catch (InvalidArgumentException) {
+            return false;
+        }
+    }
+
+    public function find(string $slug): ?ArticleDocument
+    {
+        if (!$this->exists($slug)) {
+            return null;
+        }
+        return $this->read($slug);
     }
 
     public function delete(string $slug): void

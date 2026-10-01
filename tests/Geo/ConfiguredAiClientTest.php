@@ -47,6 +47,19 @@ final class ConfiguredAiClientTest extends TestCase
         try { $client->analyze('Return JSON only.', 'body'); self::fail('Expected exception.'); }
         catch (GeoAiException $exception) { self::assertTrue($exception->retryable); self::assertStringContainsString('structured review content', $exception->getMessage()); }
     }
+
+    public function test_sends_completion_request_and_returns_text_content(): void
+    {
+        $transport = new RecordingTransport(new HttpResponse(200, json_encode(['choices' => [['message' => ['content' => "Analysis result\nLine 2"]]]], JSON_THROW_ON_ERROR)));
+        $client = new ConfiguredAiClient('secret', 'https://provider.test/v1/chat/completions', 'geo-model', $transport, 15, 8192, new EndpointPolicy(static fn (string $host): array => ['8.8.8.8']));
+
+        $text = $client->complete('System instructions', 'User input');
+
+        self::assertSame("Analysis result\nLine 2", $text);
+        self::assertSame('geo-model', json_decode($transport->body, true)['model']);
+        self::assertSame('System instructions', json_decode($transport->body, true)['messages'][0]['content']);
+        self::assertSame('User input', json_decode($transport->body, true)['messages'][1]['content']);
+    }
 }
 
 final class RecordingTransport implements HttpTransport

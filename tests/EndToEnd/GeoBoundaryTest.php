@@ -219,4 +219,9 @@ final readonly class BoundaryAiClient implements AiClient
     {
         return new AiResponse($this->json);
     }
+
+    public function complete(string $systemPrompt, string $userMessage): string
+    {
+        return $this->json;
+    }
 }

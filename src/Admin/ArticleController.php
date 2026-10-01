@@ -19,6 +19,7 @@ use HolyMD\Publish\PublishPreflightResult;
 use HolyMD\Queue\MySqlJobQueue;
 use HolyMD\Render\MarkdownRenderer;
 use InvalidArgumentException;
+use PDO;
 
 final readonly class ArticleController
 {
@@ -36,6 +37,7 @@ final readonly class ArticleController
         private array $siteSettings = [],
         private ?MarkdownRenderer $markdownRenderer = null,
         private ?GeoScoreCalculator $geoCalculator = null,
+        private ?PDO $pdo = null,
     ) {
     }
 
@@ -150,6 +152,16 @@ final readonly class ArticleController
         $calculator = $this->geoCalculator ?? new GeoScoreCalculator();
         $geoScore = $calculator->calculate($article);
         $csrfToken = $this->csrf->token();
+        $probes = [];
+        if ($this->pdo !== null) {
+            try {
+                $stmt = $this->pdo->prepare('SELECT id, question, model, cited_site, cited_article, mentioned, cited_url, answer_text, gap_analysis, analyzed_at FROM citation_probes WHERE slug = ? ORDER BY id DESC LIMIT 5');
+                $stmt->execute([$article->slug]);
+                $probes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            } catch (\Throwable) {
+                $probes = [];
+            }
+        }
         ob_start();
         require dirname(__DIR__, 2) . '/templates/admin/articles/edit.php';
         return new Response(200, (string) ob_get_clean(), ['Content-Type' => 'text/html; charset=utf-8']);

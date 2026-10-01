@@ -63,7 +63,7 @@ final class GeoDashboardControllerTest extends TestCase
             created_at TEXT NOT NULL
         )');
 
-        $this->pdo->exec('CREATE TABLE citation_probes (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT NOT NULL, question_hash TEXT NOT NULL, question TEXT NOT NULL, model TEXT NOT NULL, cited_site INTEGER NOT NULL, cited_article INTEGER NOT NULL, mentioned INTEGER NOT NULL, cited_url TEXT NULL, citations TEXT NOT NULL, error TEXT NULL, created_at TEXT NOT NULL)');
+        $this->pdo->exec('CREATE TABLE citation_probes (id INTEGER PRIMARY KEY AUTOINCREMENT, slug TEXT NOT NULL, question_hash TEXT NOT NULL, question TEXT NOT NULL, model TEXT NOT NULL, cited_site INTEGER NOT NULL, cited_article INTEGER NOT NULL, mentioned INTEGER NOT NULL, cited_url TEXT NULL, citations TEXT NOT NULL, answer_text TEXT NULL, gap_analysis TEXT NULL, analyzed_at TEXT NULL, error TEXT NULL, created_at TEXT NOT NULL)');
 
         $now = gmdate('Y-m-d H:i:s');
         $this->pdo->exec("INSERT INTO ai_bot_visits (bot_name, request_path, http_status, ip_hash, user_agent, created_at) VALUES ('GPTBot', '/llms.txt', 200, 'hash1', 'GPTBot/1.0', '{$now}')");
@@ -195,7 +195,50 @@ final class GeoDashboardControllerTest extends TestCase
         self::assertStringNotContainsString('08-17 12:34', $response->body);
     }
 
-    private function router(): Router
+    public function test_gap_analysis_requires_admin_and_csrf(): void
+    {
+        $response = $this->router()->dispatch(new ServerRequest('POST', '/admin/geo/probes/1/gap-analysis'));
+        self::assertSame(401, $response->status);
+
+        $this->session = ['admin_user_id' => 1, 'csrf_token' => 'test-token'];
+        $responseCsrf = $this->router()->dispatch(new ServerRequest('POST', '/admin/geo/probes/1/gap-analysis', parsedBody: ['csrf_token' => 'wrong']));
+        self::assertSame(419, $responseCsrf->status);
+    }
+
+    public function test_gap_analysis_executes_and_returns_json(): void
+    {
+        $this->session = ['admin_user_id' => 1, 'csrf_token' => 'test-token'];
+        $this->repo->write(new ArticleDocument(
+            'what-is-geo',
+            'What is GEO',
+            "# What is GEO\n\nBody here.",
+            new FrontMatter(['title' => 'What is GEO', 'slug' => 'what-is-geo', 'date' => '2026-10-01']),
+            $this->contentDir . '/what-is-geo.md'
+        ));
+
+        $this->pdo->exec("INSERT INTO citation_probes (slug, question_hash, question, model, cited_site, cited_article, mentioned, cited_url, citations, answer_text, created_at)
+            VALUES ('what-is-geo', 'hash1', 'What is GEO?', 'sonar', 0, 0, 0, NULL, '[]', 'Answer text here.', '2026-10-01 00:00:00')");
+
+        $fakeAi = new class implements \HolyMD\Geo\AiClient {
+            public function analyze(string $systemPrompt, string $articleMarkdown): \HolyMD\Geo\AiResponse { return new \HolyMD\Geo\AiResponse('{}'); }
+            public function complete(string $systemPrompt, string $userMessage): string {
+                return '### Gap Analysis Advice';
+            }
+        };
+
+        $analyzer = new \HolyMD\Geo\CitationGapAnalyzer($this->pdo, $this->repo, $fakeAi);
+        $router = $this->router($analyzer);
+
+        $response = $router->dispatch(new ServerRequest('POST', '/admin/geo/probes/1/gap-analysis', parsedBody: ['csrf_token' => 'test-token']));
+
+        self::assertSame(200, $response->status);
+        $data = json_decode($response->body, true);
+        self::assertTrue($data['success']);
+        self::assertSame(1, $data['probe_id']);
+        self::assertSame('### Gap Analysis Advice', $data['gap_analysis']);
+    }
+
+    private function router(?\HolyMD\Geo\CitationGapAnalyzer $gapAnalyzer = null): Router
     {
         $calc = new GeoScoreCalculator();
         $controller = new GeoDashboardController(
@@ -203,7 +246,8 @@ final class GeoDashboardControllerTest extends TestCase
             $calc,
             new AdminGuard($this->session),
             new Csrf($this->session),
-            $this->pdo
+            $this->pdo,
+            gapAnalyzer: $gapAnalyzer,
         );
         return new Router(geoDashboard: $controller);
     }

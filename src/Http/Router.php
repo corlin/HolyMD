@@ -63,6 +63,7 @@ final readonly class Router
         if ($this->jobs !== null && $request->method === 'GET' && $request->path === '/admin/jobs') return $this->jobs->index($request);
         if ($this->geoDashboard !== null && $request->method === 'GET' && $request->path === '/admin/geo') return $this->geoDashboard->index($request);
         if ($this->geoDashboard !== null && $request->method === 'POST' && $request->path === '/admin/geo/probes') return $this->geoDashboard->runProbes($request);
+        if ($this->geoDashboard !== null && $request->method === 'POST' && preg_match('#^/admin/geo/probes/([1-9][0-9]*)/gap-analysis$#', $request->path, $m) === 1) return $this->geoDashboard->gapAnalysis($request, (int) $m[1]);
         if ($this->profile !== null && $request->path === '/admin/profile' && $request->method === 'GET') return $this->profile->index($request);
         if ($this->profile !== null && $request->path === '/admin/profile' && $request->method === 'POST') return $this->profile->update($request);
         if ($this->pages !== null && $request->method === 'GET' && $request->path === '/admin/pages') return $this->pages->index($request);

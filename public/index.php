@@ -187,6 +187,7 @@ try {
         [...$publication->adminValues(), 'site_timezone' => \HolyMD\Config\SiteTimezone::fromEnvironment()->identifier()],
         new MarkdownRenderer(),
         new \HolyMD\Geo\GeoScoreCalculator(),
+        $container->get(\PDO::class),
     );
     $geoStore = new MySqlGeoProposalStore($container->get(\PDO::class));
     $geo = new GeoController(new ArticleRepository($root . '/content/articles'), new GeoReviewService($container->get(\HolyMD\Geo\AiClient::class)), $geoStore, new AdminGuard($_SESSION), new Csrf($_SESSION), $queue, new VersionService($root . '/content/versions'));
@@ -208,7 +209,8 @@ try {
         $publication,
         $probeConfiguration,
     ) : null;
-    $geoDashboard = new \HolyMD\Admin\GeoDashboardController(new ArticleRepository($root . '/content/articles'), new \HolyMD\Geo\GeoScoreCalculator(), new AdminGuard($_SESSION), new Csrf($_SESSION), $container->get(\PDO::class), $container->get(\HolyMD\Admin\AdminTimeFormatter::class), $probeRunner);
+    $gapAnalyzer = new \HolyMD\Geo\CitationGapAnalyzer($container->get(\PDO::class), $articles, $container->get(\HolyMD\Geo\AiClient::class));
+    $geoDashboard = new \HolyMD\Admin\GeoDashboardController(new ArticleRepository($root . '/content/articles'), new \HolyMD\Geo\GeoScoreCalculator(), new AdminGuard($_SESSION), new Csrf($_SESSION), $container->get(\PDO::class), $container->get(\HolyMD\Admin\AdminTimeFormatter::class), $probeRunner, $gapAnalyzer);
     $response = (new Router($controller, $geo, new AuthController($container->get(\PDO::class), $_SESSION, new Csrf($_SESSION)), $jobs, $profile, $pages, $geoDashboard))->dispatch(new ServerRequest(
         (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'HEAD') ? 'GET' : ($_SERVER['REQUEST_METHOD'] ?? 'GET'),
         $path,

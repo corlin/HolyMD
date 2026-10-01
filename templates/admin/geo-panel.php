@@ -46,6 +46,50 @@ $escape = static fn (string $value): string => htmlspecialchars($value, ENT_QUOT
     </details>
   <?php endif; ?>
 
+  <?php if (!empty($probes)): ?>
+    <details class="geo-score-inline-details geo-probes-block">
+      <summary class="geo-score-summary-bar">
+        <div class="geo-score-summary-left">
+          <span class="icon" aria-hidden="true">radar</span>
+          <span><?= __('AI citation probes') ?></span>
+        </div>
+        <span class="geo-score-pill is-good"><?= count($probes) ?></span>
+      </summary>
+      <div class="geo-probe-card-list">
+        <?php foreach ($probes as $probe): 
+          $probeState = $probe['cited_article'] ? 'cited' : ($probe['cited_site'] ? 'site' : ($probe['mentioned'] ? 'mentioned' : 'missed'));
+        ?>
+          <div class="geo-probe-mini-item" data-probe-id="<?= (int) $probe['id'] ?>">
+            <div class="geo-probe-mini-top">
+              <span class="geo-probe-state is-<?= $probeState ?>"><?= __(['cited' => 'Article cited', 'site' => 'Site cited', 'mentioned' => 'Mentioned', 'missed' => 'Not cited'][$probeState]) ?></span>
+              <strong class="geo-probe-q"><?= $escape($probe['question']) ?></strong>
+            </div>
+            <?php if (!empty($probe['gap_analysis'])): ?>
+              <details class="geo-gap-details">
+                <summary><span class="icon" aria-hidden="true">analytics</span><?= __('View gap analysis') ?></summary>
+                <div class="geo-gap-content prose"><?= nl2br($escape($probe['gap_analysis'])) ?></div>
+              </details>
+            <?php elseif (!empty($probe['answer_text']) && !$probe['cited_article']): ?>
+              <div class="geo-gap-actions" data-gap-action-container>
+                <button type="button" class="btn-gap-analyze button-link-secondary" data-analyze-probe="<?= (int) $probe['id'] ?>" data-csrf="<?= $escape($csrfToken) ?>">
+                  <span class="icon" aria-hidden="true">psychology</span><?= __('Analyze citation gap') ?>
+                </button>
+              </div>
+            <?php endif; ?>
+          </div>
+        <?php endforeach; ?>
+      </div>
+    </details>
+  <?php endif; ?>
+
+  <div class="geo-internal-links-block" data-geo-internal-links hidden>
+    <div class="geo-sub-header">
+      <span class="icon" aria-hidden="true">link</span>
+      <strong><?= __('Recommended internal links') ?></strong>
+    </div>
+    <div class="geo-internal-links-list" data-geo-internal-links-list></div>
+  </div>
+
   <div data-geo-review-status class="geo-review-status" aria-live="polite"></div>
   <div class="geo-catchall" data-geo-catchall hidden><ol data-geo-catchall-list aria-label="<?= __('Reference suggestions') ?>"></ol></div>
   <input type="hidden" data-geo-csrf value="<?= $escape($csrfToken) ?>">
