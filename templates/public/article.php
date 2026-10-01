@@ -43,6 +43,35 @@ require __DIR__ . '/_header.php';
     <?php if ($internalLinks !== []): ?><section aria-labelledby="internal-links-heading"><div class="article-section related"><h2 id="internal-links-heading"><?= __('Related links') ?></h2><ul><?php foreach ($internalLinks as $internalLink): ?><li><a href="<?= htmlspecialchars($internalLink, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($internalLink) ?></a></li><?php endforeach; ?></ul></div></section><?php endif; ?>
     <?php if ($faq !== []): ?><section aria-labelledby="faq-heading"><div class="article-section"><h2 id="faq-heading"><?= __('Frequently asked questions') ?></h2><?php foreach ($faq as $entry): ?><details><summary><?= htmlspecialchars($entry['question']) ?></summary><p><?= htmlspecialchars($entry['answer']) ?></p></details><?php endforeach; ?></div></section><?php endif; ?>
     <aside class="author-box" aria-labelledby="author-heading"><p class="eyebrow"><?= __('About the author') ?></p><h2 id="author-heading"><?= htmlspecialchars($authorName) ?></h2><p><?= __('{site} is a personal publication.', ['site' => $siteName]) ?></p></aside>
+    <?php
+    $giscusRepo = \HolyMD\Config\Env::get('HOLYMD_GISCUS_REPO');
+    $giscusRepoId = \HolyMD\Config\Env::get('HOLYMD_GISCUS_REPO_ID');
+    $giscusCategory = \HolyMD\Config\Env::get('HOLYMD_GISCUS_CATEGORY');
+    $giscusCategoryId = \HolyMD\Config\Env::get('HOLYMD_GISCUS_CATEGORY_ID');
+    $giscusMapping = \HolyMD\Config\Env::get('HOLYMD_GISCUS_MAPPING') ?: 'pathname';
+    $giscusReactions = \HolyMD\Config\Env::get('HOLYMD_GISCUS_REACTIONS_ENABLED') ?: '1';
+    ?>
+    <?php if ($giscusRepo && $giscusRepoId && $giscusCategory && $giscusCategoryId): ?>
+      <section class="article-section giscus-section" aria-labelledby="comments-heading">
+        <h2 id="comments-heading"><?= __('Comments') ?></h2>
+        <div class="giscus"></div>
+        <script src="https://giscus.app/client.js"
+          data-repo="<?= htmlspecialchars($giscusRepo, ENT_QUOTES, 'UTF-8') ?>"
+          data-repo-id="<?= htmlspecialchars($giscusRepoId, ENT_QUOTES, 'UTF-8') ?>"
+          data-category="<?= htmlspecialchars($giscusCategory, ENT_QUOTES, 'UTF-8') ?>"
+          data-category-id="<?= htmlspecialchars($giscusCategoryId, ENT_QUOTES, 'UTF-8') ?>"
+          data-mapping="<?= htmlspecialchars($giscusMapping, ENT_QUOTES, 'UTF-8') ?>"
+          data-strict="0"
+          data-reactions-enabled="<?= htmlspecialchars($giscusReactions, ENT_QUOTES, 'UTF-8') ?>"
+          data-emit-metadata="0"
+          data-input-position="top"
+          data-theme="preferred_color_scheme"
+          data-lang="<?= htmlspecialchars($siteLanguage, ENT_QUOTES, 'UTF-8') ?>"
+          crossorigin="anonymous"
+          async>
+        </script>
+      </section>
+    <?php endif; ?>
     <?php if ($related !== []): ?><section class="article-section related" aria-labelledby="related-heading"><p class="eyebrow"><?= __('Continue reading') ?></p><h2 id="related-heading"><?= __('Related articles') ?></h2><div class="article-list"><?php foreach ($related as $article): $showDate = false; require __DIR__ . '/_article_row.php'; endforeach; ?></div></section><?php endif; ?>
     </div>
   </div></article></main>

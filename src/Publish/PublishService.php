@@ -35,6 +35,7 @@ final readonly class PublishService
         private ?ArticleRepository $pages = null,
         private ?PDO $pdo = null,
         private ?GeoScoreCalculator $geoCalculator = null,
+        private ?DistributionService $distribution = null,
     ) {
     }
 
@@ -57,6 +58,7 @@ final readonly class PublishService
             }
             $published = array_values(array_filter($documents, static fn (ArticleDocument $document): bool => $document->frontMatter->get('status') === 'published'));
             $result = $this->renderSite($published, $temporaryRoot);
+            $this->distributionService()->writeVerificationFile($temporaryRoot);
             $this->publicTree->swap($temporaryRoot, $this->liveRoot);
             return $result;
         } finally {
@@ -179,6 +181,7 @@ final readonly class PublishService
             }
             $published = array_values(array_filter($documents, static fn (ArticleDocument $document): bool => $document->frontMatter->get('status') === 'published'));
             $result = $this->renderSite($published, $temporaryRoot);
+            $this->distributionService()->writeVerificationFile($temporaryRoot);
             if ($this->versions !== null) foreach ($versionsToConfirm as $version) $this->versions->stagePublished($version);
             foreach ($updates as $updated) {
                 $originals[$updated->slug] = $this->articles->read($updated->slug);
@@ -190,6 +193,7 @@ final readonly class PublishService
             $this->audit($slug, $nextStatus, 'published');
             if ($nextStatus === 'published' && $scoreDocument instanceof ArticleDocument) {
                 $this->recordGeoScore($scoreDocument);
+                $this->distributionService()->distribute($scoreDocument, $this->settings);
             }
             return $result;
         } catch (Throwable $exception) {
@@ -361,5 +365,10 @@ final readonly class PublishService
             // observable and repairable without pretending publication rolled back.
             $this->audit($article->slug, 'geo-score', 'failed', $exception->getMessage());
         }
+    }
+
+    private function distributionService(): DistributionService
+    {
+        return $this->distribution ?? new DistributionService();
     }
 }

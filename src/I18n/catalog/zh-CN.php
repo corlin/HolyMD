@@ -45,6 +45,7 @@ return [
     'Draft' => '草稿',
     'Published' => '已发布',
     'Withdrawn' => '已撤回',
+    'Comments' => '评论',
 
     // Articles
     'Writing studio' => '写作工作室',

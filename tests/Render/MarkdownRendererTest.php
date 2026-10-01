@@ -69,4 +69,13 @@ MARKDOWN;
             $admin,
         );
     }
+
+    public function test_renders_media_images_with_picture_and_webp_source(): void
+    {
+        $markdown = "![Architecture Diagram](/media/architecture-diagram-1234.png)\n\n![Landscape Photo](/media/landscape-photo-5678.jpg)";
+        $html = (new MarkdownRenderer())->render($markdown);
+
+        self::assertStringContainsString('<picture><source srcset="/media/architecture-diagram-1234.webp" type="image/webp"><img src="/media/architecture-diagram-1234.png" alt="Architecture Diagram" loading="lazy" decoding="async"></picture>', $html);
+        self::assertStringContainsString('<picture><source srcset="/media/landscape-photo-5678.webp" type="image/webp"><img src="/media/landscape-photo-5678.jpg" alt="Landscape Photo" loading="lazy" decoding="async"></picture>', $html);
+    }
 }

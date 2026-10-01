@@ -469,6 +469,20 @@ final readonly class ArticleController
                 if (!move_uploaded_file($file['tmp_name'], $destination) && !rename($file['tmp_name'], $destination)) {
                     throw new \RuntimeException('Unable to store the image.');
                 }
+                if ($extension !== 'webp' && function_exists('imagewebp') && function_exists('imagecreatefromstring')) {
+                    $rawContents = file_get_contents($destination);
+                    if ($rawContents !== false) {
+                        $imgRes = @imagecreatefromstring($rawContents);
+                        if ($imgRes !== false) {
+                            $webpName = (string) preg_replace('/\.[^.]+$/', '.webp', $name);
+                            if ($webpName !== $name) {
+                                $webpDest = $this->mediaRoot . '/' . $webpName;
+                                @imagewebp($imgRes, $webpDest, 85);
+                            }
+                            imagedestroy($imgRes);
+                        }
+                    }
+                }
                 $uploaded[] = [
                     'filename' => $name,
                     'url' => '/media/' . $name,
@@ -501,6 +515,10 @@ final readonly class ArticleController
             }
             if (!unlink($target)) {
                 throw new \RuntimeException('Unable to delete image.');
+            }
+            $webpTarget = (string) preg_replace('/\.(?:jpe?g|png)$/i', '.webp', $target);
+            if ($webpTarget !== $target && is_file($webpTarget)) {
+                @unlink($webpTarget);
             }
             return Response::redirect('/admin/media');
         } catch (InvalidArgumentException $exception) {
