@@ -164,3 +164,22 @@
 .status-scheduled{color:#b45309;background:#fef3c7;border-color:#fde68a}
 .scheduled-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;margin-bottom:16px;border-radius:6px;border:1px solid #fde68a;background:#fffbeb;color:#92400e;font-size:13px}
 .scheduled-banner .icon{color:#d97706;font-size:18px}
+.btn-outline-toggle.is-active{background:var(--line);color:var(--blue)}
+.outline-drawer{position:fixed;top:0;right:0;width:320px;height:100vh;background:#fffdf9;border-left:1px solid var(--line);box-shadow:-8px 0 24px rgba(32,35,31,.08);z-index:90;display:flex;flex-direction:column;animation:outlineSlideIn .18s cubic-bezier(0.16,1,0.3,1)}
+.outline-drawer[hidden]{display:none}
+@keyframes outlineSlideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
+.outline-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--line);background:var(--paper)}
+.outline-title{display:flex;align-items:center;gap:8px;font-weight:700;font-size:13.5px;color:var(--ink)}
+.outline-close-btn{background:transparent;border:none;cursor:pointer;padding:4px;color:var(--muted);border-radius:4px;display:flex;align-items:center}
+.outline-close-btn:hover{background:var(--line);color:var(--ink)}
+.outline-content{flex:1;overflow-y:auto;padding:12px 14px}
+.outline-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px}
+.outline-item{display:flex;align-items:center}
+.outline-link{display:flex;align-items:baseline;gap:6px;width:100%;padding:6px 10px;border-radius:6px;font-size:13px;color:var(--ink);text-decoration:none;border:1px solid transparent;background:transparent;cursor:pointer;transition:background .15s ease,border-color .15s ease;line-height:1.4;text-align:left}
+.outline-link:hover{background:var(--paper);border-color:var(--line);color:var(--blue)}
+.outline-link.level-1{font-weight:600;padding-left:8px}
+.outline-link.level-2{padding-left:20px;color:#3f3c36}
+.outline-link.level-3{padding-left:32px;color:var(--muted);font-size:12.5px}
+.outline-link.level-4,.outline-link.level-5,.outline-link.level-6{padding-left:44px;color:var(--muted);font-size:12px}
+.outline-level-tag{font-family:ui-monospace,SFMono-Regular,monospace;font-size:10px;font-weight:700;color:var(--muted);opacity:.8;flex-shrink:0}
+.outline-empty{padding:24px 12px;text-align:center;font-size:13px;color:var(--muted)}

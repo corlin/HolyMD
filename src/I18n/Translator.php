@@ -123,5 +123,6 @@ final class Translator
         'Copy link',
         'Revoke link',
         'Revoke this share link? Anyone using it will immediately lose access.',
+        'No headings found. Use # and ## to organize sections.',
     ];
 }

@@ -223,8 +223,16 @@
       }
     };
 
+    let outlineTimer;
+    const queueOutlineUpdate = () => {
+      if (!outlineDrawer || outlineDrawer.hasAttribute('hidden')) return;
+      clearTimeout(outlineTimer);
+      outlineTimer = setTimeout(renderOutline, 150);
+    };
+
     const listen = field => field.addEventListener('input', () => {
       queuePreview();
+      queueOutlineUpdate();
       dirty = true;
       setState('unsaved', t('Unsaved changes'));
       clearTimeout(saveTimer);
@@ -573,6 +581,125 @@
         }
       });
     }
+
+    const outlineDrawer = document.querySelector('#outline-drawer');
+    const outlineContent = document.querySelector('[data-outline-content]');
+    const outlineToggleBtn = document.querySelector('[data-toggle-outline]');
+    const outlineCloseBtn = document.querySelector('[data-close-outline]');
+
+    const parseHeadings = text => {
+      const lines = text.split('\n');
+      const headings = [];
+      let inCodeBlock = false;
+      let charOffset = 0;
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trim();
+        if (trimmed.startsWith('```') || trimmed.startsWith('~~~')) {
+          inCodeBlock = !inCodeBlock;
+        } else if (!inCodeBlock) {
+          const match = line.match(/^(#{1,6})\s+(.+)$/);
+          if (match) {
+            headings.push({
+              level: match[1].length,
+              text: match[2].trim(),
+              lineIndex: i,
+              charOffset: charOffset,
+              lineLength: line.length,
+            });
+          }
+        }
+        charOffset += line.length + 1;
+      }
+      return headings;
+    };
+
+    const renderOutline = () => {
+      if (!outlineContent || !outlineDrawer || outlineDrawer.hasAttribute('hidden')) return;
+      const text = body ? body.value : '';
+      const headings = parseHeadings(text);
+
+      if (headings.length === 0) {
+        outlineContent.innerHTML = `<p class="muted outline-empty">${t('No headings found. Use # and ## to organize sections.')}</p>`;
+        return;
+      }
+
+      const list = document.createElement('ul');
+      list.className = 'outline-list';
+
+      headings.forEach((heading, idx) => {
+        const li = document.createElement('li');
+        li.className = 'outline-item';
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = `outline-link level-${heading.level}`;
+
+        const tag = document.createElement('span');
+        tag.className = 'outline-level-tag';
+        tag.textContent = `H${heading.level}`;
+
+        const txt = document.createElement('span');
+        txt.className = 'outline-text';
+        txt.textContent = heading.text;
+
+        btn.appendChild(tag);
+        btn.appendChild(txt);
+
+        btn.addEventListener('click', () => {
+          if (!body) return;
+          body.focus();
+          body.setSelectionRange(heading.charOffset, heading.charOffset + heading.lineLength);
+          const lineHeight = 24;
+          body.scrollTop = Math.max(0, (heading.lineIndex - 3) * lineHeight);
+
+          if (preview) {
+            const previewHeadings = preview.querySelectorAll('h1, h2, h3, h4, h5, h6');
+            if (previewHeadings[idx]) {
+              previewHeadings[idx].scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+          }
+        });
+
+        li.appendChild(btn);
+        list.appendChild(li);
+      });
+
+      outlineContent.innerHTML = '';
+      outlineContent.appendChild(list);
+    };
+
+    const toggleOutline = forceOpen => {
+      if (!outlineDrawer) return;
+      const isHidden = outlineDrawer.hasAttribute('hidden');
+      const open = forceOpen !== undefined ? forceOpen : isHidden;
+      if (open) {
+        outlineDrawer.removeAttribute('hidden');
+        outlineToggleBtn?.classList.add('is-active');
+        renderOutline();
+      } else {
+        outlineDrawer.setAttribute('hidden', '');
+        outlineToggleBtn?.classList.remove('is-active');
+      }
+    };
+
+    if (outlineToggleBtn) {
+      outlineToggleBtn.addEventListener('click', () => toggleOutline());
+    }
+    if (outlineCloseBtn) {
+      outlineCloseBtn.addEventListener('click', () => toggleOutline(false));
+    }
+
+    window.addEventListener('keydown', event => {
+      const isMod = event.metaKey || event.ctrlKey;
+      if (isMod && (event.key === 'o' || event.key === 'O')) {
+        event.preventDefault();
+        toggleOutline();
+      } else if (event.key === 'Escape' && outlineDrawer && !outlineDrawer.hasAttribute('hidden')) {
+        toggleOutline(false);
+      }
+    });
 
     window.addEventListener('beforeunload', event => {
       if (!dirty && !saveInFlight) return;

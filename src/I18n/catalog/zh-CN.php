@@ -77,6 +77,11 @@ return [
     'Revoke this share link? Anyone using it will immediately lose access.' => '确定撤销此分享链接吗？所有正在使用该链接的人将立即失去访问权限。',
     'Draft preview mode' => '草稿审阅模式',
     'This article is an unreleased draft and is intended solely for review and proofreading. Please do not share publicly.' => '此文章为尚未公开发布的草稿，仅供同行校对与审阅参考，请勿公开传播。',
+    'Document outline (Ctrl/Cmd+O)' => '文档大纲 (Ctrl/Cmd+O)',
+    'Outline' => '大纲',
+    'Document outline' => '文档大纲',
+    'Close outline' => '关闭大纲',
+    'No headings found. Use # and ## to organize sections.' => '未检测到标题。使用 # 与 ## 组织内容章节。',
 
     // Articles
     'Writing studio' => '写作工作室',

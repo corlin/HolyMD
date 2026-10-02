@@ -51,9 +51,14 @@ $activeNav = 'articles';
     </label>
     <div class="editor-label-bar" style="display: flex; justify-content: space-between; align-items: baseline; margin-top: 16px;">
       <label class="markdown-label" for="markdown-body" style="margin: 0;">Markdown</label>
-      <button type="button" class="btn-media-drawer-toggle button-link-secondary" data-open-media-modal title="<?= __('Browse or insert media') ?>">
-        <span class="icon" aria-hidden="true">photo_library</span><?= __('Media library') ?>
-      </button>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <button type="button" class="btn-outline-toggle button-link-secondary" data-toggle-outline title="<?= __('Document outline (Ctrl/Cmd+O)') ?>">
+          <span class="icon" aria-hidden="true">format_list_bulleted</span><?= __('Outline') ?>
+        </button>
+        <button type="button" class="btn-media-drawer-toggle button-link-secondary" data-open-media-modal title="<?= __('Browse or insert media') ?>">
+          <span class="icon" aria-hidden="true">photo_library</span><?= __('Media library') ?>
+        </button>
+      </div>
     </div>
     <textarea id="markdown-body" name="body" form="<?= $publicationFormId ?>" spellcheck="true"><?= $escape($article->bodyMarkdown) ?></textarea>
     <input id="csrf-token" type="hidden" value="<?= $escape($csrfToken) ?>">
@@ -154,6 +159,21 @@ $activeNav = 'articles';
         </form>
       </details>
     <?php endif; ?>
+  </aside>
+
+  <aside id="outline-drawer" class="outline-drawer" aria-label="<?= __('Document outline') ?>" hidden>
+    <div class="outline-header">
+      <div class="outline-title">
+        <span class="icon" aria-hidden="true">format_list_bulleted</span>
+        <span><?= __('Document outline') ?></span>
+      </div>
+      <button type="button" class="outline-close-btn" data-close-outline title="<?= __('Close outline') ?>" aria-label="<?= __('Close outline') ?>">
+        <span class="icon" aria-hidden="true">close</span>
+      </button>
+    </div>
+    <div class="outline-content" id="outline-content" data-outline-content>
+      <p class="muted outline-empty"><?= __('No headings found. Use # and ## to organize sections.') ?></p>
+    </div>
   </aside>
 </main>
 <dialog id="media-modal" class="media-modal" aria-labelledby="media-modal-title">

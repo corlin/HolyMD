@@ -924,6 +924,16 @@ final class ArticleControllerTest extends TestCase
         self::assertNull($article->frontMatter->get('scheduled_version'));
     }
 
+    public function test_editor_renders_outline_button_and_drawer(): void
+    {
+        $adminRouter = $this->router(['admin_user_id' => 1, 'csrf_token' => 'csrf-val']);
+        $response = $adminRouter->dispatch(new ServerRequest('GET', '/admin/articles/first-note/edit'));
+        self::assertSame(200, $response->status);
+        self::assertStringContainsString('data-toggle-outline', $response->body);
+        self::assertStringContainsString('id="outline-drawer"', $response->body);
+        self::assertStringContainsString('data-outline-content', $response->body);
+    }
+
     /** @param array<string, mixed> $session */
     private function router(array $session): Router
     {
