@@ -1346,5 +1346,7 @@ JS);
         $styles = $this->generatedPublicStyles();
         self::assertStringContainsString('html[data-style="terminal"]', $styles);
         self::assertStringContainsString('--font-display: ui-monospace', $styles);
+        self::assertStringContainsString('html[data-style="monochrome"]', $styles);
+        self::assertStringContainsString('--font-display: "Helvetica Neue"', $styles);
     }
 }

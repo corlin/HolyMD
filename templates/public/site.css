@@ -624,3 +624,69 @@ html[data-style="terminal"] .toc-drawer-dialog {
   border: 1px solid var(--border-subtle);
 }
 
+/* --- 视觉风格主题: 极简黑白作品集 (Minimal Monochrome) --- */
+html[data-style="monochrome"] {
+  --surface-canvas: #ffffff;
+  --surface-raised: #f7f7f7;
+  --text-primary: #000000;
+  --text-muted: #666666;
+  --action-primary: #000000;
+  --border-subtle: #e5e5e5;
+  --focus-ring: #000000;
+  --font-display: "Helvetica Neue", Helvetica, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  --font-reading: "Helvetica Neue", Helvetica, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  --font-ui: "Helvetica Neue", Helvetica, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  --radius-subtle: 0px;
+  --radius-control: 0px;
+  --radius-item: 0px;
+  --radius-overlay: 0px;
+  --radius-card: 0px;
+  --radius-pill: 0px;
+}
+html[data-style="monochrome"][data-theme="dark"] {
+  --surface-canvas: #111111;
+  --surface-raised: #1c1c1c;
+  --text-primary: #ffffff;
+  --text-muted: #999999;
+  --action-primary: #ffffff;
+  --border-subtle: #2c2c2c;
+  --focus-ring: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  html[data-style="monochrome"]:not([data-theme="light"]) {
+    --surface-canvas: #111111;
+    --surface-raised: #1c1c1c;
+    --text-primary: #ffffff;
+    --text-muted: #999999;
+    --action-primary: #ffffff;
+    --border-subtle: #2c2c2c;
+    --focus-ring: #ffffff;
+  }
+}
+html[data-style="monochrome"] h1,
+html[data-style="monochrome"] h2,
+html[data-style="monochrome"] h3 {
+  font-weight: 800; letter-spacing: -.03em;
+}
+html[data-style="monochrome"] .feature-card,
+html[data-style="monochrome"] .article-row,
+html[data-style="monochrome"] .brand-identity-card {
+  border: 1px solid var(--border-subtle); border-radius: 0; box-shadow: none;
+  transition: border-color .15s ease, background .15s ease;
+}
+html[data-style="monochrome"] .feature-card:hover,
+html[data-style="monochrome"] .article-row:hover {
+  border-color: var(--text-primary);
+}
+html[data-style="monochrome"] .feature-badge {
+  background: var(--text-primary); color: var(--surface-canvas); border-radius: 0; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+}
+html[data-style="monochrome"] a {
+  text-decoration-color: currentColor;
+}
+html[data-style="monochrome"] .toc-rail-inner,
+html[data-style="monochrome"] .toc-drawer-dialog {
+  border: 1px solid var(--border-subtle); border-radius: 0;
+}
+
+
