@@ -424,4 +424,5 @@ return [
     'Terminal' => '极客终端',
     'Monochrome' => '极简黑白',
     'Newsletter' => '温暖手记',
+    'Available options: {options}' => '可选值：{options}',
 ];

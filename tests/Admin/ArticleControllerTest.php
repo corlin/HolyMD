@@ -635,6 +635,8 @@ final class ArticleControllerTest extends TestCase
         self::assertStringContainsString('Environment-managed', $response->body);
         self::assertStringContainsString('HOLYMD_SITE_LANGUAGE', $response->body);
         self::assertStringContainsString('zh-CN', $response->body);
+        self::assertStringContainsString('HOLYMD_SITE_STYLE', $response->body);
+        self::assertStringContainsString('editorial', $response->body);
         self::assertStringContainsString('holymd-build.php', $response->body);
     }
 
