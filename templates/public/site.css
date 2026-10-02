@@ -317,3 +317,218 @@ body:has(.image-viewer[open]) { overflow: hidden; }
 .load-more-wrap { margin-top: 2.5rem; text-align: center; }
 .button-load-more { display: inline-flex; align-items: center; justify-content: center; min-height: var(--control-size); padding: .75rem 1.75rem; background: var(--surface-raised); color: var(--action-primary); border: 1px solid var(--border-subtle); border-radius: var(--radius-subtle); font-family: var(--font-ui); font-size: .92rem; font-weight: 600; cursor: pointer; transition: background .15s ease, border-color .15s ease; }
 .button-load-more:hover { background: color-mix(in srgb, var(--surface-raised) 80%, var(--action-primary) 8%); border-color: var(--action-primary); }
+
+/* =========================================================
+   Personal Brand Page (Modern Editorial Brutalism)
+   ========================================================= */
+.brand-page {
+  --brand-lemon: #d4f23a;
+  --brand-lemon-ink: #182840;
+  --brand-lilac: #c9a8ff;
+  --brand-mint: #7fd1b9;
+  --brand-pink: #ffb8d1;
+  --brand-shadow: var(--text-primary);
+  --brand-card-bg: var(--surface-canvas);
+  --brand-card-border: var(--text-primary);
+  overflow-x: hidden;
+  padding-bottom: 5rem;
+}
+html[data-theme="dark"] .brand-page {
+  --brand-lemon: #c8e82d;
+  --brand-lemon-ink: #12161f;
+  --brand-lilac: #9b7de0;
+  --brand-mint: #4ea890;
+  --brand-pink: #d96f92;
+  --brand-shadow: rgba(0, 0, 0, 0.65);
+  --brand-card-bg: var(--surface-raised);
+  --brand-card-border: rgba(230, 237, 245, 0.45);
+}
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .brand-page {
+    --brand-lemon: #c8e82d;
+    --brand-lemon-ink: #12161f;
+    --brand-lilac: #9b7de0;
+    --brand-mint: #4ea890;
+    --brand-pink: #d96f92;
+    --brand-shadow: rgba(0, 0, 0, 0.65);
+    --brand-card-bg: var(--surface-raised);
+    --brand-card-border: rgba(230, 237, 245, 0.45);
+  }
+}
+.brand-container { width: min(calc(100% - var(--page-gutter)), 74rem); margin-inline: auto; }
+.brand-container-prose { width: min(calc(100% - var(--page-gutter)), 52rem); margin-inline: auto; }
+.brand-container-contact { width: min(calc(100% - var(--page-gutter)), 58rem); margin-inline: auto; }
+
+.brand-section { padding-block: clamp(3.5rem, 8vw, 6.5rem); position: relative; }
+
+/* 荧光划线高光与药丸标签 */
+.hl { background: var(--brand-lemon); color: var(--brand-lemon-ink); padding: .05em .3em; border-radius: 4px; box-decoration-break: clone; -webkit-box-decoration-break: clone; font-weight: 600; }
+.hl-lilac { background: var(--brand-lilac); color: var(--text-primary); padding: .05em .3em; border-radius: 4px; box-decoration-break: clone; -webkit-box-decoration-break: clone; font-weight: 600; }
+.pill-hl { display: inline-block; background: var(--brand-lemon); color: var(--brand-lemon-ink); padding: .15em .8em; border-radius: var(--radius-pill); font-weight: 700; border: 1.5px solid var(--text-primary); }
+
+/* 3D 实体阴影按钮系统 */
+.btn-brand {
+  display: inline-flex; align-items: center; gap: .5rem;
+  padding: .75rem 1.6rem; border: 2px solid var(--text-primary);
+  border-radius: var(--radius-pill); font-family: var(--font-ui);
+  font-size: .95rem; font-weight: 700; text-decoration: none;
+  cursor: pointer; transition: transform .15s ease, box-shadow .15s ease;
+  background: var(--surface-canvas); color: var(--text-primary);
+  box-shadow: 4px 4px 0 var(--brand-shadow);
+}
+.btn-brand:hover { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--brand-shadow); color: var(--text-primary); }
+.btn-brand:active { transform: translate(4px, 4px); box-shadow: 0 0 0 var(--brand-shadow); }
+.btn-brand-lemon { background: var(--brand-lemon); color: var(--brand-lemon-ink); }
+.btn-brand-lilac { background: var(--brand-lilac); }
+.btn-brand-dark  { background: var(--text-primary); color: var(--surface-canvas); }
+.btn-brand-outline { background: transparent; }
+.btn-brand-lg { padding: 1.1rem 2.2rem; font-size: 1.1rem; box-shadow: 5px 5px 0 var(--brand-shadow); }
+.btn-brand .arrow-r { transition: transform .2s ease; display: inline-block; }
+.btn-brand:hover .arrow-r { transform: translateX(3px); }
+
+/* 眉题 */
+.brand-eyebrow {
+  font-family: var(--font-ui); font-size: .8rem; font-weight: 700;
+  letter-spacing: .16em; text-transform: uppercase; color: var(--text-muted);
+  display: inline-flex; align-items: center; gap: .6rem; margin-bottom: 1.25rem;
+}
+.brand-eyebrow::before { content: ""; width: 1.4rem; height: 2px; background: currentColor; }
+
+/* 标题通用 */
+.brand-sec-head { margin-bottom: clamp(2rem, 4vw, 3.5rem); max-width: 52rem; }
+.brand-sec-title {
+  font-family: var(--font-display); font-size: clamp(1.85rem, 3.5vw, 2.75rem);
+  line-height: 1.25; font-weight: 600; color: var(--text-primary); margin-bottom: 1rem;
+}
+.brand-sec-lede { font-size: clamp(1rem, 1.15vw, 1.15rem); line-height: 1.85; color: var(--text-muted); }
+.brand-sec-lede p + p { margin-top: .75rem; }
+
+/* Hero 首屏 */
+.brand-hero { padding-block: clamp(3rem, 6vw, 5.5rem); }
+.brand-hero-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, .85fr); gap: clamp(2rem, 5vw, 4rem); align-items: center; }
+.brand-hero-title { font-family: var(--font-display); font-size: clamp(2.2rem, 4.5vw, 3.5rem); line-height: 1.18; font-weight: 600; margin-bottom: 1.5rem; letter-spacing: -.02em; }
+.brand-arrow-doodle { display: inline-block; vertical-align: middle; margin-left: .35rem; color: var(--text-primary); }
+.brand-hero-sub { font-size: clamp(1.05rem, 1.2vw, 1.25rem); line-height: 1.8; color: var(--text-primary); margin-bottom: 1.5rem; font-weight: 500; }
+.brand-hero-stance { margin-bottom: 2rem; padding-left: 1rem; border-left: 3px solid var(--brand-lemon); font-size: .95rem; line-height: 1.75; color: var(--text-muted); }
+.brand-hero-stance p + p { margin-top: .5rem; }
+.brand-hero-ctas { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; }
+
+.brand-hero-photo-wrap { position: relative; display: flex; justify-content: center; }
+.brand-hero-card {
+  position: relative; width: min(100%, 22rem); aspect-ratio: 4 / 5;
+  background: var(--surface-raised); border: 2.5px solid var(--text-primary);
+  border-radius: 1.25rem; overflow: hidden; box-shadow: 6px 6px 0 var(--brand-shadow);
+}
+.brand-hero-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.brand-hero-avatar-placeholder { width: 100%; height: 100%; display: grid; place-items: center; background: color-mix(in srgb, var(--brand-lilac) 25%, var(--surface-raised)); }
+.brand-avatar-initial { font-family: var(--font-display); font-size: 5rem; font-weight: 700; color: var(--text-primary); }
+.brand-photo-tag {
+  position: absolute; bottom: .75rem; left: .75rem;
+  background: color-mix(in srgb, var(--surface-canvas) 85%, transparent);
+  backdrop-filter: blur(8px); padding: .35rem .75rem; border-radius: var(--radius-pill);
+  font: 700 .72rem var(--font-ui); color: var(--text-primary); border: 1px solid var(--border-subtle);
+}
+.brand-sparkle { position: absolute; pointer-events: none; font-weight: 700; user-select: none; }
+.sp-1 { top: -1rem; right: .5rem; font-size: 1.75rem; color: var(--brand-lilac); }
+.sp-2 { bottom: 1.5rem; left: -1rem; font-size: 1.25rem; color: var(--brand-lemon); }
+.sp-3 { top: 40%; right: -1.25rem; font-size: 1rem; color: var(--brand-mint); }
+
+@media (max-width: 52rem) {
+  .brand-hero-grid { grid-template-columns: 1fr; }
+  .brand-hero-photo-wrap { order: -1; margin-bottom: 1.5rem; }
+  .brand-hero-card { width: min(100%, 18rem); }
+}
+
+/* Stats Strip */
+.brand-stats-strip { padding-block: 1rem 3rem; }
+.brand-stats-inner {
+  background: var(--surface-canvas); border: 2px solid var(--text-primary);
+  border-radius: var(--radius-pill); padding: 1rem 2rem; box-shadow: 5px 5px 0 var(--brand-shadow);
+  display: flex; align-items: center; gap: 1.5rem; overflow-x: auto; scrollbar-width: none;
+}
+.brand-stats-inner::-webkit-scrollbar { display: none; }
+.brand-stats-label { font-family: var(--font-ui); font-size: .85rem; font-weight: 800; color: var(--text-muted); white-space: nowrap; display: flex; align-items: center; gap: .5rem; }
+.brand-stats-label::after { content: "→"; color: var(--text-primary); }
+.brand-stats-list { display: flex; align-items: center; gap: 1.25rem; flex: 1; min-width: 0; }
+.brand-stats-item { font-family: var(--font-ui); font-size: .92rem; font-weight: 700; white-space: nowrap; display: inline-flex; align-items: baseline; gap: .4rem; }
+.brand-stats-item .num { font-family: var(--font-display); font-size: 1.35rem; font-weight: 700; }
+.brand-stats-item .num.is-highlight { background: var(--brand-lemon); color: var(--brand-lemon-ink); padding-inline: .35rem; border-radius: 4px; }
+.brand-stats-sep { color: var(--border-subtle); }
+
+@media (max-width: 44rem) {
+  .brand-stats-inner { flex-direction: column; align-items: flex-start; border-radius: 1.25rem; padding: 1rem 1.25rem; gap: .75rem; }
+  .brand-stats-list { flex-wrap: wrap; gap: .75rem 1rem; }
+}
+
+/* Offer 矩阵 */
+.brand-offer-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: 1.5rem; }
+.brand-offer-card {
+  position: relative; background: var(--surface-canvas); border: 2px solid var(--text-primary);
+  border-radius: 1.25rem; padding: 2rem 1.75rem; box-shadow: 5px 5px 0 var(--brand-shadow);
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+.brand-offer-card:hover { transform: translate(-2px, -2px); box-shadow: 7px 7px 0 var(--brand-shadow); }
+.brand-card-num-tag { position: absolute; top: 1.25rem; right: 1.5rem; font: 600 .75rem var(--font-code); color: var(--text-muted); }
+.brand-card-icon {
+  width: 3.25rem; height: 3.25rem; border: 2px solid var(--text-primary); border-radius: .85rem;
+  display: grid; place-items: center; font-size: 1.4rem; font-weight: 800; margin-bottom: 1.25rem;
+}
+.bg-lemon { background: var(--brand-lemon); color: var(--brand-lemon-ink); }
+.bg-lilac { background: var(--brand-lilac); }
+.bg-dark  { background: var(--text-primary); color: var(--surface-canvas); }
+.brand-offer-card h3 { font-family: var(--font-display); font-size: 1.45rem; line-height: 1.3; margin: 0 0 .75rem; color: var(--text-primary); }
+.brand-card-desc { color: var(--text-muted); font-size: .92rem; line-height: 1.8; }
+.brand-card-desc p + p { margin-top: .5rem; }
+
+/* Track 经历洞察 */
+.brand-track-list { display: flex; flex-direction: column; border-top: 1.5px solid var(--border-subtle); }
+.brand-track-item {
+  display: grid; grid-template-columns: minmax(0, .95fr) minmax(0, 1.45fr); gap: clamp(1.5rem, 4vw, 4rem);
+  padding-block: 2.25rem; border-bottom: 1.5px solid var(--border-subtle); align-items: start;
+}
+.brand-track-num { font-family: var(--font-display); font-size: clamp(1.4rem, 2.2vw, 1.85rem); font-weight: 600; line-height: 1.3; color: var(--text-primary); }
+.brand-track-insight { color: var(--text-muted); font-size: clamp(.95rem, 1.05vw, 1.05rem); line-height: 1.85; }
+
+@media (max-width: 44rem) {
+  .brand-track-item { grid-template-columns: 1fr; gap: .75rem; padding-block: 1.5rem; }
+}
+
+/* Identity 横滑卡片墙 */
+.brand-identity-track-wrap { position: relative; padding-block: 1.5rem; margin-inline: calc(var(--page-gutter) * -0.5); }
+.brand-identity-line { position: absolute; top: 2.75rem; left: 0; right: 0; height: 2px; background: var(--text-primary); opacity: .4; pointer-events: none; }
+.brand-identity-list {
+  display: flex; gap: 1.5rem; overflow-x: auto; scroll-snap-type: x mandatory;
+  padding: 1.5rem var(--page-gutter) 2rem; scrollbar-width: thin; -webkit-overflow-scrolling: touch;
+}
+.brand-identity-card {
+  flex: 0 0 19rem; scroll-snap-align: start; background: var(--surface-canvas);
+  border: 2px solid var(--text-primary); border-radius: 1.15rem; padding: 1.75rem 1.5rem;
+  box-shadow: 5px 5px 0 var(--brand-shadow); position: relative; transition: transform .2s ease;
+}
+.brand-identity-card:hover { transform: translate(-2px, -2px); }
+.brand-identity-card::before {
+  content: ""; position: absolute; top: -1rem; left: 50%; transform: translateX(-50%) rotate(-3deg);
+  width: 2rem; height: 1.35rem; border: 2px solid var(--text-primary); border-radius: 3px; z-index: 2;
+}
+.clip-lemon::before { background: var(--brand-lemon); }
+.clip-lilac::before { background: var(--brand-lilac); }
+.clip-mint::before  { background: var(--brand-mint); }
+.clip-pink::before  { background: var(--brand-pink); }
+.brand-id-tag { font: 700 .75rem var(--font-code); color: var(--text-muted); margin-bottom: .4rem; letter-spacing: .08em; }
+.brand-id-title { font-family: var(--font-display); font-size: 1.5rem; font-weight: 600; margin: 0 0 .75rem; color: var(--text-primary); }
+.brand-id-body { font-size: .9rem; line-height: 1.75; color: var(--text-muted); }
+.brand-id-body p + p { margin-top: .4rem; }
+.brand-identity-close { text-align: center; margin-top: 2rem; font-size: 1.15rem; font-weight: 600; color: var(--text-primary); }
+
+/* Markdown 深度自述正文 */
+.brand-editorial-prose { margin-inline: auto; font-size: 1.05rem; line-height: 1.85; }
+
+/* Contact 行动号召 */
+.brand-contact-actions { display: flex; justify-content: center; margin-block: 1.5rem 2rem; }
+.brand-social-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 1rem 1.5rem; }
+.brand-social-item {
+  font: 600 .9rem var(--font-ui); color: var(--text-primary); padding: .4rem .9rem;
+  border: 1.5px solid var(--border-subtle); border-radius: var(--radius-pill); text-decoration: none;
+  background: var(--surface-canvas); transition: border-color .15s ease, background .15s ease;
+}
+.brand-social-item:hover { border-color: var(--text-primary); background: var(--surface-raised); }

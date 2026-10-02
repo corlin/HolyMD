@@ -15,6 +15,16 @@ $skipTarget = '#main-content';
 $skipLabel = \HolyMD\I18n\Translator::text('Skip to content');
 $activeNav = $page->slug;
 require __DIR__ . '/_header.php';
+
+$isBrandPage = $page->frontMatter->get('template') === 'brand'
+    || $page->frontMatter->get('stats') !== null
+    || $page->frontMatter->get('offers') !== null
+    || $page->frontMatter->get('tracks') !== null
+    || $page->frontMatter->get('identities') !== null;
 ?>
+<?php if ($isBrandPage): ?>
+  <?php require __DIR__ . '/_brand_page.php'; ?>
+<?php else: ?>
   <main id="main-content" class="shell page-intro"><p class="eyebrow"><?= htmlspecialchars($page->title) ?></p><h1><?= htmlspecialchars($page->title) ?></h1><div class="prose page-copy"><?= $contentHtml ?></div></main>
+<?php endif; ?>
 <?php require __DIR__ . '/_footer.php'; ?>

@@ -98,7 +98,14 @@ final class StaticBuilder
             $rendered[] = $data;
         }
         $siteUrl = rtrim($input->settings->siteUrl, '/') . '/';
-        $authorSchema = $this->authorSchema($input);
+        $aboutPage = null;
+        foreach ($publishedPages as $p) {
+            if ($p->slug === 'about') {
+                $aboutPage = $p;
+                break;
+            }
+        }
+        $authorSchema = $this->authorSchema($input, $aboutPage);
 
         foreach ($publishedPages as $page) {
             $route = '/' . $page->slug . '/';
@@ -479,16 +486,31 @@ final class StaticBuilder
         return rtrim($input->settings->siteUrl, '/') . $path;
     }
 
-    /** @return array{'@type': string, name: string, url: string, description?: string} */
-    private function authorSchema(BuildInput $input): array
+    /** @return array{'@type': string, name: string, url: string, description?: string, knowsAbout?: list<string>} */
+    private function authorSchema(BuildInput $input, ?ArticleDocument $aboutPage = null): array
     {
         $schema = [
             '@type' => 'Person',
             'name' => $input->settings->authorName,
             'url' => rtrim($input->settings->siteUrl, '/') . '/',
         ];
-        if (trim($input->settings->about) !== '') {
+        $tagline = $aboutPage?->frontMatter->get('tagline');
+        if (is_string($tagline) && trim($tagline) !== '') {
+            $schema['description'] = trim($tagline);
+        } elseif (trim($input->settings->about) !== '') {
             $schema['description'] = $input->settings->about;
+        }
+        $identities = $aboutPage?->frontMatter->get('identities');
+        if (is_array($identities)) {
+            $knows = [];
+            foreach ($identities as $item) {
+                if (is_array($item) && isset($item['title']) && is_string($item['title'])) {
+                    $knows[] = $item['title'];
+                }
+            }
+            if ($knows !== []) {
+                $schema['knowsAbout'] = $knows;
+            }
         }
         return $schema;
     }
