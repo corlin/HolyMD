@@ -70,6 +70,12 @@ final readonly class Router
         if ($this->articles !== null && $request->method === 'POST' && preg_match('#^/admin/articles/[a-z0-9-]+/(publish|withdraw)$#', $request->path) === 1) {
             return $this->articles->publish($request);
         }
+        if ($this->articles !== null && $request->method === 'POST' && preg_match('#^/admin/articles/[a-z0-9-]+/schedule$#', $request->path) === 1) {
+            return $this->articles->schedule($request);
+        }
+        if ($this->articles !== null && $request->method === 'POST' && preg_match('#^/admin/articles/[a-z0-9-]+/schedule/cancel$#', $request->path) === 1) {
+            return $this->articles->cancelSchedule($request);
+        }
         if ($this->articles !== null && $request->method === 'POST' && preg_match('#^/admin/articles/[a-z0-9-]+/delete$#', $request->path) === 1) return $this->articles->delete($request);
         if ($this->articles !== null && $request->method === 'GET' && $request->path === '/admin/media') return $this->articles->media($request);
         if ($this->articles !== null && $request->method === 'POST' && $request->path === '/admin/media') return $this->articles->uploadMedia($request);

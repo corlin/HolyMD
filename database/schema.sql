@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS `articles` (
     `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     `source_path` VARCHAR(768) NOT NULL,
     `slug` VARCHAR(255) NOT NULL,
-    `state` ENUM('draft', 'published', 'withdrawn') NOT NULL DEFAULT 'draft',
+    `state` ENUM('draft', 'scheduled', 'published', 'withdrawn') NOT NULL DEFAULT 'draft',
     `metadata_checksum` CHAR(64) NOT NULL,
     `published_at` DATETIME(6) NULL,
     `withdrawn_at` DATETIME(6) NULL,

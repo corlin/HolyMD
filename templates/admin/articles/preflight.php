@@ -35,13 +35,42 @@ $activeNav = 'articles';
   <div class="preflight-actions">
     <a href="<?= $path('/admin/articles/' . rawurlencode($candidate->slug) . '/edit') ?>"><?= __('Return to editor') ?></a>
     <?php if ($preflight->canPublish()): ?>
-      <form method="post" action="<?= $path('/admin/articles/' . rawurlencode($candidate->slug) . '/publish') ?>">
-        <input type="hidden" name="csrf_token" value="<?= $escape($csrfToken) ?>">
-        <input type="hidden" name="expected_checksum" value="<?= $escape($expectedChecksum) ?>">
-        <input type="hidden" name="preflight_acknowledgement" value="<?= $escape($preflight->checksum) ?>">
-        <?php foreach ($fields as $name => $value): ?><textarea hidden name="<?= $escape($name) ?>"><?= $escape($value) ?></textarea><?php endforeach; ?>
-        <button type="submit"><span class="icon" aria-hidden="true">publish</span><?= __('Confirm publication') ?></button>
-      </form>
+      <div style="flex: 1; max-width: 480px;">
+        <div class="publish-mode-selector" style="margin-bottom: 12px; display: flex; gap: 16px; font-size: 0.95rem;">
+          <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+            <input type="radio" name="publish_mode" value="now" checked onchange="document.getElementById('schedule-options').hidden = true; document.getElementById('preflight-form').action = '<?= $path('/admin/articles/' . rawurlencode($candidate->slug) . '/publish') ?>'; document.getElementById('btn-confirm-text').textContent = '<?= $escape(__('Confirm publication')) ?>';">
+            <?= __('Publish immediately') ?>
+          </label>
+          <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+            <input type="radio" name="publish_mode" value="schedule" onchange="document.getElementById('schedule-options').hidden = false; document.getElementById('preflight-form').action = '<?= $path('/admin/articles/' . rawurlencode($candidate->slug) . '/schedule') ?>'; document.getElementById('btn-confirm-text').textContent = '<?= $escape(__('Schedule publication')) ?>';">
+            <?= __('Schedule publication') ?>
+          </label>
+        </div>
+
+        <form id="preflight-form" method="post" action="<?= $path('/admin/articles/' . rawurlencode($candidate->slug) . '/publish') ?>">
+          <input type="hidden" name="csrf_token" value="<?= $escape($csrfToken) ?>">
+          <input type="hidden" name="expected_checksum" value="<?= $escape($expectedChecksum) ?>">
+          <input type="hidden" name="preflight_acknowledgement" value="<?= $escape($preflight->checksum) ?>">
+          <?php foreach ($fields as $name => $value): ?><textarea hidden name="<?= $escape($name) ?>"><?= $escape($value) ?></textarea><?php endforeach; ?>
+
+          <div id="schedule-options" hidden style="margin-bottom: 16px; padding: 12px; background: var(--surface-canvas); border-radius: 6px; border: 1px solid var(--border-subtle);">
+            <label style="display: block; font-weight: 500; font-size: 0.85rem; margin-bottom: 6px;">
+              <?= __('Publication date and time') ?>
+              <span class="muted" style="font-weight: normal;">(<?= __('Site timezone: {tz}', ['tz' => $siteTimezone ?? 'UTC']) ?>)</span>
+            </label>
+            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+              <input type="datetime-local" name="scheduled_at" id="scheduled-at-input" style="padding: 6px 10px; font-size: 0.9rem;">
+              <button type="button" class="secondary" style="font-size: 0.85rem; padding: 4px 8px;" onclick="
+                const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0);
+                const pad = n => String(n).padStart(2, '0');
+                document.getElementById('scheduled-at-input').value = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+              "><?= __('Tomorrow at 09:00') ?></button>
+            </div>
+          </div>
+
+          <button type="submit" id="btn-confirm-action"><span class="icon" aria-hidden="true">publish</span><span id="btn-confirm-text"><?= __('Confirm publication') ?></span></button>
+        </form>
+      </div>
     <?php endif; ?>
   </div>
 </section>

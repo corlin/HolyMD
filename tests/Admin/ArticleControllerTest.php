@@ -849,6 +849,81 @@ final class ArticleControllerTest extends TestCase
         }
     }
 
+    public function test_schedule_article_requires_authentication(): void
+    {
+        $router = $this->router([]);
+        $response = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/schedule', [], [
+            'scheduled_at' => '2026-10-05T09:00',
+        ]));
+        self::assertSame(401, $response->status);
+    }
+
+    public function test_schedule_article_validates_future_time(): void
+    {
+        $adminRouter = $this->router(['admin_user_id' => 1, 'csrf_token' => 'csrf-val']);
+        $payload = $this->confirmedPublishPayload($adminRouter, [
+            'csrf_token' => 'csrf-val',
+            'scheduled_at' => '2020-01-01T09:00',
+        ]);
+
+        $response = $adminRouter->dispatch(new ServerRequest('POST', '/admin/articles/first-note/schedule', [], $payload));
+        self::assertSame(422, $response->status);
+        self::assertStringContainsString('Scheduled publication time must be in the future', $response->body);
+    }
+
+    public function test_schedule_article_creates_snapshot_and_sets_scheduled_state(): void
+    {
+        $adminRouter = $this->router(['admin_user_id' => 1, 'csrf_token' => 'csrf-val']);
+        $futureTime = (new \DateTimeImmutable('+2 days', new \DateTimeZone('UTC')))->format('Y-m-d\TH:i');
+        $payload = $this->confirmedPublishPayload($adminRouter, [
+            'csrf_token' => 'csrf-val',
+            'scheduled_at' => $futureTime,
+        ]);
+
+        $response = $adminRouter->dispatch(new ServerRequest('POST', '/admin/articles/first-note/schedule', [], $payload));
+        self::assertSame(202, $response->status);
+        self::assertStringContainsString('Publication scheduled', $response->body);
+
+        $repository = new ArticleRepository($this->root . '/articles');
+        $article = $repository->read('first-note');
+        self::assertSame('scheduled', $article->frontMatter->get('status'));
+        self::assertNotNull($article->frontMatter->get('scheduled_at'));
+        self::assertNotNull($article->frontMatter->get('scheduled_version'));
+
+        // Check snapshot was stored in versions directory
+        $version = (string) $article->frontMatter->get('scheduled_version');
+        self::assertFileExists($this->root . '/versions/publish-inputs/' . $version . '.md');
+
+        // Check edit view renders scheduled banner
+        $editResponse = $adminRouter->dispatch(new ServerRequest('GET', '/admin/articles/first-note/edit'));
+        self::assertSame(200, $editResponse->status);
+        self::assertStringContainsString('scheduled-banner', $editResponse->body);
+        self::assertStringContainsString('Cancel schedule', $editResponse->body);
+    }
+
+    public function test_cancel_schedule_restores_draft(): void
+    {
+        $adminRouter = $this->router(['admin_user_id' => 1, 'csrf_token' => 'csrf-val']);
+        $futureTime = (new \DateTimeImmutable('+2 days', new \DateTimeZone('UTC')))->format('Y-m-d\TH:i');
+        $payload = $this->confirmedPublishPayload($adminRouter, [
+            'csrf_token' => 'csrf-val',
+            'scheduled_at' => $futureTime,
+        ]);
+
+        $adminRouter->dispatch(new ServerRequest('POST', '/admin/articles/first-note/schedule', [], $payload));
+
+        $cancelResponse = $adminRouter->dispatch(new ServerRequest('POST', '/admin/articles/first-note/schedule/cancel', [], [
+            'csrf_token' => 'csrf-val',
+        ]));
+        self::assertSame(303, $cancelResponse->status);
+
+        $repository = new ArticleRepository($this->root . '/articles');
+        $article = $repository->read('first-note');
+        self::assertSame('draft', $article->frontMatter->get('status'));
+        self::assertNull($article->frontMatter->get('scheduled_at'));
+        self::assertNull($article->frontMatter->get('scheduled_version'));
+    }
+
     /** @param array<string, mixed> $session */
     private function router(array $session): Router
     {

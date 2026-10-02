@@ -25,6 +25,18 @@ $activeNav = 'articles';
         <output id="save-state" aria-live="polite" data-state="saved"><span class="icon" aria-hidden="true" data-save-icon>check_circle</span><span data-save-label><?= __('Source saved') ?></span></output>
       </div>
     </div>
+    <?php if ($status === 'scheduled'): ?>
+      <div class="scheduled-banner">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="icon" aria-hidden="true">schedule</span>
+          <span><?= __('This article is scheduled to publish at {time}.', ['time' => (string) $article->frontMatter->get('scheduled_at')]) ?></span>
+        </div>
+        <form method="post" action="<?= $path('/admin/articles/' . rawurlencode($article->slug) . '/schedule/cancel') ?>" style="margin: 0;">
+          <input type="hidden" name="csrf_token" value="<?= $escape($csrfToken) ?>">
+          <button type="submit" class="button-link-secondary" style="color: inherit; text-decoration: underline; padding: 0; background: none; border: none; cursor: pointer;"><?= __('Cancel schedule') ?></button>
+        </form>
+      </div>
+    <?php endif; ?>
     <label>
       <?= __('Title') ?>
       <input id="article-title" name="title" form="<?= $publicationFormId ?>" value="<?= $escape($article->title) ?>">

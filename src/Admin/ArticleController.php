@@ -292,10 +292,119 @@ final readonly class ArticleController
         $diff = $this->diffService ?? new DiffService();
         $isFirstPublication = ($publishedBody === null);
         $bodyDiffHtml = $diff->renderHtml($publishedBody ?? '', $candidate->bodyMarkdown);
+        $siteTimezone = (string) ($this->siteSettings['site_timezone'] ?? 'UTC');
 
         ob_start();
         require dirname(__DIR__, 2) . '/templates/admin/articles/preflight.php';
         return new Response($preflight->canPublish() ? 200 : 422, (string) ob_get_clean(), ['Content-Type' => 'text/html; charset=utf-8']);
+    }
+
+    public function schedule(ServerRequest $request): Response
+    {
+        if (($response = $this->authorizeMutation($request)) !== null) {
+            $payload = json_decode($response->body, true);
+            return $this->publicationError(is_array($payload) && is_string($payload['error'] ?? null) ? $payload['error'] : 'Schedule request was rejected.', $response->status);
+        }
+        if (preg_match('#^/admin/articles/([a-z0-9]+(?:-[a-z0-9]+)*)/schedule$#', $request->path, $matches) !== 1) {
+            return $this->publicationError('Invalid schedule route.', 422);
+        }
+        if ($this->publisher === null) {
+            return $this->publicationError('Publishing is not configured.', 503, $matches[1]);
+        }
+
+        try {
+            $slug = $matches[1];
+            $article = $this->articles->read($slug);
+            $hasSubmittedBody = $request->input('body') !== null;
+            $updated = $hasSubmittedBody ? $this->submittedArticle($request, $article) : $article;
+            $expectedChecksum = $request->input('expected_checksum');
+            if ($hasSubmittedBody && (!is_string($expectedChecksum) || !hash_equals($this->sourceChecksum($article), $expectedChecksum))) {
+                return $this->publicationError('The article changed in another editor session. Reload before publishing.', 409, $slug);
+            }
+            $preflight = $this->publisher->preflight($updated);
+            if (!$preflight->canPublish()) {
+                return $this->publicationError(implode("\n", $preflight->blockers), 422, $slug);
+            }
+            if ($preflight->requiresAcknowledgement() && !hash_equals($preflight->checksum, (string) $request->input('preflight_acknowledgement', ''))) {
+                return $this->publicationError('A preflight acknowledgement bound to the current article is required.', 409, $slug);
+            }
+
+            $scheduledAtRaw = (string) $request->input('scheduled_at', '');
+            if (trim($scheduledAtRaw) === '') {
+                return $this->publicationError('A scheduled publication time is required.', 422, $slug);
+            }
+
+            $siteTz = (string) ($this->siteSettings['site_timezone'] ?? 'UTC');
+            $timezone = new \DateTimeZone($siteTz);
+            $scheduledDate = \DateTimeImmutable::createFromFormat('Y-m-d\TH:i', $scheduledAtRaw, $timezone)
+                ?: \DateTimeImmutable::createFromFormat('Y-m-d H:i:s', $scheduledAtRaw, $timezone)
+                ?: \DateTimeImmutable::createFromFormat(\DateTimeInterface::ATOM, $scheduledAtRaw);
+
+            if ($scheduledDate === false) {
+                return $this->publicationError('Invalid scheduled publication time format.', 422, $slug);
+            }
+
+            $scheduledUtc = $scheduledDate->setTimezone(new \DateTimeZone('UTC'));
+            $utcNow = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+            if ($scheduledUtc <= $utcNow) {
+                return $this->publicationError('Scheduled publication time must be in the future.', 422, $slug);
+            }
+
+            $selectedVersion = $this->versions->capturePublicationInput($updated);
+            $scheduledArticle = $updated->withFrontMatter(
+                $updated->frontMatter
+                    ->with('status', 'scheduled')
+                    ->with('scheduled_at', $scheduledUtc->format('Y-m-d\TH:i:s\Z'))
+                    ->with('scheduled_version', $selectedVersion)
+            );
+            $this->articles->write($scheduledArticle);
+
+            $jobId = null;
+            if ($this->queue !== null) {
+                $jobId = $this->queue->enqueueBuild(
+                    $scheduledArticle,
+                    'publish',
+                    'publish-inputs/' . $selectedVersion . '.md',
+                    $scheduledUtc->format('Y-m-d H:i:s')
+                );
+            }
+
+            $message = 'Publication scheduled.';
+            $detail = '<p>This article is scheduled to publish at ' . htmlspecialchars($scheduledUtc->format('Y-m-d H:i:s \U\T\C')) . ' (' . htmlspecialchars($scheduledDate->format('Y-m-d H:i:s')) . ' ' . htmlspecialchars($siteTz) . ').</p>';
+            if ($jobId !== null) {
+                $detail .= '<p>Job ' . (int) $jobId . ' was queued and will run automatically at that time.</p>';
+            }
+            return new Response(202, '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>' . $message . '</title><link rel="stylesheet" href="/assets/admin.css"></head><body><main class="result-page"><h1>' . $message . '</h1>' . $detail . '<p><a href="/admin/articles/' . rawurlencode($slug) . '/edit">Return to editor</a></p></main></body></html>', ['Content-Type' => 'text/html; charset=utf-8']);
+        } catch (InvalidArgumentException $exception) {
+            return $this->publicationError($exception->getMessage(), 422, $matches[1]);
+        } catch (\RuntimeException $exception) {
+            return $this->publicationError($exception->getMessage(), 500, $matches[1]);
+        }
+    }
+
+    public function cancelSchedule(ServerRequest $request): Response
+    {
+        if (($response = $this->authorizeMutation($request)) !== null) {
+            return $response;
+        }
+        if (preg_match('#^/admin/articles/([a-z0-9]+(?:-[a-z0-9]+)*)/schedule/cancel$#', $request->path, $matches) !== 1) {
+            return Response::json(['error' => 'Invalid cancel schedule route.'], 422);
+        }
+        try {
+            $slug = $matches[1];
+            $article = $this->articles->read($slug);
+            $unscheduled = $article->withFrontMatter(
+                $article->frontMatter
+                    ->with('status', 'draft')
+                    ->without('scheduled_at')
+                    ->without('scheduled_version')
+            );
+            $this->articles->write($unscheduled);
+            $this->queue?->cancelScheduledBuild($article);
+            return Response::redirect('/admin/articles/' . rawurlencode($slug) . '/edit');
+        } catch (InvalidArgumentException $exception) {
+            return Response::json(['error' => $exception->getMessage()], 422);
+        }
     }
 
     /** @return array<string, string> */

@@ -10,9 +10,9 @@ final readonly class MySqlJobQueue
 {
     public function __construct(private PDO $pdo) {}
 
-    public function enqueueBuild(ArticleDocument $article, string $action, ?string $snapshotPath = null): int
+    public function enqueueBuild(ArticleDocument $article, string $action, ?string $snapshotPath = null, ?string $availableAt = null): int
     {
-        return $this->transaction(function () use ($article, $action, $snapshotPath): int {
+        return $this->transaction(function () use ($article, $action, $snapshotPath, $availableAt): int {
             $articleId = $this->articleId($article);
             $versionId = null;
             if ($action === 'publish') {
@@ -23,8 +23,22 @@ final readonly class MySqlJobQueue
             }
             $this->pdo->prepare("INSERT INTO builds (status) VALUES ('queued')")->execute();
             $buildId = (int) $this->pdo->lastInsertId();
-            $this->pdo->prepare("INSERT INTO jobs (job_type, status, article_id, article_version_id, build_id, action, available_at) VALUES ('build', 'queued', ?, ?, ?, ?, UTC_TIMESTAMP(6))")->execute([$articleId, $versionId, $buildId, $action]);
+            if ($availableAt !== null) {
+                $this->pdo->prepare("INSERT INTO jobs (job_type, status, article_id, article_version_id, build_id, action, available_at) VALUES ('build', 'queued', ?, ?, ?, ?, ?)")->execute([$articleId, $versionId, $buildId, $action, $availableAt]);
+            } else {
+                $this->pdo->prepare("INSERT INTO jobs (job_type, status, article_id, article_version_id, build_id, action, available_at) VALUES ('build', 'queued', ?, ?, ?, ?, UTC_TIMESTAMP(6))")->execute([$articleId, $versionId, $buildId, $action]);
+            }
             return (int) $this->pdo->lastInsertId();
+        });
+    }
+
+    public function cancelScheduledBuild(ArticleDocument $article): bool
+    {
+        return (bool) $this->transaction(function () use ($article): int {
+            $articleId = $this->articleId($article);
+            $stmt = $this->pdo->prepare("UPDATE jobs SET status = 'failed', last_error = 'Schedule cancelled by administrator.' WHERE article_id = ? AND job_type = 'build' AND action = 'publish' AND status = 'queued'");
+            $stmt->execute([$articleId]);
+            return $stmt->rowCount();
         });
     }
 

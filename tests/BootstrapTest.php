@@ -74,6 +74,7 @@ final class BootstrapTest extends TestCase
                 'ai_bot_visits',
                 'ai_referrals',
                 'citation_probes',
+                'draft_shares',
             ],
             $matches[1],
         );
