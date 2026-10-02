@@ -52,6 +52,18 @@ final readonly class Router
         if ($this->articles !== null && $request->method === 'GET' && preg_match('#^/admin/articles/[a-z0-9]+(?:-[a-z0-9]+)*/versions/[a-f0-9]{32}/diff$#', $request->path) === 1) {
             return $this->articles->versionDiff($request);
         }
+        if ($this->articles !== null && $request->method === 'GET' && preg_match('#^/preview/articles/([a-z0-9-]+)$#', $request->path, $m) === 1) {
+            return $this->articles->publicPreview($request, $m[1]);
+        }
+        if ($this->articles !== null && $request->method === 'GET' && preg_match('#^/admin/articles/([a-z0-9-]+)/shares$#', $request->path, $m) === 1) {
+            return $this->articles->listShares($request, $m[1]);
+        }
+        if ($this->articles !== null && $request->method === 'POST' && preg_match('#^/admin/articles/([a-z0-9-]+)/shares$#', $request->path, $m) === 1) {
+            return $this->articles->createShare($request, $m[1]);
+        }
+        if ($this->articles !== null && $request->method === 'POST' && preg_match('#^/admin/articles/([a-z0-9-]+)/shares/revoke$#', $request->path, $m) === 1) {
+            return $this->articles->revokeShare($request, $m[1]);
+        }
         if ($this->articles !== null && $request->method === 'POST' && preg_match('#^/admin/articles/[a-z0-9-]+/preflight$#', $request->path) === 1) {
             return $this->articles->preflight($request);
         }

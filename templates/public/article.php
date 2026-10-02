@@ -8,6 +8,7 @@ $ogDescription = $summary;
 $ogUrl = $url;
 $canonical = $url;
 $showAlternates = false;
+$noindex = !empty($isPreview);
 require __DIR__ . '/_head.php';
 $skipTarget = '#article-content';
 $skipLabel = \HolyMD\I18n\Translator::text('Skip to article');
@@ -15,6 +16,15 @@ $activeNav = null;
 $showReadingProgress = true;
 require __DIR__ . '/_header.php';
 ?>
+<?php if (!empty($isPreview)): ?>
+<div class="draft-preview-banner" role="alert">
+  <div class="draft-preview-banner-inner">
+    <span class="icon" aria-hidden="true">visibility</span>
+    <strong><?= __('Draft preview mode') ?>:</strong>
+    <span><?= __('This article is an unreleased draft and is intended solely for review and proofreading. Please do not share publicly.') ?></span>
+  </div>
+</div>
+<?php endif; ?>
   <main class="reading-page"><article><div class="reading-layout shell">
     <?php if (!empty($toc) && count($toc) >= 3): ?>
     <aside class="toc-rail" aria-labelledby="desktop-toc-heading">
@@ -51,7 +61,7 @@ require __DIR__ . '/_header.php';
     $giscusMapping = \HolyMD\Config\Env::get('HOLYMD_GISCUS_MAPPING') ?: 'pathname';
     $giscusReactions = \HolyMD\Config\Env::get('HOLYMD_GISCUS_REACTIONS_ENABLED') ?: '1';
     ?>
-    <?php if ($giscusRepo && $giscusRepoId && $giscusCategory && $giscusCategoryId): ?>
+    <?php if (empty($isPreview) && $giscusRepo && $giscusRepoId && $giscusCategory && $giscusCategoryId): ?>
       <section class="article-section giscus-section" aria-labelledby="comments-heading">
         <h2 id="comments-heading"><?= __('Comments') ?></h2>
         <div class="giscus"></div>

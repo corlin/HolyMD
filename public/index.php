@@ -61,6 +61,14 @@ if (str_starts_with($path, '/assets/')) {
     // public/assets (mirroring the .htaccess whitelist, which Apache serves
     // before PHP). Site assets are hashed build outputs and fall through to
     // the static tree below.
+    if ($relative === 'site.preview.css') {
+        $candidate = $root . '/templates/public/site.css';
+        if (!is_file($candidate)) { http_response_code(404); exit; }
+        header('Content-Type: text/css');
+        header('X-Content-Type-Options: nosniff');
+        readfile($candidate);
+        exit;
+    }
     if (in_array($relative, ['admin.css', 'admin.js'], true)) {
         $candidate = $root . ($flattened ? '/assets/' : '/public/assets/') . $relative;
         if (!is_file($candidate)) { http_response_code(404); exit; }
@@ -80,7 +88,7 @@ if (str_starts_with($path, '/assets/')) {
         exit;
     }
 }
-if (!str_starts_with($path, '/admin')) {
+if (!str_starts_with($path, '/admin') && !str_starts_with($path, '/preview/')) {
     // The release pointer is swapped atomically; drop cached path resolutions
     // so php -S development picks up the new tree immediately.
     clearstatcache(true);

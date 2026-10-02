@@ -17,6 +17,7 @@ use HolyMD\Http\Response;
 use HolyMD\Http\ServerRequest;
 use HolyMD\Publish\PublishService;
 use HolyMD\Publish\PublishPreflightResult;
+use HolyMD\Content\DraftShareService;
 use HolyMD\Queue\MySqlJobQueue;
 use HolyMD\Render\MarkdownRenderer;
 use InvalidArgumentException;
@@ -25,6 +26,8 @@ use PDO;
 final readonly class ArticleController
 {
     use AdminAuthorizationTrait;
+
+    private ?DraftShareService $draftShares;
 
     public function __construct(
         private ArticleRepository $articles,
@@ -40,7 +43,9 @@ final readonly class ArticleController
         private ?GeoScoreCalculator $geoCalculator = null,
         private ?PDO $pdo = null,
         private ?DiffService $diffService = null,
+        ?DraftShareService $draftShares = null,
     ) {
+        $this->draftShares = $draftShares ?? ($this->pdo !== null ? new DraftShareService($this->pdo) : null);
     }
 
     public function previewMarkdown(ServerRequest $request): Response
@@ -672,4 +677,141 @@ final readonly class ArticleController
         }
     }
 
+    public function listShares(ServerRequest $request, string $slug): Response
+    {
+        if (($response = $this->requireAdmin()) !== null) {
+            return $response;
+        }
+        $article = $this->articles->find($slug);
+        if ($article === null) {
+            return Response::json(['error' => 'Article not found.'], 404);
+        }
+        $shares = $this->draftShares?->listShares($slug) ?? [];
+        return Response::json(['shares' => $shares]);
+    }
+
+    public function createShare(ServerRequest $request, string $slug): Response
+    {
+        if (($response = $this->authorizeMutation($request)) !== null) {
+            return $response;
+        }
+        $article = $this->articles->find($slug);
+        if ($article === null) {
+            return Response::json(['error' => 'Article not found.'], 404);
+        }
+        if ($this->draftShares === null) {
+            return Response::json(['error' => 'Draft sharing is unavailable without database configuration.'], 503);
+        }
+        $expiresInRaw = $request->input('expires_in');
+        $expiresIn = is_numeric($expiresInRaw) && (int) $expiresInRaw > 0 ? (int) $expiresInRaw : null;
+        $share = $this->draftShares->createShare($slug, $expiresIn);
+        $basePath = (string) ($this->siteSettings['base_path'] ?? '');
+        $shareUrl = rtrim((string) ($this->siteSettings['site_url'] ?? ''), '/') . $basePath . '/preview/articles/' . rawurlencode($slug) . '?token=' . $share['token'];
+
+        return Response::json([
+            'token' => $share['token'],
+            'expires_at' => $share['expires_at'],
+            'url' => $shareUrl,
+        ]);
+    }
+
+    public function revokeShare(ServerRequest $request, string $slug): Response
+    {
+        if (($response = $this->authorizeMutation($request)) !== null) {
+            return $response;
+        }
+        $token = (string) $request->input('token');
+        if ($token === '' || $this->draftShares === null) {
+            return Response::json(['error' => 'Invalid token or service unavailable.'], 422);
+        }
+        $revoked = $this->draftShares->revokeShare($slug, $token);
+        return Response::json(['revoked' => $revoked]);
+    }
+
+    public function publicPreview(ServerRequest $request, string $slug): Response
+    {
+        $token = is_string($_GET['token'] ?? null) ? trim((string) $_GET['token']) : '';
+        if ($this->draftShares === null || !$this->draftShares->validateToken($slug, $token)) {
+            return new Response(403, '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>Preview Link Expired</title><style>body{font-family:sans-serif;text-align:center;padding:50px;color:#333;}</style></head><body><h1>草稿预览链接已失效或过期</h1><p>此分享链接不存在、已过期或已被作者撤销。</p></body></html>', [
+                'Content-Type' => 'text/html; charset=utf-8',
+                'X-Robots-Tag' => 'noindex, nofollow, noarchive',
+            ]);
+        }
+
+        $article = $this->articles->find($slug);
+        if ($article === null) {
+            return new Response(404, 'Article not found.', ['Content-Type' => 'text/html; charset=utf-8', 'X-Robots-Tag' => 'noindex, nofollow']);
+        }
+
+        $renderer = new \HolyMD\Render\TemplateRenderer(dirname(__DIR__, 2) . '/templates/public');
+        $markdownRenderer = $this->markdownRenderer ?? new MarkdownRenderer();
+        $rawHtml = $markdownRenderer->render($article->bodyMarkdown);
+
+        $toc = [];
+        $headingIdSequences = [];
+        $contentHtml = preg_replace_callback(
+            '/<h([234])(\b[^>]*)>(.*?)<\/h\1>/s',
+            static function (array $matches) use (&$toc, &$headingIdSequences): string {
+                $level = (int) $matches[1];
+                $attrs = $matches[2];
+                $innerHtml = $matches[3];
+                $plainText = trim(html_entity_decode(strip_tags($innerHtml), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
+                if ($plainText === '') return $matches[0];
+                $baseId = trim((string) preg_replace('/[^a-z0-9]+/i', '-', strtolower($plainText)), '-');
+                if ($baseId === '') $baseId = 'heading-' . (count($toc) + 1);
+                $sequence = ($headingIdSequences[$baseId] ?? 0) + 1;
+                $headingIdSequences[$baseId] = $sequence;
+                $id = $sequence === 1 ? $baseId : $baseId . '-' . $sequence;
+                $toc[] = ['level' => $level, 'title' => $plainText, 'id' => $id];
+                return '<h' . $level . $attrs . ' id="' . $id . '">' . $innerHtml . '</h' . $level . '>';
+            },
+            $rawHtml
+        ) ?? $rawHtml;
+
+        $words = preg_match_all('/\p{L}+/u', strip_tags($contentHtml));
+        $readingMinutes = max(1, (int) ceil(($words ?: 1) / 200));
+
+        $siteName = (string) ($this->siteSettings['site_name'] ?? 'HolyMD');
+        $siteUrl = (string) ($this->siteSettings['site_url'] ?? 'https://example.invalid');
+        $authorName = (string) ($this->siteSettings['author_name'] ?? 'Author');
+        $siteLanguage = (string) ($this->siteSettings['site_language'] ?? 'zh-CN');
+        $basePath = (string) ($this->siteSettings['base_path'] ?? '');
+        $url = rtrim($siteUrl, '/') . $basePath . '/articles/' . rawurlencode($slug) . '/';
+
+        $data = [
+            'article' => $article,
+            'siteName' => $siteName,
+            'siteUrl' => $siteUrl,
+            'authorName' => $authorName,
+            'siteLanguage' => $siteLanguage,
+            'basePath' => $basePath,
+            'url' => $url,
+            'summary' => (string) $article->frontMatter->get('summary', ''),
+            'date' => (string) $article->frontMatter->get('date', date('Y-m-d')),
+            'modified' => (string) $article->frontMatter->get('updated', (string) $article->frontMatter->get('date', date('Y-m-d'))),
+            'readingMinutes' => $readingMinutes,
+            'contentHtml' => $contentHtml,
+            'toc' => $toc,
+            'topics' => array_values(array_filter((array) $article->frontMatter->get('topics', []), 'is_string')),
+            'topicSlugs' => [],
+            'sources' => array_values(array_filter((array) $article->frontMatter->get('sources', []), 'is_string')),
+            'internalLinks' => array_values(array_filter((array) $article->frontMatter->get('internal_links', []), 'is_string')),
+            'faq' => [],
+            'related' => [],
+            'assetCss' => $basePath . '/assets/site.preview.css',
+            'assetSearch' => $basePath . '/assets/search.js',
+            'jsonLd' => null,
+            'isPreview' => true,
+            'generateLlmsTxt' => false,
+            'navPages' => [],
+        ];
+
+        $html = $renderer->render('article', $data);
+
+        return new Response(200, $html, [
+            'Content-Type' => 'text/html; charset=utf-8',
+            'X-Robots-Tag' => 'noindex, nofollow, noarchive',
+            'Cache-Control' => 'private, no-cache, no-store, must-revalidate',
+        ]);
+    }
 }

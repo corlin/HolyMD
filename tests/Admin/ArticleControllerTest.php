@@ -20,6 +20,7 @@ use PHPUnit\Framework\TestCase;
 final class ArticleControllerTest extends TestCase
 {
     private string $root;
+    private \PDO $pdo;
 
     protected function setUp(): void
     {
@@ -31,6 +32,17 @@ final class ArticleControllerTest extends TestCase
         file_put_contents($this->root . '/public/site/index.html', 'legacy');
         file_put_contents($this->root . '/public/.holymd-current', "site\n");
         file_put_contents($this->root . '/articles/first-note.md', "---\ntitle: First note\nslug: first-note\ndate: 2026-08-12\n---\nOriginal body\n");
+
+        $this->pdo = new \PDO('sqlite::memory:');
+        $this->pdo->setAttribute(\PDO::ATTR_ERRMODE, \PDO::ERRMODE_EXCEPTION);
+        $this->pdo->exec('CREATE TABLE draft_shares (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            slug TEXT NOT NULL,
+            token TEXT NOT NULL UNIQUE,
+            expires_at TEXT NULL,
+            created_at TEXT NOT NULL,
+            revoked_at TEXT NULL
+        )');
     }
 
     protected function tearDown(): void
@@ -752,6 +764,91 @@ final class ArticleControllerTest extends TestCase
         self::assertStringContainsString('diff-viewer', $response->body);
     }
 
+    public function test_list_shares_requires_admin_authentication(): void
+    {
+        $response = $this->router([])->dispatch(new ServerRequest('GET', '/admin/articles/first-note/shares'));
+        self::assertSame(401, $response->status);
+    }
+
+    public function test_create_and_list_and_revoke_draft_share(): void
+    {
+        $router = $this->router(['admin_user_id' => 7, 'csrf_token' => 'csrf-val']);
+
+        // Create share
+        $createResponse = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/shares', [], [
+            'csrf_token' => 'csrf-val',
+            'expires_in' => '86400',
+        ]));
+        self::assertSame(200, $createResponse->status);
+        $created = json_decode($createResponse->body, true);
+        self::assertIsArray($created);
+        self::assertArrayHasKey('token', $created);
+        self::assertStringContainsString('/preview/articles/first-note?token=' . $created['token'], $created['url']);
+
+        // List shares
+        $listResponse = $router->dispatch(new ServerRequest('GET', '/admin/articles/first-note/shares'));
+        self::assertSame(200, $listResponse->status);
+        $listed = json_decode($listResponse->body, true);
+        self::assertCount(1, $listed['shares']);
+        self::assertTrue($listed['shares'][0]['is_active']);
+
+        // Revoke share
+        $revokeResponse = $router->dispatch(new ServerRequest('POST', '/admin/articles/first-note/shares/revoke', [], [
+            'csrf_token' => 'csrf-val',
+            'token' => $created['token'],
+        ]));
+        self::assertSame(200, $revokeResponse->status);
+
+        // List again
+        $listResponse2 = $router->dispatch(new ServerRequest('GET', '/admin/articles/first-note/shares'));
+        $listed2 = json_decode($listResponse2->body, true);
+        self::assertFalse($listed2['shares'][0]['is_active']);
+    }
+
+    public function test_public_preview_requires_valid_token(): void
+    {
+        $router = $this->router([]);
+
+        // Without token
+        $response1 = $router->dispatch(new ServerRequest('GET', '/preview/articles/first-note'));
+        self::assertSame(403, $response1->status);
+
+        // With invalid token
+        $_GET['token'] = '0123456789abcdef0123456789abcdef';
+        try {
+            $response2 = $router->dispatch(new ServerRequest('GET', '/preview/articles/first-note?token=0123456789abcdef0123456789abcdef'));
+            self::assertSame(403, $response2->status);
+        } finally {
+            unset($_GET['token']);
+        }
+    }
+
+    public function test_public_preview_renders_draft_with_banner_and_noindex(): void
+    {
+        $adminRouter = $this->router(['admin_user_id' => 7, 'csrf_token' => 'csrf-val']);
+        $createResponse = $adminRouter->dispatch(new ServerRequest('POST', '/admin/articles/first-note/shares', [], [
+            'csrf_token' => 'csrf-val',
+        ]));
+        $token = json_decode($createResponse->body, true)['token'];
+
+        // Anonymous public visitor opens the preview link
+        $_GET['token'] = $token;
+        try {
+            $publicRouter = $this->router([]);
+            $response = $publicRouter->dispatch(new ServerRequest('GET', '/preview/articles/first-note?token=' . $token));
+
+            self::assertSame(200, $response->status);
+            self::assertSame('noindex, nofollow, noarchive', $response->headers['X-Robots-Tag'] ?? null);
+            self::assertStringContainsString('draft-preview-banner', $response->body);
+            self::assertStringContainsString('Draft preview mode', $response->body);
+            self::assertStringContainsString('First note', $response->body);
+            self::assertStringContainsString('Original body', $response->body);
+            self::assertStringContainsString('name="robots" content="noindex, nofollow, noarchive"', $response->body);
+        } finally {
+            unset($_GET['token']);
+        }
+    }
+
     /** @param array<string, mixed> $session */
     private function router(array $session): Router
     {
@@ -759,7 +856,7 @@ final class ArticleControllerTest extends TestCase
         $versions = new VersionService($this->root . '/versions');
         $publication = new PublicationSettings('Test publication', 'https://example.test', 'Ada Test', 'About Ada.');
         $publisher = new PublishService($repository, new StaticBuilder(), new AtomicPublicTree(), $this->root . '/public/.holymd-current', $publication, versions: $versions);
-        $controller = new ArticleController($repository, $versions, new AdminGuard($session), new Csrf($session), $publisher, null, $this->root . '/media', $publication->adminValues());
+        $controller = new ArticleController($repository, $versions, new AdminGuard($session), new Csrf($session), $publisher, null, $this->root . '/media', $publication->adminValues(), pdo: $this->pdo);
         return new Router($controller);
     }
 

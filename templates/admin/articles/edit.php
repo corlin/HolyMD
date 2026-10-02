@@ -20,7 +20,10 @@ $activeNav = 'articles';
     <h1 class="sr-only"><?= __('Edit {title}', ['title' => $article->title]) ?></h1>
     <div class="editor-topline">
       <a href="<?= $path('/admin/articles') ?>"><span class="icon" aria-hidden="true">arrow_back</span><?= __('All articles') ?></a>
-      <output id="save-state" aria-live="polite" data-state="saved"><span class="icon" aria-hidden="true" data-save-icon>check_circle</span><span data-save-label><?= __('Source saved') ?></span></output>
+      <div style="margin-left: auto; display: flex; align-items: center; gap: 12px;">
+        <button type="button" class="button-link-secondary" data-open-share-modal title="<?= __('Share draft preview') ?>"><span class="icon" aria-hidden="true">share</span><?= __('Share draft') ?></button>
+        <output id="save-state" aria-live="polite" data-state="saved"><span class="icon" aria-hidden="true" data-save-icon>check_circle</span><span data-save-label><?= __('Source saved') ?></span></output>
+      </div>
     </div>
     <label>
       <?= __('Title') ?>
@@ -149,6 +152,38 @@ $activeNav = 'articles';
     </div>
     <div class="media-modal-body" data-media-modal-list>
       <p class="muted"><?= __('Loading media…') ?></p>
+    </div>
+  </div>
+</dialog>
+<dialog id="share-modal" class="media-modal" aria-labelledby="share-modal-title">
+  <div class="media-modal-card">
+    <div class="media-modal-header">
+      <h3 id="share-modal-title"><span class="icon" aria-hidden="true">share</span><?= __('Share draft preview') ?></h3>
+      <button type="button" class="button-link-secondary" data-close-share-modal><span class="icon" aria-hidden="true">close</span></button>
+    </div>
+    <div class="media-modal-body">
+      <p class="muted" style="margin-top: 0;"><?= __('Generate a secure, unindexed link to share this unreleased draft with reviewers or friends.') ?></p>
+      <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 16px;">
+        <select id="share-expiry-select" style="flex: 1;">
+          <option value="86400"><?= __('Valid for 24 hours') ?></option>
+          <option value="604800"><?= __('Valid for 7 days') ?></option>
+          <option value=""><?= __('Permanent (until revoked)') ?></option>
+        </select>
+        <button type="button" id="btn-create-share" class="button-primary"><span class="icon" aria-hidden="true">add_link</span><?= __('Generate link') ?></button>
+      </div>
+      <div id="share-created-box" style="display: none; margin-bottom: 16px; padding: 12px; background: var(--surface-canvas); border-radius: 6px; border: 1px solid var(--border-subtle);">
+        <label style="display: block; font-size: 0.85rem; font-weight: 500; margin-bottom: 6px;"><?= __('Share URL') ?></label>
+        <div style="display: flex; gap: 8px;">
+          <input type="text" id="share-url-input" readonly onclick="this.select()" style="flex: 1; font-size: 0.85rem;">
+          <button type="button" id="btn-copy-share" class="secondary" style="white-space: nowrap;"><span class="icon" aria-hidden="true">content_copy</span><?= __('Copy') ?></button>
+        </div>
+      </div>
+      <div>
+        <h4 style="margin: 12px 0 8px; font-size: 0.95rem;"><?= __('Active links') ?></h4>
+        <div data-active-shares-container>
+          <p class="muted"><?= __('Loading links…') ?></p>
+        </div>
+      </div>
     </div>
   </div>
 </dialog>

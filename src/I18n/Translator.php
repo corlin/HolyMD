@@ -114,5 +114,14 @@ final class Translator
         'Image upload failed',
         'Failed to load version diff',
         'No media files uploaded yet.',
+        'No preview links generated yet.',
+        'Active',
+        'Revoked',
+        'Expired',
+        'Expires',
+        'Permanent',
+        'Copy link',
+        'Revoke link',
+        'Revoke this share link? Anyone using it will immediately lose access.',
     ];
 }

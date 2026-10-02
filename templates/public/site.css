@@ -56,8 +56,31 @@ a:hover { color: var(--action-primary); text-decoration-thickness: 2px; }
 :focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 4px; }
 .shell { width: min(calc(100% - var(--page-gutter)), var(--page-width)); margin-inline: auto; }
 .skip-link { position: fixed; left: 1rem; top: -4rem; z-index: 10; background: var(--text-primary); color: var(--surface-canvas); padding: .6rem .9rem; }
-.skip-link:focus { top: 1rem; }
 .site-header { position: sticky; top: 0; z-index: 20; border-bottom: 1px solid var(--border-subtle); background: color-mix(in srgb, var(--surface-canvas) 92%, transparent); backdrop-filter: blur(14px); }
+.draft-preview-banner {
+  background: color-mix(in srgb, #f0ad4e 25%, var(--surface-raised));
+  border-bottom: 1px solid color-mix(in srgb, #f0ad4e 50%, var(--border-subtle));
+  color: var(--text-primary);
+  padding: .75rem 1rem;
+  font-size: .9rem;
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+.draft-preview-banner-inner {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  width: min(calc(100% - var(--page-gutter)), var(--page-width));
+  margin-inline: auto;
+}
+.draft-preview-banner .icon {
+  color: #b06a00;
+  font-size: 1.25em;
+}
+html[data-theme="dark"] .draft-preview-banner .icon {
+  color: #f0ad4e;
+}
 .nav-row { min-width: 0; min-height: 4.75rem; display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; }
 .brand-nav, .header-tools { display: flex; align-items: center; min-width: 0; gap: clamp(1.2rem, 3vw, 2.75rem); }
 .brand-nav { flex: 1 1 auto; }

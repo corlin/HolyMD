@@ -433,6 +433,147 @@
       });
     }
 
+    const shareModal = document.querySelector('#share-modal');
+    const openShareBtn = document.querySelector('[data-open-share-modal]');
+    const closeShareBtn = document.querySelector('[data-close-share-modal]');
+    const btnCreateShare = document.querySelector('#btn-create-share');
+    const shareExpirySelect = document.querySelector('#share-expiry-select');
+    const shareCreatedBox = document.querySelector('#share-created-box');
+    const shareUrlInput = document.querySelector('#share-url-input');
+    const btnCopyShare = document.querySelector('#btn-copy-share');
+    const activeSharesContainer = document.querySelector('[data-active-shares-container]');
+    const csrfToken = document.querySelector('#csrf-token')?.value || '';
+
+    const loadSharesList = async () => {
+      if (!activeSharesContainer) return;
+      try {
+        const response = await fetch(`${base}/admin/articles/${slug}/shares`);
+        const data = await response.json();
+        if (!response.ok || !Array.isArray(data.shares)) {
+          throw new Error(data.error || 'Failed to load share links');
+        }
+        if (data.shares.length === 0) {
+          activeSharesContainer.innerHTML = `<p class="muted">${t('No preview links generated yet.')}</p>`;
+          return;
+        }
+        const ul = document.createElement('ul');
+        ul.className = 'share-active-list';
+        ul.style.listStyle = 'none';
+        ul.style.padding = '0';
+        ul.style.margin = '0';
+        data.shares.forEach(item => {
+          const li = document.createElement('li');
+          li.style.display = 'flex';
+          li.style.justifyContent = 'space-between';
+          li.style.alignItems = 'center';
+          li.style.padding = '8px 0';
+          li.style.borderBottom = '1px solid var(--border-subtle)';
+          li.style.fontSize = '0.85rem';
+
+          const info = document.createElement('div');
+          const tokenShort = item.token.slice(0, 8) + '…';
+          let statusText = item.is_active ? t('Active') : (item.revoked_at ? t('Revoked') : t('Expired'));
+          let expiryText = item.expires_at ? `${t('Expires')}: ${item.expires_at}` : t('Permanent');
+          info.innerHTML = `<strong>${tokenShort}</strong> <span class="badge ${item.is_active ? 'badge-success' : 'badge-muted'}" style="margin-left:6px;font-size:0.75rem;padding:2px 6px;border-radius:4px;background:var(--surface-canvas);border:1px solid var(--border-subtle);">${statusText}</span><div class="muted" style="font-size:0.8rem;margin-top:2px;">${expiryText}</div>`;
+
+          const actions = document.createElement('div');
+          if (item.is_active) {
+            const previewUrl = `${window.location.origin}${base}/preview/articles/${slug}?token=${item.token}`;
+            const copyBtn = document.createElement('button');
+            copyBtn.type = 'button';
+            copyBtn.className = 'button-link-secondary';
+            copyBtn.title = t('Copy link');
+            copyBtn.innerHTML = '<span class="icon" aria-hidden="true">content_copy</span>';
+            copyBtn.onclick = async () => {
+              await navigator.clipboard.writeText(previewUrl);
+              copyBtn.innerHTML = '<span class="icon" aria-hidden="true">check</span>';
+              setTimeout(() => { copyBtn.innerHTML = '<span class="icon" aria-hidden="true">content_copy</span>'; }, 2000);
+            };
+
+            const revokeBtn = document.createElement('button');
+            revokeBtn.type = 'button';
+            revokeBtn.className = 'button-link-secondary';
+            revokeBtn.title = t('Revoke link');
+            revokeBtn.style.color = '#d9534f';
+            revokeBtn.innerHTML = '<span class="icon" aria-hidden="true">block</span>';
+            revokeBtn.onclick = async () => {
+              if (!confirm(t('Revoke this share link? Anyone using it will immediately lose access.'))) return;
+              try {
+                const res = await fetch(`${base}/admin/articles/${slug}/shares/revoke`, {
+                  method: 'POST',
+                  headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                  body: new URLSearchParams({csrf_token: csrfToken, token: item.token}),
+                });
+                const revokeData = await res.json();
+                if (!res.ok) throw new Error(revokeData.error || 'Failed to revoke');
+                void loadSharesList();
+              } catch (e) {
+                alert(e.message);
+              }
+            };
+            actions.style.display = 'flex';
+            actions.style.gap = '8px';
+            actions.appendChild(copyBtn);
+            actions.appendChild(revokeBtn);
+          }
+          li.appendChild(info);
+          li.appendChild(actions);
+          ul.appendChild(li);
+        });
+        activeSharesContainer.innerHTML = '';
+        activeSharesContainer.appendChild(ul);
+      } catch (err) {
+        activeSharesContainer.innerHTML = `<p class="muted">${err.message || 'Failed to load'}</p>`;
+      }
+    };
+
+    if (openShareBtn && shareModal) {
+      openShareBtn.addEventListener('click', () => {
+        shareModal.showModal();
+        if (shareCreatedBox) shareCreatedBox.style.display = 'none';
+        void loadSharesList();
+      });
+      closeShareBtn?.addEventListener('click', () => shareModal.close());
+      shareModal.addEventListener('click', event => {
+        if (event.target === shareModal) shareModal.close();
+      });
+
+      btnCreateShare?.addEventListener('click', async () => {
+        btnCreateShare.disabled = true;
+        try {
+          const expiryVal = shareExpirySelect?.value || '';
+          const res = await fetch(`${base}/admin/articles/${slug}/shares`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: new URLSearchParams({csrf_token: csrfToken, expires_in: expiryVal}),
+          });
+          const shareData = await res.json();
+          if (!res.ok) throw new Error(shareData.error || 'Failed to create share');
+          if (shareCreatedBox && shareUrlInput) {
+            shareUrlInput.value = shareData.url;
+            shareCreatedBox.style.display = 'block';
+          }
+          void loadSharesList();
+        } catch (err) {
+          alert(err.message || 'Failed to create share link');
+        } finally {
+          btnCreateShare.disabled = false;
+        }
+      });
+
+      btnCopyShare?.addEventListener('click', async () => {
+        if (!shareUrlInput) return;
+        try {
+          await navigator.clipboard.writeText(shareUrlInput.value);
+          const orig = btnCopyShare.innerHTML;
+          btnCopyShare.innerHTML = '<span class="icon" aria-hidden="true">check</span> ' + t('Copied');
+          setTimeout(() => { btnCopyShare.innerHTML = orig; }, 2000);
+        } catch {
+          shareUrlInput.select();
+        }
+      });
+    }
+
     window.addEventListener('beforeunload', event => {
       if (!dirty && !saveInFlight) return;
       event.preventDefault();

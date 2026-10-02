@@ -7,13 +7,18 @@ namespace HolyMD\Http;
 final readonly class ServerRequest
 {
     /** @param array<string, string> $headers @param array<string, mixed> $parsedBody @param array<string, mixed> $files */
+    public string $path;
+
+    /** @param array<string, string> $headers @param array<string, mixed> $parsedBody @param array<string, mixed> $files */
     public function __construct(
         public string $method,
-        public string $path,
+        string $path,
         public array $headers = [],
         public array $parsedBody = [],
         public array $files = [],
     ) {
+        $parsed = parse_url($path, PHP_URL_PATH);
+        $this->path = is_string($parsed) ? $parsed : $path;
     }
 
     public function input(string $name, mixed $default = null): mixed
