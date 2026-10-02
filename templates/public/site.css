@@ -689,4 +689,71 @@ html[data-style="monochrome"] .toc-drawer-dialog {
   border: 1px solid var(--border-subtle); border-radius: 0;
 }
 
+/* --- 视觉风格主题: 温暖复古手记 (Craft Newsletter) --- */
+html[data-style="newsletter"] {
+  --surface-canvas: #f8f4ec;
+  --surface-raised: #f0e9dc;
+  --text-primary: #2c241e;
+  --text-muted: #6e5d50;
+  --action-primary: #b35438;
+  --border-subtle: #ded4c3;
+  --focus-ring: #b35438;
+  --font-display: "EB Garamond", Garamond, Georgia, "Times New Roman", serif;
+  --font-reading: "EB Garamond", Garamond, Georgia, "Times New Roman", serif;
+  --font-ui: "EB Garamond", Garamond, Georgia, "Times New Roman", serif;
+  --radius-subtle: 2px;
+  --radius-control: 2px;
+  --radius-item: 2px;
+  --radius-overlay: 4px;
+  --radius-card: 2px;
+  --radius-pill: 999px;
+}
+html[data-style="newsletter"][data-theme="dark"] {
+  --surface-canvas: #1c1815;
+  --surface-raised: #26201b;
+  --text-primary: #ebe2d5;
+  --text-muted: #a89b8d;
+  --action-primary: #e07a5f;
+  --border-subtle: #3d342c;
+  --focus-ring: #e07a5f;
+}
+@media (prefers-color-scheme: dark) {
+  html[data-style="newsletter"]:not([data-theme="light"]) {
+    --surface-canvas: #1c1815;
+    --surface-raised: #26201b;
+    --text-primary: #ebe2d5;
+    --text-muted: #a89b8d;
+    --action-primary: #e07a5f;
+    --border-subtle: #3d342c;
+    --focus-ring: #e07a5f;
+  }
+}
+html[data-style="newsletter"] .site-header {
+  border-bottom: 2px solid var(--action-primary);
+}
+html[data-style="newsletter"] .feature-card,
+html[data-style="newsletter"] .article-row,
+html[data-style="newsletter"] .brand-identity-card {
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-canvas);
+}
+html[data-style="newsletter"] .feature-badge {
+  background: var(--action-primary); color: #ffffff; font-family: var(--font-display);
+}
+html[data-style="newsletter"] .article-prose > p:first-of-type::first-letter,
+html[data-style="newsletter"] #article-content > p:first-of-type::first-letter {
+  font-family: var(--font-display);
+  float: left;
+  font-size: 3.4rem;
+  line-height: .85;
+  padding-right: .5rem;
+  padding-top: .15rem;
+  color: var(--action-primary);
+  font-weight: 700;
+}
+html[data-style="newsletter"] blockquote {
+  border-left: 2px solid var(--action-primary); font-style: italic;
+}
+
+
 

@@ -1348,5 +1348,8 @@ JS);
         self::assertStringContainsString('--font-display: ui-monospace', $styles);
         self::assertStringContainsString('html[data-style="monochrome"]', $styles);
         self::assertStringContainsString('--font-display: "Helvetica Neue"', $styles);
+        self::assertStringContainsString('html[data-style="newsletter"]', $styles);
+        self::assertStringContainsString('--font-display: "EB Garamond"', $styles);
+        self::assertStringContainsString('::first-letter', $styles);
     }
 }
