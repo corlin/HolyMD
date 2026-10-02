@@ -26,7 +26,17 @@ final class PublicationSettingsTest extends TestCase
             'author_name' => 'Ada',
             'about' => 'About Ada',
             'site_language' => 'en-US',
+            'site_style' => 'editorial',
         ], $settings->adminValues());
+    }
+
+    public function test_normalizes_and_safeguards_site_style(): void
+    {
+        $custom = new PublicationSettings('Notes', 'https://example.test', 'Ada', 'About Ada', false, 'en-US', '', 'terminal');
+        self::assertSame('terminal', $custom->siteStyle);
+
+        $fallback = new PublicationSettings('Notes', 'https://example.test', 'Ada', 'About Ada', false, 'en-US', '', 'unknown_style');
+        self::assertSame('editorial', $fallback->siteStyle);
     }
 
     public function test_reports_placeholder_identity_and_invalid_language(): void

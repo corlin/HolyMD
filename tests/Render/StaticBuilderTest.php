@@ -63,7 +63,7 @@ final class StaticBuilderTest extends TestCase
         self::assertStringContainsString('/articles/second-post/', (string) file_get_contents($this->outputRoot . '/sitemap.xml'));
         self::assertStringContainsString('/topics/notes/', (string) file_get_contents($this->outputRoot . '/sitemap.xml'));
         self::assertStringContainsString('og:title', $article);
-        self::assertStringContainsString('<html lang="en">', $article);
+        self::assertStringContainsString('<html lang="en" data-style="editorial">', $article);
         self::assertStringContainsString('<h2 id="first">First</h2>', $article);
         self::assertStringContainsString('1 min read', $article);
         self::assertStringContainsString('class="theme-switcher"', $article);
@@ -188,7 +188,7 @@ final class StaticBuilderTest extends TestCase
         (new StaticBuilder())->build($this->input([$article], 'Notes', 'https://example.test', 'Ada', 'About Ada', false, 'fr-CA'), $this->outputRoot);
 
         foreach (['/index.html', '/articles/language/index.html', '/topics/notes/index.html'] as $path) {
-            self::assertStringContainsString('<html lang="fr-CA">', (string) file_get_contents($this->outputRoot . $path));
+            self::assertStringContainsString('<html lang="fr-CA" data-style="editorial">', (string) file_get_contents($this->outputRoot . $path));
         }
     }
 
@@ -1013,10 +1013,11 @@ JS);
         ?string $builtAt = null,
         string $basePath = '',
         array $pages = [],
+        string $siteStyle = 'editorial',
     ): BuildInput {
         return new BuildInput(
             $articles,
-            new PublicationSettings($siteName, $siteUrl, $authorName, $about, $generateLlmsTxt, $siteLanguage, $basePath),
+            new PublicationSettings($siteName, $siteUrl, $authorName, $about, $generateLlmsTxt, $siteLanguage, $basePath, $siteStyle),
             $builtAt,
             $pages,
         );
@@ -1317,5 +1318,33 @@ JS);
             return $value <= 0.04045 ? $value / 12.92 : (($value + 0.055) / 1.055) ** 2.4;
         }, $channels);
         return (0.2126 * $linear[0]) + (0.7152 * $linear[1]) + (0.0722 * $linear[2]);
+    }
+
+    public function test_builds_multi_theme_support_and_scoped_custom_styles(): void
+    {
+        $defaultArticle = new ArticleDocument('default-post', 'Default Post', 'Body.', new FrontMatter(['title' => 'Default Post', 'slug' => 'default-post', 'date' => '2026-08-12']), '/default-post');
+        $terminalArticle = new ArticleDocument('terminal-post', 'Terminal Post', 'Body.', new FrontMatter(['title' => 'Terminal Post', 'slug' => 'terminal-post', 'date' => '2026-08-13', 'theme' => 'terminal']), '/terminal-post');
+
+        (new StaticBuilder())->build($this->input([$defaultArticle, $terminalArticle], 'Notes', 'https://example.test', 'Ada', 'About Ada', false, 'en', null, '', [], 'editorial'), $this->outputRoot);
+
+        $indexHtml = (string) file_get_contents($this->outputRoot . '/index.html');
+        $defaultHtml = (string) file_get_contents($this->outputRoot . '/articles/default-post/index.html');
+        $terminalHtml = (string) file_get_contents($this->outputRoot . '/articles/terminal-post/index.html');
+
+        self::assertStringContainsString('<html lang="en" data-style="editorial">', $indexHtml);
+        self::assertStringContainsString('<html lang="en" data-style="editorial">', $defaultHtml);
+        self::assertStringContainsString('<html lang="en" data-style="terminal">', $terminalHtml);
+
+        self::assertStringContainsString('class="header-style-wrap"', $indexHtml);
+        self::assertStringContainsString('id="style-trigger"', $indexHtml);
+        self::assertStringContainsString('data-style-set="editorial"', $indexHtml);
+        self::assertStringContainsString('data-style-set="terminal"', $indexHtml);
+        self::assertStringContainsString('data-style-set="monochrome"', $indexHtml);
+        self::assertStringContainsString('data-style-set="newsletter"', $indexHtml);
+        self::assertStringContainsString('localStorage.getItem("holymd_style")', $indexHtml);
+
+        $styles = $this->generatedPublicStyles();
+        self::assertStringContainsString('html[data-style="terminal"]', $styles);
+        self::assertStringContainsString('--font-display: ui-monospace', $styles);
     }
 }

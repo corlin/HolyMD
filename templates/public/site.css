@@ -532,3 +532,95 @@ html[data-theme="dark"] .brand-page {
   background: var(--surface-canvas); transition: border-color .15s ease, background .15s ease;
 }
 .brand-social-item:hover { border-color: var(--text-primary); background: var(--surface-raised); }
+
+/* --- 风格选择器组件 (Style Switcher) --- */
+.header-style-wrap { position: relative; display: inline-flex; align-items: center; }
+.header-style-trigger {
+  width: var(--control-size); height: var(--control-size); display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid transparent; border-radius: var(--radius-control); background: transparent; color: inherit; cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+.header-style-trigger:hover { background: var(--surface-raised); border-color: var(--border-subtle); }
+.header-style-dropdown {
+  position: absolute; right: 0; top: calc(100% + .5rem); min-width: 11rem; z-index: 50;
+  background: var(--surface-canvas); border: 1px solid var(--border-subtle); border-radius: var(--radius-overlay);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, .15), 0 8px 10px -6px rgba(0, 0, 0, .1);
+  padding: .4rem; backdrop-filter: blur(12px);
+}
+.style-menu { display: flex; flex-direction: column; gap: 2px; }
+.style-menu-item {
+  display: flex; align-items: center; gap: .75rem; width: 100%; padding: .55rem .75rem;
+  border: 1px solid transparent; border-radius: var(--radius-item); background: transparent; color: var(--text-primary);
+  font: 500 .875rem var(--font-ui); text-align: left; cursor: pointer; transition: background .12s ease;
+}
+.style-menu-item:hover { background: var(--surface-raised); }
+.style-menu-item.active,
+.style-menu-item[aria-checked="true"] {
+  background: color-mix(in srgb, var(--action-primary) 12%, transparent);
+  color: var(--action-primary); font-weight: 600;
+}
+.style-dot { width: .75rem; height: .75rem; border-radius: 50%; flex-shrink: 0; border: 1px solid rgba(0, 0, 0, .15); }
+.style-dot-editorial { background: #b06a00; }
+.style-dot-terminal { background: #2ea043; box-shadow: 0 0 4px #2ea043; }
+.style-dot-monochrome { background: #111111; }
+.style-dot-newsletter { background: #b35438; }
+
+/* --- 视觉风格主题: 极客终端 (Cyber Terminal) --- */
+html[data-style="terminal"] {
+  --surface-canvas: #f4f6f8;
+  --surface-raised: #e8ecf1;
+  --text-primary: #0f2c1f;
+  --text-muted: #3a5c4c;
+  --action-primary: #0969da;
+  --border-subtle: #c7d2de;
+  --focus-ring: #1a7f37;
+  --font-display: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --font-reading: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --font-ui: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --font-code: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  --radius-subtle: 2px;
+  --radius-control: 3px;
+  --radius-item: 3px;
+  --radius-overlay: 4px;
+  --radius-card: 4px;
+  --radius-pill: 4px;
+}
+html[data-style="terminal"][data-theme="dark"] {
+  --surface-canvas: #0a0e14;
+  --surface-raised: #121820;
+  --text-primary: #39d353;
+  --text-muted: #7ee787;
+  --action-primary: #58a6ff;
+  --border-subtle: #232c37;
+  --focus-ring: #39d353;
+}
+@media (prefers-color-scheme: dark) {
+  html[data-style="terminal"]:not([data-theme="light"]) {
+    --surface-canvas: #0a0e14;
+    --surface-raised: #121820;
+    --text-primary: #39d353;
+    --text-muted: #7ee787;
+    --action-primary: #58a6ff;
+    --border-subtle: #232c37;
+    --focus-ring: #39d353;
+  }
+}
+html[data-style="terminal"] .wordmark::before {
+  content: "$ "; color: var(--action-primary); font-weight: 700;
+}
+html[data-style="terminal"] .feature-card,
+html[data-style="terminal"] .article-row,
+html[data-style="terminal"] .brand-identity-card {
+  border-left: 3px solid var(--action-primary);
+}
+html[data-style="terminal"] .feature-badge {
+  background: var(--text-primary); color: var(--surface-canvas); font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+}
+html[data-style="terminal"] .article-prose {
+  line-height: 1.7; font-size: 1rem;
+}
+html[data-style="terminal"] .toc-rail-inner,
+html[data-style="terminal"] .toc-drawer-dialog {
+  border: 1px solid var(--border-subtle);
+}
+

@@ -419,4 +419,9 @@ return [
     'Browse or insert media' => '浏览或插入媒体图片',
     'Insert media' => '插入媒体',
     'Loading media…' => '加载媒体中…',
+    'Theme style' => '主题风格',
+    'Editorial' => '杂志',
+    'Terminal' => '极客终端',
+    'Monochrome' => '极简黑白',
+    'Newsletter' => '温暖手记',
 ];

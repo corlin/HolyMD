@@ -14,10 +14,12 @@ declare(strict_types=1);
  * @var bool $showAlternates
  * @var string $assetCss
  * @var string $assetSearch
+ * @var string $siteStyle
  */
+$siteStyle = $siteStyle ?? 'editorial';
 ?>
 <!doctype html>
-<html lang="<?= htmlspecialchars($siteLanguage, ENT_QUOTES, 'UTF-8') ?>">
+<html lang="<?= htmlspecialchars($siteLanguage, ENT_QUOTES, 'UTF-8') ?>" data-style="<?= htmlspecialchars($siteStyle, ENT_QUOTES, 'UTF-8') ?>">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -38,5 +40,5 @@ declare(strict_types=1);
 <?php if ($jsonLd !== null): ?>
   <script type="application/ld+json"><?= $jsonLd ?></script>
 <?php endif; ?>
-  <script>!function(){try{var t=localStorage.getItem("holymd_theme");t?document.documentElement.setAttribute("data-theme",t):"dark"===matchMedia("(prefers-color-scheme: dark)").matches&&document.documentElement.setAttribute("data-theme","dark")}catch(e){}}();</script>
+  <script>!function(){try{var t=localStorage.getItem("holymd_theme");t?document.documentElement.setAttribute("data-theme",t):"dark"===matchMedia("(prefers-color-scheme: dark)").matches&&document.documentElement.setAttribute("data-theme","dark");var s=localStorage.getItem("holymd_style");s&&document.documentElement.setAttribute("data-style",s)}catch(e){}}();</script>
 </head>

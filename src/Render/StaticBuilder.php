@@ -84,7 +84,7 @@ final class StaticBuilder
             $topicSlugs[$topicLabel] = $slug;
             $route = '/topics/' . $slug . '/';
             $this->write($temporaryRoot . $route . 'index.html', $this->renderer->render('topic', [
-                'siteName' => $input->settings->siteName, 'siteUrl' => $input->settings->siteUrl, 'authorName' => $input->settings->authorName, 'siteLanguage' => $input->settings->siteLanguage, 'topic' => $topicLabel, 'articles' => $topicArticles, 'route' => $route, 'generateLlmsTxt' => $input->settings->generateLlmsTxt, 'assetCss' => $assetCss, 'assetSearch' => $assetSearch, 'basePath' => $input->settings->basePath, 'navPages' => $navPages,
+                'siteName' => $input->settings->siteName, 'siteUrl' => $input->settings->siteUrl, 'authorName' => $input->settings->authorName, 'siteLanguage' => $input->settings->siteLanguage, 'topic' => $topicLabel, 'articles' => $topicArticles, 'route' => $route, 'generateLlmsTxt' => $input->settings->generateLlmsTxt, 'assetCss' => $assetCss, 'assetSearch' => $assetSearch, 'basePath' => $input->settings->basePath, 'navPages' => $navPages, 'siteStyle' => $input->settings->siteStyle,
             ]));
             $files[] = $route . 'index.html';
         }
@@ -125,11 +125,16 @@ final class StaticBuilder
                 $authorSchema,
             ]);
 
+            $pageStyle = (string) ($page->frontMatter->get('style') ?? $page->frontMatter->get('theme') ?? $input->settings->siteStyle);
+            if (!in_array($pageStyle, \HolyMD\Config\PublicationSettings::ALLOWED_STYLES, true)) {
+                $pageStyle = $input->settings->siteStyle;
+            }
+
             $this->write($path, $this->renderer->render('page', [
                 'siteName' => $input->settings->siteName, 'siteUrl' => $input->settings->siteUrl, 'authorName' => $input->settings->authorName, 'siteLanguage' => $input->settings->siteLanguage,
                 'page' => $page, 'contentHtml' => $contentHtml, 'generateLlmsTxt' => $input->settings->generateLlmsTxt,
                 'assetCss' => $assetCss, 'assetSearch' => $assetSearch, 'basePath' => $input->settings->basePath, 'navPages' => $navPages,
-                'jsonLd' => $pageJsonLd,
+                'jsonLd' => $pageJsonLd, 'siteStyle' => $pageStyle,
             ]));
             $files[] = substr($route, 1) . 'index.html';
         }
@@ -139,9 +144,9 @@ final class StaticBuilder
         $homeJsonLd = $this->encodeJsonLdGraph([$homeWebsite, $authorSchema]);
 
         $this->write($temporaryRoot . '/index.html', $this->renderer->render('index', [
-            'siteName' => $input->settings->siteName, 'siteUrl' => $input->settings->siteUrl, 'authorName' => $input->settings->authorName, 'about' => $input->settings->about, 'siteLanguage' => $input->settings->siteLanguage, 'articles' => $articles, 'topics' => $topics, 'topicSlugs' => $topicSlugs, 'generateLlmsTxt' => $input->settings->generateLlmsTxt, 'assetCss' => $assetCss, 'assetSearch' => $assetSearch, 'basePath' => $input->settings->basePath, 'navPages' => $navPages, 'jsonLd' => $homeJsonLd,
+            'siteName' => $input->settings->siteName, 'siteUrl' => $input->settings->siteUrl, 'authorName' => $input->settings->authorName, 'about' => $input->settings->about, 'siteLanguage' => $input->settings->siteLanguage, 'articles' => $articles, 'topics' => $topics, 'topicSlugs' => $topicSlugs, 'generateLlmsTxt' => $input->settings->generateLlmsTxt, 'assetCss' => $assetCss, 'assetSearch' => $assetSearch, 'basePath' => $input->settings->basePath, 'navPages' => $navPages, 'jsonLd' => $homeJsonLd, 'siteStyle' => $input->settings->siteStyle,
         ]));
-        $this->write($temporaryRoot . '/404.html', $this->renderer->render('404', ['siteName' => $input->settings->siteName, 'siteUrl' => $input->settings->siteUrl, 'authorName' => $input->settings->authorName, 'siteLanguage' => $input->settings->siteLanguage, 'generateLlmsTxt' => $input->settings->generateLlmsTxt, 'assetCss' => $assetCss, 'assetSearch' => $assetSearch, 'basePath' => $input->settings->basePath, 'navPages' => $navPages]));
+        $this->write($temporaryRoot . '/404.html', $this->renderer->render('404', ['siteName' => $input->settings->siteName, 'siteUrl' => $input->settings->siteUrl, 'authorName' => $input->settings->authorName, 'siteLanguage' => $input->settings->siteLanguage, 'generateLlmsTxt' => $input->settings->generateLlmsTxt, 'assetCss' => $assetCss, 'assetSearch' => $assetSearch, 'basePath' => $input->settings->basePath, 'navPages' => $navPages, 'siteStyle' => $input->settings->siteStyle]));
         $this->write($temporaryRoot . $assetCss, $styles);
         $this->write($temporaryRoot . $assetSearch, $script);
         $this->write($temporaryRoot . '/rss.xml', $this->rss($articles, $input, $builtAt));
@@ -279,12 +284,16 @@ final class StaticBuilder
         ) ?? $contentHtml;
 
         $readingMinutes = $this->readingMinutes($contentHtml);
+        $articleStyle = (string) ($article->frontMatter->get('style') ?? $article->frontMatter->get('theme') ?? $input->settings->siteStyle);
+        if (!in_array($articleStyle, \HolyMD\Config\PublicationSettings::ALLOWED_STYLES, true)) {
+            $articleStyle = $input->settings->siteStyle;
+        }
 
         return [
             'siteName' => $input->settings->siteName, 'siteUrl' => $input->settings->siteUrl, 'authorName' => $input->settings->authorName, 'siteLanguage' => $input->settings->siteLanguage, 'article' => $article,
             'url' => $url, 'date' => $date, 'modified' => $modified, 'summary' => $summary, 'sources' => $sources, 'internalLinks' => $internalLinks, 'faq' => $faq, 'topics' => $articleTopics, 'topicSlugs' => $topicSlugs, 'related' => array_slice($related, 0, 3),
             'contentHtml' => $contentHtmlWithIds, 'feedContentHtml' => $feedContentHtml, 'searchText' => $searchText, 'toc' => $toc, 'readingMinutes' => $readingMinutes, 'ogImage' => $ogImage, 'generateLlmsTxt' => $input->settings->generateLlmsTxt, 'assetCss' => $assetCss, 'assetSearch' => $assetSearch, 'basePath' => $input->settings->basePath, 'navPages' => $navPages,
-            'jsonLd' => $this->encodeJsonLdGraph($graph),
+            'jsonLd' => $this->encodeJsonLdGraph($graph), 'siteStyle' => $articleStyle,
         ];
     }
 

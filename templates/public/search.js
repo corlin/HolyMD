@@ -205,4 +205,77 @@
     }
     results.removeAttribute('hidden');
   });
+
+  // Style switcher controller
+  (function () {
+    var trigger = document.getElementById('style-trigger');
+    var dropdown = document.getElementById('style-dropdown');
+    var items = document.querySelectorAll('[data-style-set]');
+    if (!trigger || !dropdown || !items.length) return;
+
+    function currentStyle() {
+      return document.documentElement.getAttribute('data-style') || 'editorial';
+    }
+
+    function syncItems(activeStyle) {
+      items.forEach(function (btn) {
+        var match = btn.getAttribute('data-style-set') === activeStyle;
+        btn.setAttribute('aria-checked', match ? 'true' : 'false');
+        btn.classList.toggle('active', match);
+      });
+    }
+
+    function openMenu() {
+      dropdown.removeAttribute('hidden');
+      trigger.setAttribute('aria-expanded', 'true');
+      syncItems(currentStyle());
+    }
+
+    function closeMenu() {
+      dropdown.setAttribute('hidden', '');
+      trigger.setAttribute('aria-expanded', 'false');
+    }
+
+    function toggleMenu() {
+      if (dropdown.hasAttribute('hidden')) {
+        openMenu();
+      } else {
+        closeMenu();
+      }
+    }
+
+    trigger.addEventListener('click', function (e) {
+      e.stopPropagation();
+      toggleMenu();
+    });
+
+    items.forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var style = btn.getAttribute('data-style-set') || 'editorial';
+        try {
+          localStorage.setItem('holymd_style', style);
+        } catch (err) {}
+        document.documentElement.setAttribute('data-style', style);
+        syncItems(style);
+        closeMenu();
+      });
+    });
+
+    document.addEventListener('click', function (e) {
+      if (!dropdown.hasAttribute('hidden') && !e.target.closest('.header-style-wrap')) {
+        closeMenu();
+      }
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && !dropdown.hasAttribute('hidden')) {
+        e.preventDefault();
+        closeMenu();
+        trigger.focus();
+      }
+    });
+
+    syncItems(currentStyle());
+  })();
 })();

@@ -6,7 +6,11 @@ namespace HolyMD\Config;
 
 final readonly class PublicationSettings
 {
+    /** @var list<string> */
+    public const ALLOWED_STYLES = ['editorial', 'terminal', 'monochrome', 'newsletter'];
+
     public string $basePath;
+    public string $siteStyle;
 
     public function __construct(
         public string $siteName,
@@ -16,9 +20,12 @@ final readonly class PublicationSettings
         public bool $generateLlmsTxt = false,
         public string $siteLanguage = 'zh-CN',
         string $basePath = '',
+        string $siteStyle = 'editorial',
     ) {
         $normalized = '/' . trim($basePath, '/');
         $this->basePath = $normalized === '/' ? '' : $normalized;
+        $normalizedStyle = strtolower(trim($siteStyle));
+        $this->siteStyle = in_array($normalizedStyle, self::ALLOWED_STYLES, true) ? $normalizedStyle : 'editorial';
     }
 
     public static function fromEnvironment(): self
@@ -31,6 +38,7 @@ final readonly class PublicationSettings
             Env::get('HOLYMD_LLMS_TXT') === '1',
             (string) (Env::get('HOLYMD_SITE_LANGUAGE') ?: 'zh-CN'),
             (string) (Env::get('HOLYMD_BASE_PATH') ?: ''),
+            (string) (Env::get('HOLYMD_SITE_STYLE') ?: 'editorial'),
         );
     }
 
@@ -46,7 +54,7 @@ final readonly class PublicationSettings
         return $errors;
     }
 
-    /** @return array{site_name:string,site_url:string,author_name:string,about:string,site_language:string} */
+    /** @return array{site_name:string,site_url:string,author_name:string,about:string,site_language:string,site_style:string} */
     public function adminValues(): array
     {
         return [
@@ -55,6 +63,7 @@ final readonly class PublicationSettings
             'author_name' => $this->authorName,
             'about' => $this->about,
             'site_language' => $this->siteLanguage,
+            'site_style' => $this->siteStyle,
         ];
     }
 }
